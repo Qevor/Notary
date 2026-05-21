@@ -24,6 +24,14 @@ class Settings(BaseModel):
     notary_demo_mode: bool = True
     notary_default_privacy_mode: PrivacyMode = PrivacyMode.PROTECTED
 
+    claude_api_key: str | None = None
+    claude_model: str = "claude-3-5-sonnet-20241022"
+    claude_api_base_url: str = "https://api.anthropic.com"
+
+    groq_api_key: str | None = None
+    groq_model: str = "llama-3.3-70b-versatile"
+    groq_api_base_url: str = "https://api.groq.com"
+
     validator_private_key: str | None = None
     validator_eip712_name: str = "NOTARY"
     validator_eip712_version: str = "1"
@@ -39,14 +47,29 @@ class Settings(BaseModel):
     arc_validation_registry: str | None = None
     arc_governance: str | None = None
 
+    circle_cli_path: str = "circle"
+    circle_wallet_email: str | None = None
+    circle_chain: str = "ARC-TESTNET"
+    circle_testnet: bool = True
+    circle_gateway_enabled: bool = True
+    circle_paymaster_enabled: bool = True
+
     qevorpay_demo_mode: bool = True
     qevorpay_api_base_url: str | None = None
     qevorpay_api_key: str | None = None
     qevorpay_webhook_secret: str | None = None
+    qevorpay_payment_link_path: str | None = None
+    qevorpay_batch_distribution_path: str | None = None
+    qevorpay_release_escrow_path: str | None = None
+    qevorpay_refund_path: str | None = None
+    qevorpay_payment_status_path_template: str | None = None
+    qevorpay_webhook_signature_header: str = "x-signature"
 
     speedmatic_demo_mode: bool = True
     speedmatic_api_base_url: str | None = None
     speedmatic_api_key: str | None = None
+    speedmatic_transcriptions_path: str | None = None
+    speedmatic_transcription_status_path_template: str | None = None
 
     evidence_vault_local_dir: Path = Path(".notary_vault")
     evidence_vault_passphrase: str | None = None
@@ -61,6 +84,12 @@ class Settings(BaseModel):
             notary_default_privacy_mode=PrivacyMode(
                 os.getenv("NOTARY_DEFAULT_PRIVACY_MODE", PrivacyMode.PROTECTED.value)
             ),
+            claude_api_key=_optional_str("CLAUDE_API_KEY"),
+            claude_model=os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20241022"),
+            claude_api_base_url=os.getenv("CLAUDE_API_BASE_URL", "https://api.anthropic.com"),
+            groq_api_key=_optional_str("GROQ_API_KEY"),
+            groq_model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            groq_api_base_url=os.getenv("GROQ_API_BASE_URL", "https://api.groq.com"),
             validator_private_key=_optional_str("VALIDATOR_PRIVATE_KEY"),
             validator_eip712_name=os.getenv("VALIDATOR_EIP712_NAME", "NOTARY"),
             validator_eip712_version=os.getenv("VALIDATOR_EIP712_VERSION", "1"),
@@ -74,13 +103,27 @@ class Settings(BaseModel):
             arc_karma_registry=_optional_str("ARC_KARMA_REGISTRY"),
             arc_validation_registry=_optional_str("ARC_VALIDATION_REGISTRY"),
             arc_governance=_optional_str("ARC_GOVERNANCE"),
+            circle_cli_path=os.getenv("CIRCLE_CLI_PATH", "circle"),
+            circle_wallet_email=_optional_str("CIRCLE_WALLET_EMAIL"),
+            circle_chain=os.getenv("CIRCLE_CHAIN", "ARC-TESTNET"),
+            circle_testnet=_bool_env("CIRCLE_TESTNET", True),
+            circle_gateway_enabled=_bool_env("CIRCLE_GATEWAY_ENABLED", True),
+            circle_paymaster_enabled=_bool_env("CIRCLE_PAYMASTER_ENABLED", True),
             qevorpay_demo_mode=_bool_env("QEVORPAY_DEMO_MODE", True),
             qevorpay_api_base_url=_optional_str("QEVORPAY_API_BASE_URL"),
             qevorpay_api_key=_optional_str("QEVORPAY_API_KEY"),
             qevorpay_webhook_secret=_optional_str("QEVORPAY_WEBHOOK_SECRET"),
+            qevorpay_payment_link_path=_optional_str("QEVORPAY_PAYMENT_LINK_PATH"),
+            qevorpay_batch_distribution_path=_optional_str("QEVORPAY_BATCH_DISTRIBUTION_PATH"),
+            qevorpay_release_escrow_path=_optional_str("QEVORPAY_RELEASE_ESCROW_PATH"),
+            qevorpay_refund_path=_optional_str("QEVORPAY_REFUND_PATH"),
+            qevorpay_payment_status_path_template=_optional_str("QEVORPAY_PAYMENT_STATUS_PATH_TEMPLATE"),
+            qevorpay_webhook_signature_header=os.getenv("QEVORPAY_WEBHOOK_SIGNATURE_HEADER", "x-signature"),
             speedmatic_demo_mode=_bool_env("SPEEDMATIC_DEMO_MODE", True),
             speedmatic_api_base_url=_optional_str("SPEEDMATIC_API_BASE_URL"),
             speedmatic_api_key=_optional_str("SPEEDMATIC_API_KEY"),
+            speedmatic_transcriptions_path=_optional_str("SPEEDMATIC_TRANSCRIPTIONS_PATH"),
+            speedmatic_transcription_status_path_template=_optional_str("SPEEDMATIC_TRANSCRIPTION_STATUS_PATH_TEMPLATE"),
             evidence_vault_local_dir=Path(os.getenv("EVIDENCE_VAULT_LOCAL_DIR", ".notary_vault")),
             evidence_vault_passphrase=_optional_str("EVIDENCE_VAULT_PASSPHRASE"),
             notary_db_path=Path(os.getenv("NOTARY_DB_PATH", ".notary/notary.sqlite3")),

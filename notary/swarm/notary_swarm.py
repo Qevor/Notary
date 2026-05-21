@@ -27,6 +27,7 @@ from notary.models.schemas import (
     SpeakerClaim,
     utc_now,
 )
+from notary.services.reasoning import SwarmReasoningEngine
 
 
 PRIVACY_MODE_TO_INT = {"public": 0, "protected": 1, "private": 2}
@@ -104,6 +105,27 @@ def signal_scanner(state: NotaryState) -> NotaryState:
     return state
 
 
+async def signal_scanner_live(state: NotaryState, reasoning: SwarmReasoningEngine) -> NotaryState:
+    if not state.observations:
+        return state
+    observation = state.observations[-1]
+    output = await reasoning.scan(observation)
+    observation.summary = output.summary
+    observation.confidence = output.confidence
+    observation.claims = [SpeakerClaim.model_validate(item) for item in output.claims]
+    observation.obligations = [ObligationDetected.model_validate(item) for item in output.obligations]
+    state.traces.append(
+        _trace(
+            "Signal Scanner",
+            output.conclusion,
+            output.confidence,
+            observation=observation.model_dump(mode="json"),
+            steps=output.rationale_steps,
+        )
+    )
+    return state
+
+
 def guardian_sentinel(state: NotaryState) -> NotaryState:
     observation = state.observations[-1]
     source_quality = 0.78 if observation.raw_text else 0.55
@@ -129,6 +151,30 @@ def guardian_sentinel(state: NotaryState) -> NotaryState:
     return state
 
 
+async def guardian_sentinel_live(state: NotaryState, reasoning: SwarmReasoningEngine) -> NotaryState:
+    observation = state.observations[-1]
+    output = await reasoning.sentinel(observation)
+    report = IntegrityReport(
+        observation_id=observation.observation_id,
+        source_quality=output.source_quality,
+        spoofing_risk=output.spoofing_risk,
+        privacy_risk=output.privacy_risk,
+        safety_flags=output.safety_flags,
+        approved=output.approved,
+        notes=output.notes,
+    )
+    state.integrity_reports.append(report)
+    state.traces.append(
+        _trace(
+            "Guardian Sentinel",
+            "Observation integrity approved." if report.approved else "Observation rejected.",
+            output.source_quality,
+            report=report.model_dump(mode="json"),
+        )
+    )
+    return state
+
+
 def risk_guardian(state: NotaryState) -> NotaryState:
     observation = state.observations[-1]
     report = state.integrity_reports[-1]
@@ -147,6 +193,32 @@ def risk_guardian(state: NotaryState) -> NotaryState:
             "confidence_threshold_met" if approved else "confidence_threshold_or_integrity_failed",
             "payment_obligation_detected" if has_obligation else "no_payment_obligation_detected",
         ],
+    )
+    state.risk_decisions.append(decision)
+    state.traces.append(
+        _trace(
+            "Risk Guardian",
+            "Authorized Witness-to-Pay flow." if decision.payment_authorized else "Payment blocked.",
+            observation.confidence,
+            decision=decision.model_dump(mode="json"),
+        )
+    )
+    return state
+
+
+async def risk_guardian_live(state: NotaryState, reasoning: SwarmReasoningEngine) -> NotaryState:
+    observation = state.observations[-1]
+    report = state.integrity_reports[-1]
+    output = await reasoning.risk(observation, report.model_dump(mode="json"))
+    decision = RiskDecision(
+        approved=output.approved,
+        confidence_threshold=output.confidence_threshold,
+        payment_authorized=output.payment_authorized,
+        trade_authorized=output.trade_authorized,
+        public_post_authorized=output.public_post_authorized,
+        dispute_window_seconds=output.dispute_window_seconds,
+        max_payment_usdc=output.max_payment_usdc,
+        reasons=output.reasons,
     )
     state.risk_decisions.append(decision)
     state.traces.append(
@@ -208,6 +280,64 @@ def strategy_engine(state: NotaryState) -> NotaryState:
             horizon=utc_now() + timedelta(days=1),
             rationale="Integrity, confidence, and payment-obligation checks were evaluated by the swarm.",
             counterarguments=["Transcript context may be incomplete.", "Counterparty may dispute intent."],
+            resolution_source="Qevorpay dispute status and user feedback",
+            reasoning_trace_hash=trace.hash,
+        )
+    )
+    return state
+
+
+async def strategy_engine_live(state: NotaryState, reasoning: SwarmReasoningEngine) -> NotaryState:
+    observation = state.observations[-1]
+    decision = state.risk_decisions[-1]
+    output = await reasoning.strategy(
+        {
+            "observation": observation.model_dump(mode="json"),
+            "riskDecision": decision.model_dump(mode="json"),
+            "integrityReport": state.integrity_reports[-1].model_dump(mode="json"),
+        }
+    )
+    trace = _trace(
+        "Strategy Engine",
+        output.conclusion,
+        observation.confidence,
+        observation_id=observation.observation_id,
+        steps=output.rationale_steps,
+    )
+    state.traces.append(trace)
+
+    attestation = Attestation(
+        observation_id=observation.observation_id,
+        statement=output.attestation_statement,
+        evidence_hash=sha256_hex(observation.model_dump(mode="json")),
+        reasoning_trace_hash=trace.hash,
+        confidence=observation.confidence,
+        privacy_mode=observation.privacy_mode,
+        disclosure_policy_hash=sha256_hex(
+            {"privacyMode": observation.privacy_mode.value, "disputeWindow": decision.dispute_window_seconds}
+        ),
+    )
+    state.attestations.append(attestation)
+
+    if decision.payment_authorized:
+        state.payment_triggers.append(
+            PaymentTrigger(
+                action=PaymentAction(output.payment_action),
+                amount_usdc=decision.max_payment_usdc,
+                condition=output.payment_condition,
+                attestation_id=attestation.attestation_id,
+                authorized=True,
+                metadata={"observationId": observation.observation_id},
+            )
+        )
+
+    state.predictions.append(
+        Prediction(
+            question=output.prediction_question,
+            probability=output.prediction_probability,
+            horizon=utc_now() + timedelta(days=1),
+            rationale="LLM strategy output translated to a structured NOTARY prediction.",
+            counterarguments=["Evidence may be incomplete.", "Counterparty may dispute intent."],
             resolution_source="Qevorpay dispute status and user feedback",
             reasoning_trace_hash=trace.hash,
         )
@@ -381,6 +511,76 @@ def reflector(state: NotaryState) -> NotaryState:
     return state
 
 
+async def reflector_live(state: NotaryState, reasoning: SwarmReasoningEngine) -> NotaryState:
+    previous_score = state.karma.score if state.karma else 0.5
+    output = await reasoning.reflect(state.model_dump(mode="json"), previous_score)
+    checkpoint = KarmaCheckpoint(
+        notary_id=state.notary_id,
+        accuracy=output.accuracy,
+        safety=output.safety,
+        payment_reliability=output.payment_reliability,
+        privacy_score=output.privacy_score,
+        dispute_rate=output.dispute_rate,
+        arbitrage_pnl_usdc=output.arbitrage_pnl_usdc,
+        score=output.updated_score,
+    )
+    signer = _signer_from_state(state)
+    checkpoint.signature = signer.sign_typed_data(
+        primary_type="KarmaCheckpoint",
+        verifying_contract=_verifying_contract(state, "HelixAIKarma"),
+        message={
+            "checkpointId": checkpoint.checkpoint_id,
+            "notaryId": state.notary_id,
+            "accuracyBps": _confidence_bps(checkpoint.accuracy),
+            "safetyBps": _confidence_bps(checkpoint.safety),
+            "paymentReliabilityBps": _confidence_bps(checkpoint.payment_reliability),
+            "privacyScoreBps": _confidence_bps(checkpoint.privacy_score),
+            "arbitragePnlUsdc": int(round(checkpoint.arbitrage_pnl_usdc)),
+            "createdAt": int(checkpoint.created_at.timestamp()),
+        },
+        message_types={
+            "KarmaCheckpoint": [
+                {"name": "checkpointId", "type": "string"},
+                {"name": "notaryId", "type": "string"},
+                {"name": "accuracyBps", "type": "uint64"},
+                {"name": "safetyBps", "type": "uint64"},
+                {"name": "paymentReliabilityBps", "type": "uint64"},
+                {"name": "privacyScoreBps", "type": "uint64"},
+                {"name": "arbitragePnlUsdc", "type": "int256"},
+                {"name": "createdAt", "type": "uint256"},
+            ]
+        },
+    )
+    state.karma = checkpoint
+    state.arc_payloads.append(
+        ArcTransactionPayload(
+            contract_name="HelixAIKarma",
+            method="recordCheckpoint",
+            args=[
+                state.notary_id,
+                sha256_hex(checkpoint.model_dump(mode="json")),
+                _confidence_bps(checkpoint.accuracy),
+                _confidence_bps(checkpoint.safety),
+                _confidence_bps(checkpoint.payment_reliability),
+                _confidence_bps(checkpoint.privacy_score),
+                int(round(checkpoint.arbitrage_pnl_usdc)),
+                signer.address,
+            ],
+        )
+    )
+    state.traces.append(
+        _trace(
+            "Reflector",
+            output.critique,
+            output.updated_score,
+            checkpoint=checkpoint.model_dump(mode="json"),
+            policyUpdates=output.policy_updates,
+        )
+    )
+    state.should_continue = False
+    return state
+
+
 def build_graph():
     if StateGraph is None:
         raise RuntimeError("langgraph is not installed")
@@ -406,19 +606,21 @@ def build_graph():
     return graph.compile()
 
 
-async def run_notary_cycle(state: NotaryState) -> NotaryState:
+async def run_notary_cycle(state: NotaryState, reasoning: SwarmReasoningEngine | None = None) -> NotaryState:
     """Run one deterministic cycle.
 
     The implementation uses pure functions so tests and demo mode work even before cloud LLM
     credentials are configured. `build_graph()` is available when LangGraph is installed.
     """
-    for step in (
-        signal_scanner,
-        guardian_sentinel,
-        risk_guardian,
-        strategy_engine,
-        validator,
-        reflector,
-    ):
+    if reasoning and reasoning.enabled:
+        state = await signal_scanner_live(state, reasoning)
+        state = await guardian_sentinel_live(state, reasoning)
+        state = await risk_guardian_live(state, reasoning)
+        state = await strategy_engine_live(state, reasoning)
+        state = validator(state)
+        state = await reflector_live(state, reasoning)
+        return state
+
+    for step in (signal_scanner, guardian_sentinel, risk_guardian, strategy_engine, validator, reflector):
         state = step(state)
     return state

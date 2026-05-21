@@ -44,6 +44,21 @@ async def list_notaries() -> list[dict]:
     return get_app_service().list_notaries()
 
 
+@app.get("/circle/status")
+async def circle_status() -> dict:
+    return await get_app_service().circle_status()
+
+
+@app.post("/circle/login/init")
+async def circle_login_init(email: str | None = None) -> dict:
+    return await get_app_service().circle_login_init(email)
+
+
+@app.post("/circle/login/complete")
+async def circle_login_complete(request_id: str = Form(...), otp: str = Form(...)) -> dict:
+    return await get_app_service().circle_login_complete(request_id, otp)
+
+
 @app.get("/notaries/{notary_id}/operating-agreement")
 async def get_operating_agreement(notary_id: str) -> dict:
     agreement = get_app_service().get_operating_agreement(notary_id)

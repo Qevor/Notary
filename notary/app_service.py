@@ -27,6 +27,7 @@ from notary.services.arc import ArcClient
 from notary.services.circle_agent import CircleAgentClient
 from notary.services.evidence_vault import EvidenceVault
 from notary.services.qevorpay import QevorpayClient
+from notary.services.reasoning import AnthropicReasoner, GroqReasoner, SwarmReasoningEngine
 from notary.services.speedmatic import SpeedmaticClient
 from notary.storage.sqlite import SQLiteStore
 from notary.swarm.notary_swarm import run_notary_cycle
@@ -46,11 +47,24 @@ class NotaryAppService:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.store = SQLiteStore(settings.notary_db_path)
-        self.circle = CircleAgentClient(demo_mode=settings.notary_demo_mode)
+        self.circle = CircleAgentClient(
+            demo_mode=settings.notary_demo_mode,
+            cli_path=settings.circle_cli_path,
+            wallet_email=settings.circle_wallet_email,
+            chain=settings.circle_chain,
+            testnet=settings.circle_testnet,
+        )
         self.qevorpay = QevorpayClient(
             api_base_url=settings.qevorpay_api_base_url,
             api_key=settings.qevorpay_api_key,
             demo_mode=settings.qevorpay_demo_mode,
+            payment_link_path=settings.qevorpay_payment_link_path,
+            batch_distribution_path=settings.qevorpay_batch_distribution_path,
+            release_escrow_path=settings.qevorpay_release_escrow_path,
+            refund_path=settings.qevorpay_refund_path,
+            payment_status_path_template=settings.qevorpay_payment_status_path_template,
+            webhook_secret=settings.qevorpay_webhook_secret,
+            webhook_signature_header=settings.qevorpay_webhook_signature_header,
         )
         self.arc = ArcClient(
             rpc_url=settings.arc_rpc_url,
@@ -69,6 +83,24 @@ class NotaryAppService:
             api_base_url=settings.speedmatic_api_base_url,
             api_key=settings.speedmatic_api_key,
             demo_mode=settings.speedmatic_demo_mode,
+            transcriptions_path=settings.speedmatic_transcriptions_path,
+            transcription_status_path_template=settings.speedmatic_transcription_status_path_template,
+        )
+        self.reasoning = SwarmReasoningEngine(
+            groq=GroqReasoner(
+                api_key=settings.groq_api_key,
+                model=settings.groq_model,
+                api_base_url=settings.groq_api_base_url,
+            )
+            if settings.groq_api_key
+            else None,
+            reflector=AnthropicReasoner(
+                api_key=settings.claude_api_key,
+                model=settings.claude_model,
+                api_base_url=settings.claude_api_base_url,
+            )
+            if settings.claude_api_key
+            else None,
         )
         self.vault = EvidenceVault(
             root=settings.evidence_vault_local_dir,
@@ -107,6 +139,15 @@ class NotaryAppService:
 
     def list_notaries(self) -> list[dict[str, Any]]:
         return self.store.list("notaries")
+
+    async def circle_login_init(self, email: str | None = None) -> dict[str, Any]:
+        return await self.circle.login_init(email)
+
+    async def circle_login_complete(self, request_id: str, otp: str) -> dict[str, Any]:
+        return await self.circle.login_complete(request_id, otp)
+
+    async def circle_status(self) -> dict[str, Any]:
+        return await self.circle.wallet_status()
 
     def get_operating_agreement(self, notary_id: str) -> dict[str, Any] | None:
         agreements = self.store.list("operating_agreements")
@@ -216,7 +257,7 @@ class NotaryAppService:
                 },
             },
         )
-        result = await run_notary_cycle(state)
+        result = await run_notary_cycle(state, reasoning=self.reasoning if self.reasoning.enabled else None)
         await self._submit_arc_payloads(result.arc_payloads)
         await self._execute_payment_triggers(result)
         await self._write_validation_records(result)

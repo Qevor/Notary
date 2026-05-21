@@ -103,7 +103,7 @@ Arc stores commitments. Users control evidence.
 - Python 3.12+
 - Node/Foundry or preferred Solidity toolchain
 - ARC CLI
-- Circle Agent Stack credentials
+- Circle Agent Stack CLI
 - Qevorpay credentials
 - Speedmatic credentials
 
@@ -131,9 +131,27 @@ When real provider credentials are added, set the relevant provider mode to `fal
 
 Additional production wiring now supported by the codebase:
 
+- `CLAUDE_API_KEY` and `GROQ_API_KEY` enable real cloud reasoning for the 6-agent swarm.
 - `VALIDATOR_PRIVATE_KEY` enables real EIP-712 signatures for attestations, predictions, and karma checkpoints.
 - `ARC_RPC_URL`, `ARC_CHAIN_ID`, `ARC_OPERATOR_PRIVATE_KEY`, and the Arc contract addresses enable signed contract submission over JSON-RPC.
+- `CIRCLE_CLI_PATH`, `CIRCLE_WALLET_EMAIL`, `CIRCLE_CHAIN`, and the Circle CLI session enable real Agent Wallet, Gateway, and x402 CLI operations.
+- `QEVORPAY_*_PATH` and `SPEEDMATIC_*_PATH` values are required in live mode because those provider endpoint contracts are not public in this repo.
 - `EVIDENCE_VAULT_PASSPHRASE` enables deterministic vault encryption. If omitted, NOTARY generates a local vault key file on first run.
+
+### Circle CLI
+
+Install the official Circle CLI:
+
+```bash
+npm install -g @circle-fin/cli
+```
+
+Then authenticate the agent wallet session:
+
+1. `POST /circle/login/init`
+2. Receive the OTP in the configured Circle wallet email inbox
+3. `POST /circle/login/complete`
+4. Verify with `GET /circle/status`
 
 ### Run Live App
 
@@ -200,17 +218,17 @@ The zero-member LLC / Wyoming DAO LLC / Bayern mechanism module is an experiment
 
 Implemented in code:
 
-- 6-step deterministic NOTARY swarm with structured state, attestations, predictions, and karma checkpoints
+- Real Circle CLI adapter for wallet login, wallet discovery/creation, Gateway balance/deposit, and x402 service payments
+- Real Groq and Anthropic reasoning clients, with Groq driving the operational agents and Claude driving the Reflector when keys are configured
 - Arc payload generation aligned with the shipped Solidity contracts
 - Optional real EIP-712 signing through `eth-account`
 - Local encrypted evidence vault backed by `openssl`
+- Contract-driven Qevorpay and Speedmatic live adapters that stop guessing provider endpoints
 - Qevorpay trigger execution path from the Strategy Engine through the app service
 - Arc contract deployment helper via Foundry
 
 Still dependent on external credentials or vendor-specific infrastructure:
 
-- Real Speedmatic transcription
-- Real Qevorpay settlement
 - Real Arc submission
 - Public social publishing
-- Non-demo Circle Agent Stack wallet and data-payment flows
+- Live vendor endpoint contracts for Qevorpay and Speedmatic
