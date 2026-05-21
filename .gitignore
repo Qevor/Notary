@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.env
+.notary_vault/
+media/uploads/
+media/transcripts/
+dist/
+build/
+*.egg-info/
+node_modules/
+out/
+cache/
+

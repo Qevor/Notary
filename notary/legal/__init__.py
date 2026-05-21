@@ -1,0 +1,2 @@
+"""Legal-operational document generation."""
+
