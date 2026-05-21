@@ -1,0 +1,12 @@
+langgraph
+langchain
+langchain-anthropic
+langchain-groq
+fastapi
+uvicorn
+python-dotenv
+requests
+pydantic
+eth-account
+eth-utils
+

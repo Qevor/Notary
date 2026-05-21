@@ -129,7 +129,19 @@ ARC_DEMO_MODE=true
 
 When real provider credentials are added, set the relevant provider mode to `false` and configure the API base URL, key, and webhook secrets.
 
-### Run API
+### Run Live App
+
+The fastest working path is dependency-light and runs with the standard library server:
+
+```bash
+python main.py
+```
+
+Then open `http://127.0.0.1:8000`.
+
+Use this path for local demos when dependency installation is slow or unavailable.
+
+### Run FastAPI
 
 ```bash
 uvicorn apps.api.main:app --reload
