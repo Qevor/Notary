@@ -10,6 +10,7 @@ from apps.api.dashboard import render_dashboard
 from notary.app_service import NotaryAppService
 from notary.config import get_settings
 from notary.models.schemas import (
+    DisclosureLevel,
     Observation,
     PrivacyMode,
     QevorpayPaymentLinkRequest,
@@ -41,6 +42,14 @@ async def create_notary(label: str | None = None) -> dict:
 @app.get("/notaries")
 async def list_notaries() -> list[dict]:
     return get_app_service().list_notaries()
+
+
+@app.get("/notaries/{notary_id}/operating-agreement")
+async def get_operating_agreement(notary_id: str) -> dict:
+    agreement = get_app_service().get_operating_agreement(notary_id)
+    if not agreement:
+        return {"error": "not_found", "notaryId": notary_id}
+    return agreement
 
 
 @app.post("/ui/notaries")
@@ -188,6 +197,21 @@ async def ui_attest_transcript(
 @app.post("/qevorpay/payment-link")
 async def create_payment_link(request: QevorpayPaymentLinkRequest) -> dict:
     return await get_app_service().create_payment_link(request)
+
+
+@app.post("/evidence/grants")
+async def grant_evidence_access(
+    evidence_id: str = Form(...),
+    grantee: str = Form(...),
+    purpose: str = Form(...),
+    disclosure_level: DisclosureLevel = Form(...),
+) -> dict:
+    return get_app_service().grant_evidence_access(
+        evidence_id=evidence_id,
+        grantee=grantee,
+        purpose=purpose,
+        disclosure_level=disclosure_level,
+    )
 
 
 @app.post("/ui/payment-link")

@@ -129,6 +129,12 @@ ARC_DEMO_MODE=true
 
 When real provider credentials are added, set the relevant provider mode to `false` and configure the API base URL, key, and webhook secrets.
 
+Additional production wiring now supported by the codebase:
+
+- `VALIDATOR_PRIVATE_KEY` enables real EIP-712 signatures for attestations, predictions, and karma checkpoints.
+- `ARC_RPC_URL`, `ARC_CHAIN_ID`, `ARC_OPERATOR_PRIVATE_KEY`, and the Arc contract addresses enable signed contract submission over JSON-RPC.
+- `EVIDENCE_VAULT_PASSPHRASE` enables deterministic vault encryption. If omitted, NOTARY generates a local vault key file on first run.
+
 ### Run Live App
 
 The fastest working path is dependency-light and runs with the standard library server:
@@ -161,6 +167,18 @@ python scripts/run_cycle.py
 python scripts/generate_operating_agreement.py
 ```
 
+### Deploy Arc Contracts
+
+```bash
+forge build
+python scripts/deploy_arc.py
+```
+
+Required environment:
+
+- `ARC_RPC_URL`
+- `ARC_OPERATOR_PRIVATE_KEY`
+
 ## Agora Judge Demo Script
 
 1. Open `notaryonarc.com` dashboard or Telegram bot.
@@ -177,3 +195,22 @@ python scripts/generate_operating_agreement.py
 NOTARY produces evidence-grade signed attestations modeled on U.S. Federal Rules of Evidence 901/902 authentication patterns [experimental; not legal advice or a guarantee of admissibility].
 
 The zero-member LLC / Wyoming DAO LLC / Bayern mechanism module is an experimental legal-operational framework and is not legal advice.
+
+## Current Implementation Status
+
+Implemented in code:
+
+- 6-step deterministic NOTARY swarm with structured state, attestations, predictions, and karma checkpoints
+- Arc payload generation aligned with the shipped Solidity contracts
+- Optional real EIP-712 signing through `eth-account`
+- Local encrypted evidence vault backed by `openssl`
+- Qevorpay trigger execution path from the Strategy Engine through the app service
+- Arc contract deployment helper via Foundry
+
+Still dependent on external credentials or vendor-specific infrastructure:
+
+- Real Speedmatic transcription
+- Real Qevorpay settlement
+- Real Arc submission
+- Public social publishing
+- Non-demo Circle Agent Stack wallet and data-payment flows

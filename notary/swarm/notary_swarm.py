@@ -9,7 +9,7 @@ except Exception:  # pragma: no cover - allows schema/tests without langgraph in
     END = "__end__"
     StateGraph = None  # type: ignore[assignment]
 
-from notary.crypto.eip712 import sign_placeholder
+from notary.crypto.eip712 import EIP712Signer
 from notary.crypto.hashing import sha256_hex
 from notary.models.schemas import (
     ArcTransactionPayload,
@@ -29,6 +29,9 @@ from notary.models.schemas import (
 )
 
 
+PRIVACY_MODE_TO_INT = {"public": 0, "protected": 1, "private": 2}
+
+
 def _trace(agent_name: str, conclusion: str, confidence: float, **inputs: Any) -> ReasoningTrace:
     trace = ReasoningTrace(
         agent_name=agent_name,
@@ -43,6 +46,27 @@ def _trace(agent_name: str, conclusion: str, confidence: float, **inputs: Any) -
     )
     trace.hash = sha256_hex(trace.model_dump(mode="json", exclude={"hash"}))
     return trace
+
+
+def _confidence_bps(value: float) -> int:
+    return max(0, min(10_000, round(value * 10_000)))
+
+
+def _signer_from_state(state: NotaryState) -> EIP712Signer:
+    metadata = state.metadata
+    return EIP712Signer(
+        private_key=metadata.get("validatorPrivateKey"),
+        domain_name=metadata.get("validatorDomainName", "NOTARY"),
+        domain_version=metadata.get("validatorDomainVersion", "1"),
+        chain_id=metadata.get("arcChainId"),
+    )
+
+
+def _verifying_contract(state: NotaryState, contract_name: str) -> str | None:
+    contracts = state.metadata.get("verifyingContracts", {})
+    if isinstance(contracts, dict):
+        return contracts.get(contract_name)
+    return None
 
 
 def signal_scanner(state: NotaryState) -> NotaryState:
@@ -194,13 +218,62 @@ def strategy_engine(state: NotaryState) -> NotaryState:
 def validator(state: NotaryState) -> NotaryState:
     attestation = state.attestations[-1]
     prediction = state.predictions[-1]
-    signer = "notary-demo-validator"
+    signer = _signer_from_state(state)
+    signer_address = signer.address
 
-    attestation.signer = signer
-    attestation.signature = sign_placeholder("NOTARYAttestation", attestation.model_dump(mode="json"), signer)
+    attestation.signer = signer_address
+    attestation.signature = signer.sign_typed_data(
+        primary_type="Attestation",
+        verifying_contract=_verifying_contract(state, "AttestationRegistry"),
+        message={
+            "attestationId": attestation.attestation_id,
+            "notaryId": state.notary_id,
+            "observationId": attestation.observation_id,
+            "evidenceHash": attestation.evidence_hash or sha256_hex(attestation.observation_id),
+            "reasoningTraceHash": attestation.reasoning_trace_hash or sha256_hex(attestation.attestation_id),
+            "disclosurePolicyHash": attestation.disclosure_policy_hash or sha256_hex(""),
+            "confidenceBps": _confidence_bps(attestation.confidence),
+            "privacyMode": PRIVACY_MODE_TO_INT[attestation.privacy_mode.value],
+            "createdAt": int(attestation.created_at.timestamp()),
+        },
+        message_types={
+            "Attestation": [
+                {"name": "attestationId", "type": "string"},
+                {"name": "notaryId", "type": "string"},
+                {"name": "observationId", "type": "string"},
+                {"name": "evidenceHash", "type": "bytes32"},
+                {"name": "reasoningTraceHash", "type": "bytes32"},
+                {"name": "disclosurePolicyHash", "type": "bytes32"},
+                {"name": "confidenceBps", "type": "uint64"},
+                {"name": "privacyMode", "type": "uint8"},
+                {"name": "createdAt", "type": "uint256"},
+            ]
+        },
+    )
     attestation.status = AttestationStatus.SIGNED
 
-    prediction.signature = sign_placeholder("NOTARYPrediction", prediction.model_dump(mode="json"), signer)
+    prediction.signature = signer.sign_typed_data(
+        primary_type="Prediction",
+        verifying_contract=_verifying_contract(state, "AttestationRegistry"),
+        message={
+            "predictionId": prediction.prediction_id,
+            "notaryId": state.notary_id,
+            "question": prediction.question,
+            "probabilityBps": _confidence_bps(prediction.probability),
+            "horizon": int(prediction.horizon.timestamp()),
+            "reasoningTraceHash": prediction.reasoning_trace_hash or sha256_hex(prediction.prediction_id),
+        },
+        message_types={
+            "Prediction": [
+                {"name": "predictionId", "type": "string"},
+                {"name": "notaryId", "type": "string"},
+                {"name": "question", "type": "string"},
+                {"name": "probabilityBps", "type": "uint64"},
+                {"name": "horizon", "type": "uint256"},
+                {"name": "reasoningTraceHash", "type": "bytes32"},
+            ]
+        },
+    )
 
     state.arc_payloads.append(
         ArcTransactionPayload(
@@ -208,8 +281,13 @@ def validator(state: NotaryState) -> NotaryState:
             method="recordAttestation",
             args=[
                 attestation.attestation_id,
-                sha256_hex(attestation.model_dump(mode="json")),
-                attestation.privacy_mode.value,
+                state.notary_id,
+                attestation.evidence_hash,
+                attestation.reasoning_trace_hash,
+                attestation.disclosure_policy_hash,
+                _confidence_bps(attestation.confidence),
+                PRIVACY_MODE_TO_INT[attestation.privacy_mode.value],
+                signer_address,
             ],
         )
     )
@@ -247,13 +325,48 @@ def reflector(state: NotaryState) -> NotaryState:
         arbitrage_pnl_usdc=0.0,
         score=score,
     )
-    checkpoint.signature = sign_placeholder("NOTARYKarma", checkpoint.model_dump(mode="json"))
+    signer = _signer_from_state(state)
+    checkpoint.signature = signer.sign_typed_data(
+        primary_type="KarmaCheckpoint",
+        verifying_contract=_verifying_contract(state, "HelixAIKarma"),
+        message={
+            "checkpointId": checkpoint.checkpoint_id,
+            "notaryId": state.notary_id,
+            "accuracyBps": _confidence_bps(checkpoint.accuracy),
+            "safetyBps": _confidence_bps(checkpoint.safety),
+            "paymentReliabilityBps": _confidence_bps(checkpoint.payment_reliability),
+            "privacyScoreBps": _confidence_bps(checkpoint.privacy_score),
+            "arbitragePnlUsdc": int(round(checkpoint.arbitrage_pnl_usdc)),
+            "createdAt": int(checkpoint.created_at.timestamp()),
+        },
+        message_types={
+            "KarmaCheckpoint": [
+                {"name": "checkpointId", "type": "string"},
+                {"name": "notaryId", "type": "string"},
+                {"name": "accuracyBps", "type": "uint64"},
+                {"name": "safetyBps", "type": "uint64"},
+                {"name": "paymentReliabilityBps", "type": "uint64"},
+                {"name": "privacyScoreBps", "type": "uint64"},
+                {"name": "arbitragePnlUsdc", "type": "int256"},
+                {"name": "createdAt", "type": "uint256"},
+            ]
+        },
+    )
     state.karma = checkpoint
     state.arc_payloads.append(
         ArcTransactionPayload(
             contract_name="HelixAIKarma",
             method="recordCheckpoint",
-            args=[state.notary_id, sha256_hex(checkpoint.model_dump(mode="json")), checkpoint.score],
+            args=[
+                state.notary_id,
+                sha256_hex(checkpoint.model_dump(mode="json")),
+                _confidence_bps(checkpoint.accuracy),
+                _confidence_bps(checkpoint.safety),
+                _confidence_bps(checkpoint.payment_reliability),
+                _confidence_bps(checkpoint.privacy_score),
+                int(round(checkpoint.arbitrage_pnl_usdc)),
+                signer.address,
+            ],
         )
     )
     state.traces.append(
@@ -309,4 +422,3 @@ async def run_notary_cycle(state: NotaryState) -> NotaryState:
     ):
         state = step(state)
     return state
-
