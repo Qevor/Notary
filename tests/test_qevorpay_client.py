@@ -11,5 +11,4 @@ async def test_qevorpay_demo_payment_link() -> None:
         QevorpayPaymentLinkRequest(amount_usdc=25, description="Verified invoice")
     )
     assert response["status"] == "created"
-    assert response["url"].startswith("https://pay.qevor.demo/")
-
+    assert response["url"].startswith("/pay/")

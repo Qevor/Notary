@@ -4,8 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import httpx
-
 from notary.crypto.hashing import sha256_hex
 from notary.models.schemas import (
     EvidenceSource,
@@ -48,6 +46,8 @@ class SpeedmaticClient:
             )
         if not self.api_base_url or not self.api_key:
             raise RuntimeError("Speedmatic credentials are not configured")
+        import httpx
+
         async with httpx.AsyncClient(base_url=self.api_base_url, timeout=60) as client:
             with file_path.open("rb") as media:
                 response = await client.post(
@@ -75,4 +75,3 @@ class SpeedmaticClient:
             confidence=0.82 if text else 0.2,
             metadata={"transcriptionJobId": job.job_id, "evidenceId": job.evidence_id},
         )
-

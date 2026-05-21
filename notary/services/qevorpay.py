@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-import httpx
-
 from notary.models.schemas import (
     PaymentAction,
     PaymentTrigger,
@@ -25,8 +23,9 @@ class QevorpayClient:
             ref = new_id("qevor_link")
             return {
                 "reference": ref,
-                "url": f"https://pay.qevor.demo/{ref}",
+                "url": f"/pay/{ref}",
                 "status": "created",
+                "provider": "local_qevorpay",
                 "request": request.model_dump(mode="json"),
             }
         return await self._post("/payment-links", request.model_dump(mode="json"))
@@ -79,6 +78,8 @@ class QevorpayClient:
     async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         if not self.api_base_url or not self.api_key:
             raise RuntimeError("Qevorpay credentials are not configured")
+        import httpx
+
         async with httpx.AsyncClient(base_url=self.api_base_url, timeout=30) as client:
             response = await client.post(
                 path,
@@ -87,4 +88,3 @@ class QevorpayClient:
             )
             response.raise_for_status()
             return response.json()
-

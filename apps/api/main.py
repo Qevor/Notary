@@ -1,25 +1,26 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, File, Form, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse
 
+from apps.api.dashboard import render_dashboard
+from notary.app_service import NotaryAppService
 from notary.config import get_settings
-from notary.legal.operating_agreement import generate_operating_agreement
 from notary.models.schemas import (
-    EvidenceSource,
-    MediaEvidence,
-    NotaryIdentity,
-    NotaryState,
     Observation,
     PrivacyMode,
     QevorpayPaymentLinkRequest,
 )
-from notary.services.qevorpay import QevorpayClient
-from notary.services.speedmatic import SpeedmaticClient
-from notary.swarm.notary_swarm import run_notary_cycle
 
 app = FastAPI(title="NOTARY", version="0.1.0")
+
+
+@lru_cache
+def get_app_service() -> NotaryAppService:
+    return NotaryAppService(get_settings())
 
 
 @app.get("/health")
@@ -27,76 +28,179 @@ async def health() -> dict[str, str]:
     return {"status": "ok", "service": "notary"}
 
 
+@app.get("/", response_class=HTMLResponse)
+async def dashboard() -> HTMLResponse:
+    return HTMLResponse(render_dashboard(get_app_service().dashboard_state()))
+
+
 @app.post("/notaries")
-async def create_notary() -> dict:
-    identity = NotaryIdentity(
-        capabilities=[
-            "witness_to_pay",
-            "speedmatic_transcription",
-            "qevorpay_payment_triggers",
-            "arc_attestation_hashing",
-            "micro_shares",
-        ]
-    )
-    agreement = generate_operating_agreement(identity.notary_id)
-    identity.operating_agreement_hash = agreement.hash
-    return {"identity": identity.model_dump(mode="json"), "operatingAgreement": agreement.model_dump(mode="json")}
+async def create_notary(label: str | None = None) -> dict:
+    return await get_app_service().create_notary(label)
+
+
+@app.get("/notaries")
+async def list_notaries() -> list[dict]:
+    return get_app_service().list_notaries()
+
+
+@app.post("/ui/notaries")
+async def ui_create_notary(label: str = Form(default="")) -> RedirectResponse:
+    await get_app_service().create_notary(label or None)
+    return RedirectResponse("/", status_code=303)
 
 
 @app.post("/observations/cycle")
 async def submit_observation_and_run_cycle(observation: Observation) -> dict:
-    state = NotaryState(privacy_mode=observation.privacy_mode, observations=[observation])
-    result = await run_notary_cycle(state)
-    return result.model_dump(mode="json")
+    return await get_app_service().run_cycle(observation)
+
+
+@app.get("/attestations")
+async def list_attestations() -> list[dict]:
+    return get_app_service().list_bucket("attestations")
+
+
+@app.get("/predictions")
+async def list_predictions() -> list[dict]:
+    return get_app_service().list_bucket("predictions")
+
+
+@app.get("/payments")
+async def list_payments() -> dict[str, list[dict]]:
+    service = get_app_service()
+    return {
+        "paymentLinks": service.list_bucket("payments"),
+        "paymentTriggers": service.list_bucket("payment_triggers"),
+    }
+
+
+@app.get("/pay/{reference}", response_class=HTMLResponse)
+async def local_payment_page(reference: str) -> HTMLResponse:
+    payments = get_app_service().list_bucket("payments")
+    payment = next((item for item in payments if item.get("reference") == reference), None)
+    if not payment:
+        return HTMLResponse("<h1>Payment not found</h1>", status_code=404)
+    request = payment.get("request", {})
+    amount = request.get("amount_usdc", request.get("amountUSDC", "n/a"))
+    description = request.get("description", "NOTARY payment")
+    return HTMLResponse(
+        f"""
+        <!doctype html>
+        <html>
+          <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>Qevorpay Local Payment</title>
+            <style>
+              body {{
+                font-family: Inter, system-ui, sans-serif;
+                margin: 0;
+                min-height: 100vh;
+                display: grid;
+                place-items: center;
+                background: #f7f3ea;
+                color: #151515;
+              }}
+              main {{
+                width: min(520px, calc(100vw - 32px));
+                background: #fffaf0;
+                border: 1px solid #d8d5cc;
+                border-radius: 8px;
+                padding: 24px;
+              }}
+              strong {{ font-size: 42px; display: block; }}
+              a {{ color: #116149; font-weight: 800; }}
+            </style>
+          </head>
+          <body>
+            <main>
+              <h1>Qevorpay Payment</h1>
+              <p>{description}</p>
+              <strong>{amount} USDC</strong>
+              <p>Status: {payment.get("status", "created")}</p>
+              <p><a href="/">Back to NOTARY</a></p>
+            </main>
+          </body>
+        </html>
+        """
+    )
+
+
+@app.get("/karma")
+async def list_karma() -> list[dict]:
+    return get_app_service().list_bucket("karma")
 
 
 @app.post("/media/transcribe")
-async def transcribe_media(file: UploadFile, privacy_mode: PrivacyMode = PrivacyMode.PROTECTED) -> dict:
-    settings = get_settings()
+async def transcribe_media(
+    file: UploadFile = File(...),
+    privacy_mode: PrivacyMode = Form(default=PrivacyMode.PROTECTED),
+    transcript_text: str | None = Form(default=None),
+) -> dict:
     upload_dir = Path("media/uploads")
     upload_dir.mkdir(parents=True, exist_ok=True)
     file_path = upload_dir / file.filename
     file_path.write_bytes(await file.read())
-
-    evidence = MediaEvidence(
+    return await get_app_service().upload_media(
+        file_path=file_path,
         filename=file.filename,
         content_type=file.content_type or "application/octet-stream",
         privacy_mode=privacy_mode,
+        transcript_text=transcript_text,
     )
-    speedmatic = SpeedmaticClient(
-        api_base_url=settings.speedmatic_api_base_url,
-        api_key=settings.speedmatic_api_key,
-        demo_mode=settings.speedmatic_demo_mode,
+
+
+@app.post("/ui/media")
+async def ui_upload_media(
+    file: UploadFile = File(...),
+    privacy_mode: PrivacyMode = Form(default=PrivacyMode.PROTECTED),
+    transcript_text: str | None = Form(default=None),
+) -> RedirectResponse:
+    upload_dir = Path("media/uploads")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    file_path = upload_dir / file.filename
+    file_path.write_bytes(await file.read())
+    result = await get_app_service().upload_media(
+        file_path=file_path,
+        filename=file.filename,
+        content_type=file.content_type or "application/octet-stream",
+        privacy_mode=privacy_mode,
+        transcript_text=transcript_text or None,
     )
-    job = await speedmatic.transcribe_file(file_path, evidence.evidence_id, privacy_mode)
-    observation = speedmatic.transcript_to_observation(job, privacy_mode)
-    return {
-        "evidence": evidence.model_dump(mode="json"),
-        "transcription": job.model_dump(mode="json"),
-        "observation": observation.model_dump(mode="json"),
-    }
+    if result.get("observation"):
+        observation = Observation.model_validate(result["observation"])
+        await get_app_service().run_cycle(observation)
+    return RedirectResponse("/", status_code=303)
 
 
 @app.post("/media/attest")
 async def attest_transcript(transcript_text: str, privacy_mode: PrivacyMode = PrivacyMode.PROTECTED) -> dict:
-    observation = Observation(
-        source=EvidenceSource(kind="manual_transcript"),
-        summary=transcript_text[:240],
-        raw_text=transcript_text,
-        privacy_mode=privacy_mode,
-        confidence=0.78,
-    )
-    state = await run_notary_cycle(NotaryState(privacy_mode=privacy_mode, observations=[observation]))
-    return state.model_dump(mode="json")
+    return await get_app_service().ingest_transcript(transcript_text, privacy_mode)
+
+
+@app.post("/ui/attest")
+async def ui_attest_transcript(
+    transcript_text: str = Form(...),
+    privacy_mode: PrivacyMode = Form(default=PrivacyMode.PROTECTED),
+) -> RedirectResponse:
+    await get_app_service().ingest_transcript(transcript_text, privacy_mode)
+    return RedirectResponse("/", status_code=303)
 
 
 @app.post("/qevorpay/payment-link")
 async def create_payment_link(request: QevorpayPaymentLinkRequest) -> dict:
-    settings = get_settings()
-    client = QevorpayClient(
-        api_base_url=settings.qevorpay_api_base_url,
-        api_key=settings.qevorpay_api_key,
-        demo_mode=settings.qevorpay_demo_mode,
-    )
-    return await client.create_payment_link(request)
+    return await get_app_service().create_payment_link(request)
 
+
+@app.post("/ui/payment-link")
+async def ui_create_payment_link(
+    amount_usdc: float = Form(...),
+    description: str = Form(...),
+) -> RedirectResponse:
+    await get_app_service().create_payment_link(
+        QevorpayPaymentLinkRequest(amount_usdc=amount_usdc, description=description)
+    )
+    return RedirectResponse("/", status_code=303)
+
+
+@app.get("/state")
+async def state() -> dict:
+    return get_app_service().dashboard_state()

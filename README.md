@@ -118,7 +118,7 @@ cp .env.example .env
 
 ### Environment
 
-See `.env.example` for all settings. The first local demo can run in mock mode:
+See `.env.example` for all settings. The app works locally with SQLite state and local Qevorpay-style payment links before production provider credentials are connected:
 
 ```env
 NOTARY_DEMO_MODE=true
@@ -127,11 +127,15 @@ QEVORPAY_DEMO_MODE=true
 ARC_DEMO_MODE=true
 ```
 
+When real provider credentials are added, set the relevant provider mode to `false` and configure the API base URL, key, and webhook secrets.
+
 ### Run API
 
 ```bash
 uvicorn apps.api.main:app --reload
 ```
+
+Open `http://127.0.0.1:8000` for the dashboard. From there you can create a Notary, paste a transcript, choose privacy mode, run Witness-to-Pay, and create local Qevorpay payment links.
 
 ### Run One Swarm Cycle
 
@@ -161,4 +165,3 @@ python scripts/generate_operating_agreement.py
 NOTARY produces evidence-grade signed attestations modeled on U.S. Federal Rules of Evidence 901/902 authentication patterns [experimental; not legal advice or a guarantee of admissibility].
 
 The zero-member LLC / Wyoming DAO LLC / Bayern mechanism module is an experimental legal-operational framework and is not legal advice.
-
