@@ -4,7 +4,6 @@ import json
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
-import httpx
 from pydantic import BaseModel, Field
 
 from notary.models.schemas import Observation
@@ -89,6 +88,8 @@ class GroqReasoner:
     api_base_url: str = "https://api.groq.com"
 
     async def invoke_json(self, *, system: str, user: str, schema: type[T]) -> T:
+        import httpx
+
         async with httpx.AsyncClient(base_url=self.api_base_url, timeout=60) as client:
             response = await client.post(
                 "/openai/v1/chat/completions",
@@ -116,6 +117,8 @@ class AnthropicReasoner:
     api_base_url: str = "https://api.anthropic.com"
 
     async def invoke_json(self, *, system: str, user: str, schema: type[T]) -> T:
+        import httpx
+
         async with httpx.AsyncClient(base_url=self.api_base_url, timeout=60) as client:
             response = await client.post(
                 "/v1/messages",

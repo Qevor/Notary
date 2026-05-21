@@ -7,6 +7,19 @@ from pydantic import BaseModel
 from notary.models.schemas import PrivacyMode
 
 
+def _load_dotenv(path: Path = Path(".env")) -> None:
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
+
+
 def _bool_env(name: str, default: bool) -> bool:
     value = os.getenv(name)
     if value is None:
@@ -65,11 +78,15 @@ class Settings(BaseModel):
     qevorpay_payment_status_path_template: str | None = None
     qevorpay_webhook_signature_header: str = "x-signature"
 
-    speedmatic_demo_mode: bool = True
-    speedmatic_api_base_url: str | None = None
-    speedmatic_api_key: str | None = None
-    speedmatic_transcriptions_path: str | None = None
-    speedmatic_transcription_status_path_template: str | None = None
+    speechmatics_demo_mode: bool = True
+    speechmatics_api_base_url: str | None = "https://asr.api.speechmatics.com/v2"
+    speechmatics_api_key: str | None = None
+    speechmatics_transcriptions_path: str | None = "/jobs"
+    speechmatics_transcription_status_path_template: str | None = "/jobs/{job_id}"
+    speechmatics_transcript_path_template: str | None = "/jobs/{job_id}/transcript?format=json-v2"
+    speechmatics_language: str = "en"
+    speechmatics_operating_point: str = "enhanced"
+    speechmatics_diarization: str = "speaker"
 
     evidence_vault_local_dir: Path = Path(".notary_vault")
     evidence_vault_passphrase: str | None = None
@@ -77,6 +94,7 @@ class Settings(BaseModel):
 
     @classmethod
     def from_env(cls) -> "Settings":
+        _load_dotenv()
         chain_id = os.getenv("ARC_CHAIN_ID")
         return cls(
             notary_env=os.getenv("NOTARY_ENV", "development"),
@@ -119,11 +137,34 @@ class Settings(BaseModel):
             qevorpay_refund_path=_optional_str("QEVORPAY_REFUND_PATH"),
             qevorpay_payment_status_path_template=_optional_str("QEVORPAY_PAYMENT_STATUS_PATH_TEMPLATE"),
             qevorpay_webhook_signature_header=os.getenv("QEVORPAY_WEBHOOK_SIGNATURE_HEADER", "x-signature"),
-            speedmatic_demo_mode=_bool_env("SPEEDMATIC_DEMO_MODE", True),
-            speedmatic_api_base_url=_optional_str("SPEEDMATIC_API_BASE_URL"),
-            speedmatic_api_key=_optional_str("SPEEDMATIC_API_KEY"),
-            speedmatic_transcriptions_path=_optional_str("SPEEDMATIC_TRANSCRIPTIONS_PATH"),
-            speedmatic_transcription_status_path_template=_optional_str("SPEEDMATIC_TRANSCRIPTION_STATUS_PATH_TEMPLATE"),
+            speechmatics_demo_mode=_bool_env(
+                "SPEECHMATICS_DEMO_MODE",
+                _bool_env("SPEEDMATIC_DEMO_MODE", True),
+            ),
+            speechmatics_api_base_url=(
+                _optional_str("SPEECHMATICS_API_BASE_URL")
+                or _optional_str("SPEEDMATIC_API_BASE_URL")
+                or "https://asr.api.speechmatics.com/v2"
+            ),
+            speechmatics_api_key=_optional_str("SPEECHMATICS_API_KEY")
+            or _optional_str("SPEEDMATIC_API_KEY"),
+            speechmatics_transcriptions_path=(
+                _optional_str("SPEECHMATICS_TRANSCRIPTIONS_PATH")
+                or _optional_str("SPEEDMATIC_TRANSCRIPTIONS_PATH")
+                or "/jobs"
+            ),
+            speechmatics_transcription_status_path_template=(
+                _optional_str("SPEECHMATICS_TRANSCRIPTION_STATUS_PATH_TEMPLATE")
+                or _optional_str("SPEEDMATIC_TRANSCRIPTION_STATUS_PATH_TEMPLATE")
+                or "/jobs/{job_id}"
+            ),
+            speechmatics_transcript_path_template=(
+                _optional_str("SPEECHMATICS_TRANSCRIPT_PATH_TEMPLATE")
+                or "/jobs/{job_id}/transcript?format=json-v2"
+            ),
+            speechmatics_language=os.getenv("SPEECHMATICS_LANGUAGE", "en"),
+            speechmatics_operating_point=os.getenv("SPEECHMATICS_OPERATING_POINT", "enhanced"),
+            speechmatics_diarization=os.getenv("SPEECHMATICS_DIARIZATION", "speaker"),
             evidence_vault_local_dir=Path(os.getenv("EVIDENCE_VAULT_LOCAL_DIR", ".notary_vault")),
             evidence_vault_passphrase=_optional_str("EVIDENCE_VAULT_PASSPHRASE"),
             notary_db_path=Path(os.getenv("NOTARY_DB_PATH", ".notary/notary.sqlite3")),

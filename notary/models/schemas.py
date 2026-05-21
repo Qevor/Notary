@@ -80,7 +80,7 @@ class TranscriptionJob(BaseModel):
     status: Literal["queued", "processing", "succeeded", "failed"] = "queued"
     transcript_text: str | None = None
     segments: list[TranscriptSegment] = Field(default_factory=list)
-    provider: str = "speedmatic"
+    provider: str = "speechmatics"
     created_at: datetime = Field(default_factory=utc_now)
     completed_at: datetime | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -331,4 +331,3 @@ class NotaryState(BaseModel):
     arc_payloads: list[ArcTransactionPayload] = Field(default_factory=list)
     should_continue: bool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
-

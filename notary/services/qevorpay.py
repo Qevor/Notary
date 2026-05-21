@@ -5,8 +5,6 @@ import hmac
 from dataclasses import dataclass
 from typing import Any
 
-import httpx
-
 from notary.models.schemas import (
     PaymentAction,
     PaymentTrigger,
@@ -108,6 +106,8 @@ class QevorpayClient:
         raise RuntimeError(f"Unsupported Qevorpay action in live mode: {trigger.action}")
 
     async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        import httpx
+
         async with httpx.AsyncClient(base_url=self._base_url(), timeout=30) as client:
             response = await client.post(
                 path,
@@ -118,6 +118,8 @@ class QevorpayClient:
             return response.json()
 
     async def _get(self, path: str) -> dict[str, Any]:
+        import httpx
+
         async with httpx.AsyncClient(base_url=self._base_url(), timeout=30) as client:
             response = await client.get(path, headers=self._headers())
             response.raise_for_status()

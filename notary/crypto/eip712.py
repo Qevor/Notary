@@ -4,8 +4,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from eth_account import Account
-from eth_account.messages import encode_typed_data
+try:
+    from eth_account import Account
+    from eth_account.messages import encode_typed_data
+except ModuleNotFoundError:  # pragma: no cover - live signing requires eth-account
+    Account = None
+    encode_typed_data = None
 
 from notary.crypto.hashing import sha256_hex
 
@@ -74,6 +78,8 @@ class EIP712Signer:
     def address(self) -> str:
         if not self.private_key:
             return "demo-signer"
+        if Account is None:
+            return "demo-signer-missing-eth-account"
         return Account.from_key(self.private_key).address
 
     def sign_typed_data(
@@ -85,6 +91,8 @@ class EIP712Signer:
         verifying_contract: str | None = None,
     ) -> str:
         if not self.private_key:
+            return sign_placeholder(primary_type, message, self.address)
+        if Account is None or encode_typed_data is None:
             return sign_placeholder(primary_type, message, self.address)
 
         payload = build_eip712_payload(

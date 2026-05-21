@@ -2,7 +2,7 @@
 
 **Autonomous legal witness and payment intelligence terminal on Arc.**
 
-NOTARY is a 6-agent self-improving swarm and Qevorpay side product that turns ordinary payments into verified, conditional, agent-managed USDC flows. It observes real-world and onchain events, including audio/video evidence through Speedmatic, produces evidence-grade signed attestations and probability predictions, hashes reasoning traces to Arc, lets users buy micro-shares in its next output through Nanopayments, bridges USDC from any supported chain through Circle Gateway, executes bounded treasury arbitrage, and triggers instant payments through Qevorpay.
+NOTARY is a 6-agent self-improving swarm and Qevorpay side product that turns ordinary payments into verified, conditional, agent-managed USDC flows. It observes real-world and onchain events, including audio/video evidence through Speechmatics, produces evidence-grade signed attestations and probability predictions, hashes reasoning traces to Arc, lets users buy micro-shares in its next output through Nanopayments, bridges USDC from any supported chain through Circle Gateway, executes bounded treasury arbitrage, and triggers instant payments through Qevorpay.
 
 > NOTARY decides. Qevorpay pays. Arc remembers.
 
@@ -36,7 +36,7 @@ Arc is not just where NOTARY settles. Arc is where NOTARY lives.
 
 ```text
 Upload audio
--> Speedmatic transcript
+-> Speechmatics transcript
 -> NOTARY extracts obligations and acceptance
 -> Guardian Sentinel verifies evidence integrity
 -> Risk Guardian approves release
@@ -60,7 +60,7 @@ flowchart LR
   Validator --> Reflector[Reflector]
   Reflector --> Scanner
 
-  Scanner --> Speedmatic[Speedmatic]
+  Scanner --> Speechmatics[Speechmatics]
   Scanner --> Circle[Circle Agent Stack]
   Strategy --> Qevorpay[Qevorpay]
   Strategy --> Gateway[Circle Gateway / Bridge Kit]
@@ -71,7 +71,7 @@ flowchart LR
 
 ## 6-Agent Swarm
 
-1. **Signal Scanner** finds signals from Speedmatic transcripts, paid data, market feeds, smart contracts, Qevorpay events, social sentiment, non-English news, work logs, delivery proofs, and arbitrage opportunities.
+1. **Signal Scanner** finds signals from Speechmatics transcripts, paid data, market feeds, smart contracts, Qevorpay events, social sentiment, non-English news, work logs, delivery proofs, and arbitrage opportunities.
 2. **Guardian Sentinel** verifies source integrity, transcript authenticity, anti-drainer/anti-rug risk, malicious inputs, and privacy leaks.
 3. **Risk Guardian** authorizes attestations, predictions, Qevorpay triggers, arbitrage actions, pay-to-peek sales, and public disclosure.
 4. **Strategy Engine** creates payment links, releases escrow, sends batch distributions, opens pay-to-peek markets, routes treasury actions, and executes Witness-to-Pay.
@@ -105,7 +105,7 @@ Arc stores commitments. Users control evidence.
 - ARC CLI
 - Circle Agent Stack CLI
 - Qevorpay credentials
-- Speedmatic credentials
+- Speechmatics credentials
 
 ### Install
 
@@ -122,7 +122,7 @@ See `.env.example` for all settings. The app works locally with SQLite state and
 
 ```env
 NOTARY_DEMO_MODE=true
-SPEEDMATIC_DEMO_MODE=true
+SPEECHMATICS_DEMO_MODE=true
 QEVORPAY_DEMO_MODE=true
 ARC_DEMO_MODE=true
 ```
@@ -135,7 +135,8 @@ Additional production wiring now supported by the codebase:
 - `VALIDATOR_PRIVATE_KEY` enables real EIP-712 signatures for attestations, predictions, and karma checkpoints.
 - `ARC_RPC_URL`, `ARC_CHAIN_ID`, `ARC_OPERATOR_PRIVATE_KEY`, and the Arc contract addresses enable signed contract submission over JSON-RPC.
 - `CIRCLE_CLI_PATH`, `CIRCLE_WALLET_EMAIL`, `CIRCLE_CHAIN`, and the Circle CLI session enable real Agent Wallet, Gateway, and x402 CLI operations.
-- `QEVORPAY_*_PATH` and `SPEEDMATIC_*_PATH` values are required in live mode because those provider endpoint contracts are not public in this repo.
+- `QEVORPAY_*_PATH` values are required in live Qevorpay mode because those provider endpoint contracts are project-specific.
+- Speechmatics uses the documented Batch API defaults: `https://asr.api.speechmatics.com/v2`, `/jobs`, `/jobs/{job_id}`, and `/jobs/{job_id}/transcript?format=json-v2`.
 - `EVIDENCE_VAULT_PASSPHRASE` enables deterministic vault encryption. If omitted, NOTARY generates a local vault key file on first run.
 
 ### Circle CLI
@@ -202,7 +203,7 @@ Required environment:
 1. Open `notaryonarc.com` dashboard or Telegram bot.
 2. Create a Notary.
 3. Upload a voice note or work-call recording.
-4. Speedmatic returns a transcript.
+4. Speechmatics returns a transcript.
 5. NOTARY extracts payment conditions and signs an attestation.
 6. Arc records proof commitments.
 7. Qevorpay releases or creates the conditional USDC payment.
@@ -223,7 +224,7 @@ Implemented in code:
 - Arc payload generation aligned with the shipped Solidity contracts
 - Optional real EIP-712 signing through `eth-account`
 - Local encrypted evidence vault backed by `openssl`
-- Contract-driven Qevorpay and Speedmatic live adapters that stop guessing provider endpoints
+- Contract-driven Qevorpay and Speechmatics live adapters that stop guessing provider endpoints
 - Qevorpay trigger execution path from the Strategy Engine through the app service
 - Arc contract deployment helper via Foundry
 
@@ -231,4 +232,4 @@ Still dependent on external credentials or vendor-specific infrastructure:
 
 - Real Arc submission
 - Public social publishing
-- Live vendor endpoint contracts for Qevorpay and Speedmatic
+- Live vendor endpoint contracts for Qevorpay

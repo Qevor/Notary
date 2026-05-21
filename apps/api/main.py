@@ -49,6 +49,11 @@ async def circle_status() -> dict:
     return await get_app_service().circle_status()
 
 
+@app.get("/speechmatics/status")
+async def speechmatics_status() -> dict:
+    return get_app_service().speechmatics_status()
+
+
 @app.post("/circle/login/init")
 async def circle_login_init(email: str | None = None) -> dict:
     return await get_app_service().circle_login_init(email)

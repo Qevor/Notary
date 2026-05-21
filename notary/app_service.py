@@ -28,7 +28,7 @@ from notary.services.circle_agent import CircleAgentClient
 from notary.services.evidence_vault import EvidenceVault
 from notary.services.qevorpay import QevorpayClient
 from notary.services.reasoning import AnthropicReasoner, GroqReasoner, SwarmReasoningEngine
-from notary.services.speedmatic import SpeedmaticClient
+from notary.services.speechmatics import SpeechmaticsClient
 from notary.storage.sqlite import SQLiteStore
 from notary.swarm.notary_swarm import run_notary_cycle
 
@@ -79,12 +79,16 @@ class NotaryAppService:
                 "NotaryGovernance": settings.arc_governance or "",
             },
         )
-        self.speedmatic = SpeedmaticClient(
-            api_base_url=settings.speedmatic_api_base_url,
-            api_key=settings.speedmatic_api_key,
-            demo_mode=settings.speedmatic_demo_mode,
-            transcriptions_path=settings.speedmatic_transcriptions_path,
-            transcription_status_path_template=settings.speedmatic_transcription_status_path_template,
+        self.speechmatics = SpeechmaticsClient(
+            api_base_url=settings.speechmatics_api_base_url,
+            api_key=settings.speechmatics_api_key,
+            demo_mode=settings.speechmatics_demo_mode,
+            transcriptions_path=settings.speechmatics_transcriptions_path,
+            transcription_status_path_template=settings.speechmatics_transcription_status_path_template,
+            transcript_path_template=settings.speechmatics_transcript_path_template,
+            language=settings.speechmatics_language,
+            operating_point=settings.speechmatics_operating_point,
+            diarization=settings.speechmatics_diarization,
         )
         self.reasoning = SwarmReasoningEngine(
             groq=GroqReasoner(
@@ -111,7 +115,7 @@ class NotaryAppService:
         identity = NotaryIdentity(
             capabilities=[
                 "witness_to_pay",
-                "speedmatic_transcription",
+                "speechmatics_transcription",
                 "qevorpay_payment_triggers",
                 "arc_attestation_hashing",
                 "privacy_modes",
@@ -148,6 +152,20 @@ class NotaryAppService:
 
     async def circle_status(self) -> dict[str, Any]:
         return await self.circle.wallet_status()
+
+    def speechmatics_status(self) -> dict[str, Any]:
+        return {
+            "provider": "speechmatics",
+            "configured": bool(self.settings.speechmatics_api_key),
+            "demoMode": self.settings.speechmatics_demo_mode,
+            "baseUrl": self.settings.speechmatics_api_base_url,
+            "transcriptionsPath": self.settings.speechmatics_transcriptions_path,
+            "statusPathTemplate": self.settings.speechmatics_transcription_status_path_template,
+            "transcriptPathTemplate": self.settings.speechmatics_transcript_path_template,
+            "language": self.settings.speechmatics_language,
+            "operatingPoint": self.settings.speechmatics_operating_point,
+            "diarization": self.settings.speechmatics_diarization,
+        }
 
     def get_operating_agreement(self, notary_id: str) -> dict[str, Any] | None:
         agreements = self.store.list("operating_agreements")
@@ -211,15 +229,15 @@ class NotaryAppService:
                     "transcriptHash": transcript_record["rawHash"],
                 },
             )
-        elif not self.settings.speedmatic_demo_mode and self.settings.speedmatic_api_key:
-            job = await self.speedmatic.transcribe_file(file_path, evidence.evidence_id, privacy_mode)
+        elif not self.settings.speechmatics_demo_mode and self.settings.speechmatics_api_key:
+            job = await self.speechmatics.transcribe_file(file_path, evidence.evidence_id, privacy_mode)
         else:
             job = TranscriptionJob(
                 evidence_id=evidence.evidence_id,
                 status="queued",
-                provider="speedmatic",
+                provider="speechmatics",
                 metadata={
-                    "nextStep": "Configure Speedmatic credentials or submit transcript_text.",
+                    "nextStep": "Configure Speechmatics credentials or submit transcript_text.",
                     "localFile": str(file_path),
                 },
             )
@@ -236,7 +254,7 @@ class NotaryAppService:
             "transcription": job.model_dump(mode="json"),
         }
         if job.transcript_text:
-            observation = self.speedmatic.transcript_to_observation(job, privacy_mode)
+            observation = self.speechmatics.transcript_to_observation(job, privacy_mode)
             self.store.put("observations", observation.observation_id, observation.model_dump(mode="json"))
             response["observation"] = observation.model_dump(mode="json")
         return response
@@ -287,6 +305,7 @@ class NotaryAppService:
             "media": self.store.list("media"),
             "transcriptions": self.store.list("transcriptions"),
             "karma": self.store.list("karma"),
+            "speechmatics": self.speechmatics_status(),
         }
 
     def grant_evidence_access(

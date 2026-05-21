@@ -36,6 +36,9 @@ class NotaryHandler(BaseHTTPRequestHandler):
         if parsed.path == "/state":
             self._json(HTTPStatus.OK, SERVICE.dashboard_state())
             return
+        if parsed.path == "/speechmatics/status":
+            self._json(HTTPStatus.OK, SERVICE.speechmatics_status())
+            return
         if parsed.path.startswith("/pay/"):
             self._render_payment(parsed.path.removeprefix("/pay/"))
             return
@@ -225,4 +228,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

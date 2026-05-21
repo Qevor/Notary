@@ -3,10 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-import httpx
-from eth_abi import encode
-from eth_account import Account
-from eth_utils import keccak, to_checksum_address, to_hex
+try:
+    from eth_abi import encode
+    from eth_account import Account
+    from eth_utils import keccak, to_checksum_address, to_hex
+except ModuleNotFoundError:  # pragma: no cover - live Arc mode requires these deps
+    encode = None
+    Account = None
+    keccak = None
+    to_checksum_address = None
+    to_hex = None
 
 from notary.crypto.hashing import sha256_hex
 from notary.models.schemas import ArcTransactionPayload, new_id
@@ -54,6 +60,8 @@ def _convert_arg(arg_type: str, value: Any) -> Any:
     if arg_type == "bytes32":
         return _bytes32_from_text(str(value))
     if arg_type == "address":
+        if to_checksum_address is None:
+            raise RuntimeError("eth-utils is required for live Arc transaction encoding")
         return to_checksum_address(str(value))
     if arg_type in {"uint64", "uint8", "uint256", "int256"}:
         return int(value)
@@ -61,6 +69,8 @@ def _convert_arg(arg_type: str, value: Any) -> Any:
 
 
 def _encode_call(method_signature: str, arg_types: list[str], args: list[Any]) -> str:
+    if encode is None or keccak is None or to_hex is None:
+        raise RuntimeError("eth-abi and eth-utils are required for live Arc transaction encoding")
     selector = keccak(text=method_signature)[:4]
     encoded_args = encode(arg_types, [_convert_arg(arg_type, arg) for arg_type, arg in zip(arg_types, args, strict=True)])
     return to_hex(selector + encoded_args)
@@ -87,6 +97,8 @@ class ArcClient:
     def sender(self) -> str:
         if not self.private_key:
             return "demo-arc-sender"
+        if Account is None:
+            raise RuntimeError("eth-account is required for live Arc signing")
         return Account.from_key(self.private_key).address
 
     async def submit_payload(self, payload: ArcTransactionPayload) -> dict[str, Any]:
@@ -127,6 +139,8 @@ class ArcClient:
             "chainId": hex(self.chain_id),
             "gasPrice": gas_price,
         }
+        if to_checksum_address is None or Account is None:
+            raise RuntimeError("eth-account and eth-utils are required for live Arc submission")
         estimated_gas = await self._rpc("eth_estimateGas", [tx])
         tx["gas"] = estimated_gas
 
@@ -174,6 +188,8 @@ class ArcClient:
     async def _rpc(self, method: str, params: list[Any]) -> Any:
         if not self.rpc_url:
             raise RuntimeError("ARC RPC URL is not configured")
+        import httpx
+
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 self.rpc_url,

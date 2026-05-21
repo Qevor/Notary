@@ -10,6 +10,8 @@ def render_dashboard(state: dict[str, list[dict[str, Any]]]) -> str:
     payment_count = len(state["payments"]) + len(state.get("payment_triggers", []))
     karma = state["karma"][-1] if state["karma"] else None
     karma_score = karma.get("score", "n/a") if karma else "n/a"
+    speechmatics = state.get("speechmatics", {})
+    speechmatics_configured = "configured" if speechmatics.get("configured") else "needs key"
 
     latest_attestations = "".join(
         f"""
@@ -139,6 +141,7 @@ def render_dashboard(state: dict[str, list[dict[str, Any]]]) -> str:
           <div class="metric"><span>Attestations</span><strong>{attestation_count}</strong></div>
           <div class="metric"><span>Payments</span><strong>{payment_count}</strong></div>
           <div class="metric"><span>Karma</span><strong>{escape(str(karma_score))}</strong></div>
+          <div class="metric"><span>Speechmatics</span><strong>{escape(speechmatics_configured)}</strong></div>
         </div>
         <main>
           <section>
@@ -175,8 +178,8 @@ def render_dashboard(state: dict[str, list[dict[str, Any]]]) -> str:
                 </select>
                 <label for="file">Evidence file</label>
                 <input id="file" name="file" type="file" />
-                <label for="media_transcript_text">Transcript text when Speedmatic is not connected</label>
-                <textarea id="media_transcript_text" name="transcript_text" placeholder="Paste transcript or leave blank for Speedmatic processing."></textarea>
+                <label for="media_transcript_text">Transcript text when Speechmatics is not connected</label>
+                <textarea id="media_transcript_text" name="transcript_text" placeholder="Paste transcript or leave blank for Speechmatics processing."></textarea>
                 <button>Upload Evidence</button>
               </form>
             </div>
