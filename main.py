@@ -39,6 +39,20 @@ class NotaryHandler(BaseHTTPRequestHandler):
         if parsed.path == "/speechmatics/status":
             self._json(HTTPStatus.OK, SERVICE.speechmatics_status())
             return
+        if parsed.path == "/circle/status":
+            try:
+                self._json(HTTPStatus.OK, run_async(SERVICE.circle_status()))
+            except Exception as exc:
+                self._json(
+                    HTTPStatus.OK,
+                    {
+                        "provider": "circle",
+                        "configured": False,
+                        "status": "unavailable",
+                        "message": str(exc),
+                    },
+                )
+            return
         if parsed.path.startswith("/pay/"):
             self._render_payment(parsed.path.removeprefix("/pay/"))
             return

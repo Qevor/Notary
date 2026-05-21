@@ -4,48 +4,98 @@ from html import escape
 from typing import Any
 
 
-def render_dashboard(state: dict[str, list[dict[str, Any]]]) -> str:
-    notary_count = len(state["notaries"])
-    attestation_count = len(state["attestations"])
-    payment_count = len(state["payments"]) + len(state.get("payment_triggers", []))
-    karma = state["karma"][-1] if state["karma"] else None
+def _short(value: Any, length: int = 14) -> str:
+    text = str(value or "")
+    if len(text) <= length:
+        return text
+    return f"{text[: length - 3]}..."
+
+
+def _status(value: Any) -> str:
+    return escape(str(value or "n/a").replace("_", " "))
+
+
+def _attestation_rows(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return '<tr><td colspan="5" class="empty">No attestations yet.</td></tr>'
+    rows = []
+    for item in reversed(items[-8:]):
+        rows.append(
+            f"""
+            <tr>
+              <td><span class="pill">{escape(item.get("privacy_mode", "protected"))}</span></td>
+              <td>{escape(_short(item.get("statement", "Attestation"), 92))}</td>
+              <td>{escape(str(item.get("confidence", "n/a")))}</td>
+              <td>{_status(item.get("status"))}</td>
+              <td><code>{escape(_short(item.get("attestation_id", ""), 18))}</code></td>
+            </tr>
+            """
+        )
+    return "".join(rows)
+
+
+def _prediction_rows(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return '<tr><td colspan="4" class="empty">No predictions yet.</td></tr>'
+    rows = []
+    for item in reversed(items[-6:]):
+        rows.append(
+            f"""
+            <tr>
+              <td>{escape(_short(item.get("question", "Prediction"), 84))}</td>
+              <td>{escape(str(item.get("probability", "n/a")))}</td>
+              <td>{_status("resolved" if item.get("resolved") else "open")}</td>
+              <td><code>{escape(_short(item.get("prediction_id", ""), 18))}</code></td>
+            </tr>
+            """
+        )
+    return "".join(rows)
+
+
+def _payment_rows(links: list[dict[str, Any]], triggers: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in reversed(links[-4:]):
+        request = item.get("request", {})
+        rows.append(
+            f"""
+            <tr>
+              <td>Payment link</td>
+              <td>{escape(_short(request.get("description", "Qevorpay link"), 64))}</td>
+              <td>{escape(str(request.get("amount_usdc", request.get("amountUSDC", "n/a"))))}</td>
+              <td>{_status(item.get("status"))}</td>
+              <td><a href="{escape(item.get("url", "#"))}">{escape(_short(item.get("reference", ""), 18))}</a></td>
+            </tr>
+            """
+        )
+    for item in reversed(triggers[-4:]):
+        rows.append(
+            f"""
+            <tr>
+              <td>{escape(str(item.get("action", "trigger")).replace("_", " "))}</td>
+              <td>{escape(_short(item.get("condition", "Payment trigger"), 64))}</td>
+              <td>{escape(str(item.get("amount_usdc", "n/a")))}</td>
+              <td>{_status("authorized" if item.get("authorized") else "blocked")}</td>
+              <td><code>{escape(_short(item.get("trigger_id", ""), 18))}</code></td>
+            </tr>
+            """
+        )
+    if not rows:
+        return '<tr><td colspan="5" class="empty">No payment activity yet.</td></tr>'
+    return "".join(rows)
+
+
+def render_dashboard(state: dict[str, Any]) -> str:
+    notary_count = len(state.get("notaries", []))
+    attestation_count = len(state.get("attestations", []))
+    prediction_count = len(state.get("predictions", []))
+    payment_count = len(state.get("payments", [])) + len(state.get("payment_triggers", []))
+    karma = state.get("karma", [])[-1] if state.get("karma") else None
     karma_score = karma.get("score", "n/a") if karma else "n/a"
     speechmatics = state.get("speechmatics", {})
-    speechmatics_configured = "configured" if speechmatics.get("configured") else "needs key"
-
-    latest_attestations = "".join(
-        f"""
-        <article class="item">
-          <div class="eyebrow">{escape(item.get("privacy_mode", "protected"))}</div>
-          <h3>{escape(item.get("statement", "Attestation"))}</h3>
-          <p>Confidence: {escape(str(item.get("confidence", "n/a")))} · Status: {escape(item.get("status", "n/a"))}</p>
-          <code>{escape(item.get("attestation_id", ""))}</code>
-        </article>
-        """
-        for item in reversed(state["attestations"][-5:])
-    )
-
-    latest_predictions = "".join(
-        f"""
-        <article class="item">
-          <div class="eyebrow">Prediction</div>
-          <h3>{escape(item.get("question", "Prediction"))}</h3>
-          <p>Probability: {escape(str(item.get("probability", "n/a")))}</p>
-        </article>
-        """
-        for item in reversed(state["predictions"][-5:])
-    )
-    latest_payments = "".join(
-        f"""
-        <article class="item">
-          <div class="eyebrow">Qevorpay</div>
-          <h3>{escape(item.get("request", {}).get("description", "Payment link"))}</h3>
-          <p>Status: {escape(item.get("status", "n/a"))}</p>
-          <code>{escape(item.get("url", ""))}</code>
-        </article>
-        """
-        for item in reversed(state["payments"][-5:])
-    )
+    speechmatics_configured = "Configured" if speechmatics.get("configured") else "Needs key"
+    speechmatics_mode = "Live" if not speechmatics.get("demoMode", True) else "Demo"
+    arc_receipts = len(state.get("arc_receipts", []))
+    validations = len(state.get("validations", []))
 
     return f"""
     <!doctype html>
@@ -57,94 +107,235 @@ def render_dashboard(state: dict[str, list[dict[str, Any]]]) -> str:
         <style>
           :root {{
             color-scheme: light;
-            --ink: #151515;
-            --muted: #62625f;
-            --line: #d8d5cc;
-            --paper: #f7f3ea;
-            --panel: #fffaf0;
-            --accent: #116149;
-            --accent-2: #a23b2a;
-            --gold: #b98323;
+            --bg: #f4f6f4;
+            --surface: #ffffff;
+            --surface-2: #eef2ef;
+            --ink: #101414;
+            --muted: #66716d;
+            --line: #d7ddd9;
+            --green: #0f5f46;
+            --green-2: #0b4736;
+            --red: #9d352b;
+            --gold: #a97316;
+            --blue: #235b83;
           }}
           * {{ box-sizing: border-box; }}
           body {{
             margin: 0;
-            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: var(--paper);
+            background: var(--bg);
             color: var(--ink);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           }}
+          a {{ color: var(--green); font-weight: 800; text-decoration: none; }}
           header {{
             display: flex;
-            justify-content: space-between;
-            gap: 24px;
-            padding: 28px 36px;
-            border-bottom: 1px solid var(--line);
             align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            padding: 18px 28px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--line);
+            position: sticky;
+            top: 0;
+            z-index: 2;
           }}
-          h1, h2, h3, p {{ margin-top: 0; }}
-          h1 {{ font-size: clamp(32px, 5vw, 62px); line-height: .96; margin-bottom: 10px; max-width: 760px; }}
-          .tagline {{ color: var(--muted); max-width: 760px; font-size: 18px; }}
-          .status {{
+          .brand h1 {{
+            margin: 0;
+            font-size: 24px;
+            letter-spacing: 0;
+          }}
+          .brand p {{
+            margin: 4px 0 0;
+            color: var(--muted);
+            font-size: 14px;
+          }}
+          .top-actions {{
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+          }}
+          .top-actions a {{
+            border: 1px solid var(--line);
+            padding: 9px 11px;
+            border-radius: 6px;
+            background: var(--surface);
+          }}
+          .metrics {{
             display: grid;
-            grid-template-columns: repeat(4, minmax(120px, 1fr));
-            gap: 10px;
-            padding: 18px 36px;
+            grid-template-columns: repeat(7, minmax(120px, 1fr));
+            gap: 1px;
+            background: var(--line);
             border-bottom: 1px solid var(--line);
           }}
-          .metric {{ border: 1px solid var(--line); background: var(--panel); padding: 14px; border-radius: 8px; }}
-          .metric strong {{ display: block; font-size: 24px; }}
-          main {{ display: grid; grid-template-columns: minmax(320px, 420px) 1fr; gap: 28px; padding: 28px 36px; }}
-          section {{ min-width: 0; }}
-          .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; margin-bottom: 16px; }}
-          label {{ display: block; font-weight: 700; margin: 12px 0 6px; }}
+          .metric {{
+            background: var(--surface);
+            padding: 14px 18px;
+            min-height: 76px;
+          }}
+          .metric span {{
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+          }}
+          .metric strong {{
+            display: block;
+            margin-top: 7px;
+            font-size: 24px;
+          }}
+          .app {{
+            display: grid;
+            grid-template-columns: minmax(300px, 380px) 1fr;
+            gap: 18px;
+            padding: 18px;
+          }}
+          .panel {{
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 14px;
+          }}
+          .panel h2 {{
+            margin: 0 0 12px;
+            font-size: 16px;
+          }}
+          label {{
+            display: block;
+            margin: 11px 0 6px;
+            font-size: 13px;
+            font-weight: 800;
+          }}
           input, textarea, select {{
             width: 100%;
             border: 1px solid var(--line);
             border-radius: 6px;
-            padding: 10px 12px;
+            padding: 10px 11px;
+            background: #fff;
+            color: var(--ink);
             font: inherit;
-            background: white;
           }}
-          textarea {{ min-height: 150px; resize: vertical; }}
+          textarea {{
+            min-height: 124px;
+            resize: vertical;
+          }}
           button {{
-            border: 0;
-            background: var(--accent);
-            color: white;
-            border-radius: 6px;
-            padding: 11px 14px;
-            font-weight: 800;
-            cursor: pointer;
-            margin-top: 12px;
             width: 100%;
+            min-height: 42px;
+            margin-top: 12px;
+            border: 0;
+            border-radius: 6px;
+            background: var(--green);
+            color: white;
+            cursor: pointer;
+            font-weight: 900;
           }}
-          .secondary {{ background: var(--accent-2); }}
-          .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }}
-          .item {{ border: 1px solid var(--line); border-radius: 8px; background: white; padding: 14px; }}
-          .eyebrow {{ color: var(--gold); font-weight: 900; text-transform: uppercase; font-size: 12px; letter-spacing: .06em; }}
-          code {{ display: block; overflow: auto; color: var(--muted); font-size: 12px; }}
-          @media (max-width: 900px) {{
-            header, main, .status {{ padding-left: 18px; padding-right: 18px; }}
-            main {{ grid-template-columns: 1fr; }}
-            .status {{ grid-template-columns: repeat(2, 1fr); }}
+          button.secondary {{ background: var(--blue); }}
+          button.danger {{ background: var(--red); }}
+          .workbench {{
+            display: grid;
+            gap: 14px;
+          }}
+          .table-panel {{
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            overflow: hidden;
+          }}
+          .table-title {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 13px 15px;
+            border-bottom: 1px solid var(--line);
+            background: var(--surface-2);
+          }}
+          .table-title h2 {{
+            margin: 0;
+            font-size: 15px;
+          }}
+          .table-title span {{
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 800;
+          }}
+          table {{
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }}
+          th, td {{
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--line);
+            vertical-align: top;
+            font-size: 14px;
+            overflow-wrap: anywhere;
+          }}
+          th {{
+            color: var(--muted);
+            font-size: 12px;
+            text-transform: uppercase;
+          }}
+          tr:last-child td {{ border-bottom: 0; }}
+          code {{
+            color: var(--muted);
+            font-size: 12px;
+          }}
+          .pill {{
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            padding: 3px 8px;
+            background: var(--surface-2);
+            color: var(--green-2);
+            font-size: 12px;
+            font-weight: 800;
+          }}
+          .empty {{
+            color: var(--muted);
+            text-align: center;
+            padding: 24px;
+          }}
+          @media (max-width: 1100px) {{
+            .metrics {{ grid-template-columns: repeat(3, 1fr); }}
+            .app {{ grid-template-columns: 1fr; }}
+          }}
+          @media (max-width: 680px) {{
+            header {{ align-items: flex-start; flex-direction: column; padding: 16px; }}
+            .metrics {{ grid-template-columns: repeat(2, 1fr); }}
+            .app {{ padding: 12px; }}
+            th:nth-child(5), td:nth-child(5) {{ display: none; }}
           }}
         </style>
       </head>
       <body>
         <header>
-          <div>
+          <div class="brand">
             <h1>NOTARY</h1>
-            <p class="tagline">Verified payments for the agent economy. Upload proof, choose privacy, produce an attestation, and trigger Qevorpay when the facts check out.</p>
+            <p>Witness-to-Pay terminal for Qevorpay on Arc</p>
           </div>
+          <nav class="top-actions">
+            <a href="/state">State JSON</a>
+            <a href="/speechmatics/status">Speechmatics</a>
+            <a href="/circle/status">Circle</a>
+          </nav>
         </header>
-        <div class="status">
+
+        <section class="metrics">
           <div class="metric"><span>Notaries</span><strong>{notary_count}</strong></div>
           <div class="metric"><span>Attestations</span><strong>{attestation_count}</strong></div>
+          <div class="metric"><span>Predictions</span><strong>{prediction_count}</strong></div>
           <div class="metric"><span>Payments</span><strong>{payment_count}</strong></div>
           <div class="metric"><span>Karma</span><strong>{escape(str(karma_score))}</strong></div>
-          <div class="metric"><span>Speechmatics</span><strong>{escape(speechmatics_configured)}</strong></div>
-        </div>
-        <main>
-          <section>
+          <div class="metric"><span>Speechmatics</span><strong>{speechmatics_configured}</strong></div>
+          <div class="metric"><span>Mode</span><strong>{speechmatics_mode}</strong></div>
+        </section>
+
+        <main class="app">
+          <aside>
             <div class="panel">
               <h2>Create Notary</h2>
               <form method="post" action="/ui/notaries">
@@ -153,8 +344,9 @@ def render_dashboard(state: dict[str, list[dict[str, Any]]]) -> str:
                 <button>Create Notary</button>
               </form>
             </div>
+
             <div class="panel">
-              <h2>Attest Transcript</h2>
+              <h2>Witness-to-Pay</h2>
               <form method="post" action="/ui/attest">
                 <label for="privacy_mode">Privacy</label>
                 <select id="privacy_mode" name="privacy_mode">
@@ -162,13 +354,14 @@ def render_dashboard(state: dict[str, list[dict[str, Any]]]) -> str:
                   <option value="private">Private</option>
                   <option value="public">Public</option>
                 </select>
-                <label for="transcript_text">Transcript or voice-note text</label>
+                <label for="transcript_text">Transcript</label>
                 <textarea id="transcript_text" name="transcript_text" placeholder="Client: The work is complete. Please release payment."></textarea>
                 <button>Run Witness-to-Pay</button>
               </form>
             </div>
+
             <div class="panel">
-              <h2>Upload Audio/Video Evidence</h2>
+              <h2>Evidence Upload</h2>
               <form method="post" action="/ui/media" enctype="multipart/form-data">
                 <label for="media_privacy_mode">Privacy</label>
                 <select id="media_privacy_mode" name="privacy_mode">
@@ -176,36 +369,59 @@ def render_dashboard(state: dict[str, list[dict[str, Any]]]) -> str:
                   <option value="private">Private</option>
                   <option value="public">Public</option>
                 </select>
-                <label for="file">Evidence file</label>
+                <label for="file">Audio or video</label>
                 <input id="file" name="file" type="file" />
-                <label for="media_transcript_text">Transcript text when Speechmatics is not connected</label>
-                <textarea id="media_transcript_text" name="transcript_text" placeholder="Paste transcript or leave blank for Speechmatics processing."></textarea>
+                <label for="media_transcript_text">Transcript override</label>
+                <textarea id="media_transcript_text" name="transcript_text" placeholder="Optional when Speechmatics is connected."></textarea>
                 <button>Upload Evidence</button>
               </form>
             </div>
+
             <div class="panel">
-              <h2>Create Qevorpay Link</h2>
+              <h2>Qevorpay Link</h2>
               <form method="post" action="/ui/payment-link">
                 <label for="amount_usdc">Amount USDC</label>
                 <input id="amount_usdc" name="amount_usdc" type="number" min="0.01" step="0.01" value="25" />
                 <label for="description">Description</label>
                 <input id="description" name="description" value="Verified NOTARY payment" />
-                <button class="secondary">Create Payment Link</button>
+                <button class="secondary">Create Link</button>
               </form>
             </div>
-          </section>
-          <section>
-            <div class="panel">
-              <h2>Latest Attestations</h2>
-              <div class="grid">{latest_attestations or "<p>No attestations yet.</p>"}</div>
+          </aside>
+
+          <section class="workbench">
+            <div class="table-panel">
+              <div class="table-title"><h2>Payment Activity</h2><span>{payment_count} total</span></div>
+              <table>
+                <thead><tr><th>Type</th><th>Detail</th><th>USDC</th><th>Status</th><th>Reference</th></tr></thead>
+                <tbody>{_payment_rows(state.get("payments", []), state.get("payment_triggers", []))}</tbody>
+              </table>
             </div>
-            <div class="panel">
-              <h2>Latest Predictions</h2>
-              <div class="grid">{latest_predictions or "<p>No predictions yet.</p>"}</div>
+
+            <div class="table-panel">
+              <div class="table-title"><h2>Attestations</h2><span>{attestation_count} signed</span></div>
+              <table>
+                <thead><tr><th>Privacy</th><th>Statement</th><th>Confidence</th><th>Status</th><th>ID</th></tr></thead>
+                <tbody>{_attestation_rows(state.get("attestations", []))}</tbody>
+              </table>
             </div>
-            <div class="panel">
-              <h2>Qevorpay Links</h2>
-              <div class="grid">{latest_payments or "<p>No payment links yet.</p>"}</div>
+
+            <div class="table-panel">
+              <div class="table-title"><h2>Predictions</h2><span>{prediction_count} tracked</span></div>
+              <table>
+                <thead><tr><th>Question</th><th>Probability</th><th>Status</th><th>ID</th></tr></thead>
+                <tbody>{_prediction_rows(state.get("predictions", []))}</tbody>
+              </table>
+            </div>
+
+            <div class="table-panel">
+              <div class="table-title"><h2>Validation</h2><span>Arc {arc_receipts} / Validation {validations}</span></div>
+              <table>
+                <tbody>
+                  <tr><th>Speechmatics</th><td>{speechmatics_configured}</td><th>Provider Mode</th><td>{speechmatics_mode}</td></tr>
+                  <tr><th>Base URL</th><td>{escape(str(speechmatics.get("baseUrl", "n/a")))}</td><th>Language</th><td>{escape(str(speechmatics.get("language", "n/a")))}</td></tr>
+                </tbody>
+              </table>
             </div>
           </section>
         </main>
