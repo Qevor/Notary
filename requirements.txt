@@ -6,7 +6,7 @@ fastapi
 uvicorn
 python-dotenv
 requests
+httpx
 pydantic
 eth-account
 eth-utils
-

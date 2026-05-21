@@ -63,7 +63,17 @@ class SpeechmaticsClient:
         return job
 
     async def submit_transcription(self, file_path: Path, *, evidence_id: str) -> TranscriptionJob:
-        import httpx
+        try:
+            import httpx
+        except ModuleNotFoundError:
+            return TranscriptionJob(
+                evidence_id=evidence_id,
+                status="failed",
+                provider="speechmatics",
+                metadata={
+                    "error": "httpx is required for live Speechmatics transcription. Run pip install -e .",
+                },
+            )
 
         config = {
             "type": "transcription",
@@ -86,7 +96,18 @@ class SpeechmaticsClient:
         return self._normalize_job(payload, evidence_id=evidence_id)
 
     async def poll_transcription(self, job_id: str, *, evidence_id: str) -> TranscriptionJob:
-        import httpx
+        try:
+            import httpx
+        except ModuleNotFoundError:
+            return TranscriptionJob(
+                job_id=job_id,
+                evidence_id=evidence_id,
+                status="failed",
+                provider="speechmatics",
+                metadata={
+                    "error": "httpx is required for live Speechmatics transcription. Run pip install -e .",
+                },
+            )
 
         status_template = self._required_path(
             self.transcription_status_path_template,
@@ -227,4 +248,3 @@ class SpeechmaticsClient:
 
 
 SpeedmaticClient = SpeechmaticsClient
-
