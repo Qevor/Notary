@@ -106,7 +106,7 @@ class Settings(BaseModel):
                 os.getenv("NOTARY_DEFAULT_PRIVACY_MODE", PrivacyMode.PROTECTED.value)
             ),
             claude_api_key=_optional_str("CLAUDE_API_KEY"),
-            claude_model=os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20241022"),
+            claude_model=os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6"),
             claude_api_base_url=os.getenv("CLAUDE_API_BASE_URL", "https://api.anthropic.com"),
             groq_api_key=_optional_str("GROQ_API_KEY"),
             groq_model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),

@@ -617,8 +617,8 @@ class NotaryAppService:
 
     def _require_live_witness_config(self, *, payments: bool) -> None:
         missing = []
-        if not self.settings.groq_api_key:
-            missing.append("GROQ_API_KEY")
+        if not self.settings.groq_api_key and not self.settings.claude_api_key:
+            missing.append("GROQ_API_KEY or CLAUDE_API_KEY")
         if not self.settings.validator_private_key:
             missing.append("VALIDATOR_PRIVATE_KEY")
         if self.settings.arc_demo_mode:
@@ -649,14 +649,22 @@ class NotaryAppService:
             )
 
     async def _extract_obligation_with_llm(self, request: WitnessIntakeRequest):
-        if not self.settings.groq_api_key:
-            raise RuntimeError("GROQ_API_KEY is required for LLM obligation extraction")
-        extractor = GroqObligationExtractor(
-            api_key=self.settings.groq_api_key,
-            model=self.settings.groq_model,
-            api_base_url=self.settings.groq_api_base_url,
-        )
-        return await extractor.extract(request)
+        if self.settings.groq_api_key:
+            extractor = GroqObligationExtractor(
+                api_key=self.settings.groq_api_key,
+                model=self.settings.groq_model,
+                api_base_url=self.settings.groq_api_base_url,
+            )
+            return await extractor.extract(request)
+        if self.settings.claude_api_key:
+            from notary.services.obligation_extractor import ClaudeObligationExtractor
+            extractor = ClaudeObligationExtractor(
+                api_key=self.settings.claude_api_key,
+                model=self.settings.claude_model,
+                api_base_url=self.settings.claude_api_base_url,
+            )
+            return await extractor.extract(request)
+        raise RuntimeError("GROQ_API_KEY or CLAUDE_API_KEY is required for LLM obligation extraction")
 
     async def _execute_payment_instruction(self, instruction: PaymentInstruction) -> dict[str, Any]:
         if instruction.action == PaymentAction.HOLD:
