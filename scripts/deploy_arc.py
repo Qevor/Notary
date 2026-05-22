@@ -34,6 +34,7 @@ def deploy_contract(contract_name: str, contract_file: Path, rpc_url: str, priva
         rpc_url,
         "--private-key",
         private_key,
+        "--broadcast",
         f"{contract_file}:{contract_name}",
     ]
     proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
