@@ -25,6 +25,7 @@ from notary.models.schemas import (
     PaymentTrigger,
     PrivacyMode,
     QevorpayBatchDistributionRequest,
+    QevorpayConditionalReserveRequest,
     QevorpayPaymentLinkRequest,
     Ruling,
     TranscriptionJob,
@@ -425,21 +426,21 @@ class NotaryAppService:
                 "pendingEvidenceInviteToken": token,
             }
         )
-        payment = await self.create_payment_link(
-            QevorpayPaymentLinkRequest(
+        payment = await self.qevorpay.create_conditional_reserve(
+            QevorpayConditionalReserveRequest(
                 amount_usdc=amount_usdc,
-                description=f"NOTARY conditional payment {case.case_id}",
-                recipient=executor_wallet.get("escrow_address"),
+                payer_identity=payer_identity,
+                payee_identity=payee_identity,
+                payer_wallet=payer_resolution.get("wallet"),
+                payee_wallet=payee_resolution.get("wallet"),
+                executor_agent_wallet_id=executor_wallet.get("id"),
+                reserve_wallet=executor_wallet.get("escrow_address"),
+                notary_case_id=case.case_id,
+                instruction=instruction,
                 metadata={
-                    "notaryCaseId": case.case_id,
-                    "fundsPurpose": "notary_conditional_payment_reserve",
-                    "payerIdentity": payer_identity,
-                    "payerWallet": payer_resolution.get("wallet"),
-                    "payeeIdentity": payee_identity,
-                    "payeeWallet": payee_resolution.get("wallet"),
-                    "executorAgentWalletId": executor_wallet.get("id"),
-                    "executorEscrowAddress": executor_wallet.get("escrow_address"),
-                    "instruction": instruction,
+                    "createdByIdentity": created_by_identity,
+                    "payerType": payer_type,
+                    "payeeType": payee_type,
                 },
             )
         )
@@ -460,7 +461,9 @@ class NotaryAppService:
             "succeeded",
             "success",
         }
-        status = str(payload.get("status") or payload.get("payment_status") or "").lower()
+        status = str(
+            payload.get("status") or payload.get("state") or payload.get("payment_status") or ""
+        ).lower()
         if status and status not in funded_statuses:
             return None
         for item in self.store.list("cases"):

@@ -216,14 +216,14 @@ async def test_conditional_case_creates_qevor_reference_and_matches_agent_eviden
     )
     service = NotaryAppService(settings)
 
-    payment_link_requests = []
+    reserve_requests = []
 
-    async def fake_payment_link(self, request):
-        payment_link_requests.append(request)
+    async def fake_conditional_reserve(self, request):
+        reserve_requests.append(request)
         return {
             "reference": "qevor_ref_123",
-            "url": "/pay/qevor_ref_123",
-            "provider": "qevor_supabase",
+            "url": "/request/qevor_ref_123",
+            "provider": "qevor_supabase_reserve",
             "request": request.model_dump(mode="json"),
         }
 
@@ -250,7 +250,7 @@ async def test_conditional_case_creates_qevor_reference_and_matches_agent_eviden
 
     from notary.services.qevorpay import QevorpayClient
 
-    monkeypatch.setattr(QevorpayClient, "create_payment_link", fake_payment_link)
+    monkeypatch.setattr(QevorpayClient, "create_conditional_reserve", fake_conditional_reserve)
     monkeypatch.setattr(QevorpayClient, "resolve_identity_to_wallet", fake_resolve_identity)
     monkeypatch.setattr(QevorpayClient, "resolve_executor_agent_wallet", fake_resolve_executor)
     monkeypatch.setattr(NotaryAppService, "submit_witness_obligation", fake_submit_witness)
@@ -272,7 +272,8 @@ async def test_conditional_case_creates_qevor_reference_and_matches_agent_eviden
     assert case["qevor_payment_reference"] == "qevor_ref_123"
     assert case["status"] == "awaiting_funding"
     assert "evidenceUploadPath" not in case["metadata"]
-    assert payment_link_requests[0].recipient == "0x0000000000000000000000000000000000000c33"
+    assert reserve_requests[0].reserve_wallet == "0x0000000000000000000000000000000000000c33"
+    assert reserve_requests[0].payee_wallet == "0x0000000000000000000000000000000000000b22"
     assert case["metadata"]["payerWallet"] == "0x0000000000000000000000000000000000000a11"
     assert case["metadata"]["payeeWallet"] == "0x0000000000000000000000000000000000000b22"
     assert case["metadata"]["executorAgentWalletId"] == "agent_wallet_123"

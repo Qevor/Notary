@@ -681,7 +681,7 @@ async def qevorpay_settlement_webhook(request: Request) -> dict:
     if payment_ref:
         existing = service.store.get("payments", str(payment_ref))
         if existing:
-            existing["status"] = payload.get("status") or existing.get("status")
+            existing["status"] = payload.get("status") or payload.get("state") or existing.get("status")
             existing["settlement"] = payload
             service.store.put("payments", str(payment_ref), existing)
         service.mark_case_funded_from_qevor(str(payment_ref), payload)

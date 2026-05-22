@@ -395,6 +395,19 @@ class QevorpayPaymentLinkRequest(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class QevorpayConditionalReserveRequest(BaseModel):
+    amount_usdc: float = Field(gt=0)
+    payer_identity: str
+    payee_identity: str
+    payer_wallet: str
+    payee_wallet: str
+    executor_agent_wallet_id: str
+    reserve_wallet: str
+    notary_case_id: str
+    instruction: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class QevorpayBatchDistributionRequest(BaseModel):
     batch_id: str = Field(default_factory=lambda: new_id("batch"))
     recipients: list[dict[str, Any]]

@@ -34,6 +34,23 @@ Intake → Verify → Judge → Attest → Pay → Learn
 
 **6. Learn** — Improves judgment from outcomes. Maintains and organizes the precedent base used by stage 3, and the per-party operating history. Not gamified scoring — a queryable record of prior verdicts, disputes, reversals, and how each held up. Each ruling feeds the next.
 
+## Funded Conditional Cases
+
+NOTARY now protects the payee before work starts by requiring a funded Qevor reserve before evidence becomes actionable.
+
+Flow:
+
+1. The payer creates a NOTARY case using Qevor usernames for payer and payee.
+2. NOTARY resolves those usernames through Qevor's `profiles` table to wallet addresses.
+3. NOTARY requires the payer to have an enrolled Qevor `ARC-TESTNET` agent wallet with an escrow address.
+4. NOTARY creates a Qevor **conditional reserve** request, not a direct payee payment link.
+5. Qevor's executor runs the `pending_reserve` state and, if payer policy allows it, moves USDC from the payer's agent wallet into the payer's escrow wallet.
+6. Qevor sends NOTARY a signed settlement webhook with `state: funded`.
+7. Only then does NOTARY expose the evidence invite link and move the case to `funded_awaiting_evidence`.
+8. After the payee submits evidence, NOTARY judges and sends a signed post-verdict release/refund instruction to Qevor.
+
+This separates **pre-work reserve funding** from **post-verdict release**. The payee is not asked to work against an unfunded promise, and Qevor still owns the actual USDC movement.
+
 ## The Reversal (centerpiece)
 
 This is the single distinguishing capability. **NOTARY can reverse its own prior verdict, on the public record, when shown it was wrong — and must defend the reversal.**
@@ -180,6 +197,16 @@ When real credentials are added, set the relevant `*_DEMO_MODE` to `false` and c
 **Circle** — set `CIRCLE_WALLET_EMAIL` and authenticate the session (see Circle CLI section below).
 
 **Qevor paths** — `QEVORPAY_*_PATH` values are required in live mode because Qevor's endpoint contracts are project-specific.
+
+**Qevor Supabase integration** — live conditional reserves use Qevor Supabase tables directly when no HTTP endpoint is configured. Required server-side values:
+
+```env
+QEVOR_SUPABASE_URL=
+QEVOR_SUPABASE_SERVICE_ROLE_KEY=
+QEVORPAY_WEBHOOK_SECRET=
+```
+
+Qevor must have migrations `03_notary_attestation.sql` and `04_conditional_reserves.sql` applied before live funded cases work.
 
 **Speechmatics** — uses the documented Batch API defaults (`https://asr.api.speechmatics.com/v2`). Set `SPEECHMATICS_API_KEY` to enable real transcription; without it the pipeline accepts a pasted transcript or runs with a mock.
 

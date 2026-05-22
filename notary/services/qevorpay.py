@@ -10,6 +10,7 @@ from notary.models.schemas import (
     PaymentAction,
     PaymentTrigger,
     QevorpayBatchDistributionRequest,
+    QevorpayConditionalReserveRequest,
     QevorpayPaymentLinkRequest,
     new_id,
 )
@@ -104,6 +105,22 @@ class QevorpayClient:
             }
         return await self._post(
             self._required_path(self.payment_link_path, "QEVORPAY_PAYMENT_LINK_PATH"),
+            request.model_dump(mode="json"),
+        )
+
+    async def create_conditional_reserve(self, request: QevorpayConditionalReserveRequest) -> dict[str, Any]:
+        if self.demo_mode:
+            return {
+                "reference": new_id("qevor_reserve"),
+                "url": f"/reserve/{request.notary_case_id}",
+                "status": "pending_reserve",
+                "provider": "local_qevorpay",
+                "request": request.model_dump(mode="json"),
+            }
+        if self.supabase_url:
+            return await self._create_supabase_reserve(request)
+        return await self._post(
+            self._required_path(self.batch_distribution_path, "QEVORPAY_BATCH_DISTRIBUTION_PATH"),
             request.model_dump(mode="json"),
         )
 
@@ -343,6 +360,52 @@ class QevorpayClient:
             "provider": "qevor_supabase",
             "request": request.model_dump(mode="json"),
             "batchRequest": batch,
+        }
+
+    async def _create_supabase_reserve(self, request: QevorpayConditionalReserveRequest) -> dict[str, Any]:
+        batch_row: dict[str, Any] = {
+            "creator_wallet": request.payer_wallet,
+            "title": "NOTARY conditional reserve",
+            "description": request.instruction,
+            "recipients": [
+                {
+                    "wallet": request.payee_wallet,
+                    "amount": request.amount_usdc,
+                    "label": request.payee_identity,
+                }
+            ],
+            "total_amount": request.amount_usdc,
+            "status": "pending",
+            "executor_agent_wallet_id": request.executor_agent_wallet_id,
+            "executor_state": "pending_reserve",
+            "notary_case_id": request.notary_case_id,
+            "reserve_wallet": request.reserve_wallet,
+            "reserve_source_wallet": request.payer_wallet,
+            "reserve_amount_usdc": request.amount_usdc,
+        }
+        batch_rows = await self._supabase_insert("batch_requests", batch_row)
+        batch = batch_rows[0]
+        payment_rows = await self._supabase_insert(
+            "batch_payments",
+            [
+                {
+                    "batch_request_id": batch["id"],
+                    "payer_wallet": request.payer_wallet,
+                    "recipient_wallet": request.reserve_wallet,
+                    "amount": request.amount_usdc,
+                    "tx_hash": "pending_reserve",
+                    "status": "pending_reserve",
+                }
+            ],
+        )
+        return {
+            "reference": batch["id"],
+            "url": f"/request/{batch['id']}",
+            "status": "pending_reserve",
+            "provider": "qevor_supabase_reserve",
+            "request": request.model_dump(mode="json"),
+            "batchRequest": batch,
+            "batchPayment": payment_rows[0],
         }
 
     async def _supabase_insert(self, table: str, payload: dict[str, Any] | list[dict[str, Any]]) -> list[dict[str, Any]]:
