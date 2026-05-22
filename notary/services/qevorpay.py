@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -30,6 +31,47 @@ class QevorpayClient:
     supabase_service_role_key: str | None = None
     executor_agent_wallet_id: str | None = None
     creator_wallet: str | None = None
+
+    async def resolve_identity_to_wallet(self, identity: str | None) -> dict[str, Any]:
+        if not identity:
+            return {"identity": identity, "wallet": identity, "username": None, "resolved": False}
+        value = identity.strip()
+        if self._is_evm_address(value):
+            return {"identity": identity, "wallet": value, "username": None, "resolved": True}
+        username = value.removeprefix("@").strip().lower()
+        if not username:
+            return {"identity": identity, "wallet": identity, "username": None, "resolved": False}
+        rows = await self._supabase_select(
+            "profiles",
+            select="wallet,username",
+            filters={"username": f"eq.{username}"},
+            limit=1,
+        )
+        if not rows:
+            raise RuntimeError(f"Qevor username @{username} is not registered")
+        wallet = rows[0].get("wallet")
+        if not wallet:
+            raise RuntimeError(f"Qevor username @{username} has no wallet")
+        return {"identity": identity, "wallet": wallet, "username": username, "resolved": True}
+
+    async def resolve_executor_agent_wallet(self, profile_wallet: str | None) -> dict[str, Any] | None:
+        if not profile_wallet:
+            return None
+        rows = await self._supabase_select(
+            "agent_wallets",
+            select="id,profile_wallet,wallet_address,chain,status,executor_mode,escrow_address,attestation_mode,label",
+            filters={
+                "profile_wallet": f"eq.{profile_wallet}",
+                "chain": "eq.ARC-TESTNET",
+                "status": "eq.active",
+            },
+            limit=10,
+        )
+        if not rows:
+            return None
+        escrow_rows = [row for row in rows if row.get("executor_mode") == "escrow"]
+        with_escrow = [row for row in escrow_rows if row.get("escrow_address")]
+        return (with_escrow or escrow_rows or rows)[0]
 
     async def create_payment_link(self, request: QevorpayPaymentLinkRequest) -> dict[str, Any]:
         if self.demo_mode:
@@ -208,27 +250,40 @@ class QevorpayClient:
             return response.json()
 
     async def _create_supabase_batch(self, request: QevorpayBatchDistributionRequest) -> dict[str, Any]:
-        creator_wallet = (
+        creator_identity = (
             request.metadata.get("creator_wallet")
             or request.metadata.get("payerIdentity")
             or self.creator_wallet
         )
+        creator = await self.resolve_identity_to_wallet(creator_identity)
+        creator_wallet = creator.get("wallet")
         if not creator_wallet:
             raise RuntimeError(
                 "Qevor Supabase batch execution requires a creator wallet. "
                 "Pass payer_identity as a wallet address or set QEVOR_CREATOR_WALLET."
             )
-        recipients = [
-            {
-                "wallet": item.get("wallet") or item.get("recipient") or item.get("recipient_wallet"),
-                "amount": float(item.get("amount") or item.get("amount_usdc") or 0),
-                "label": item.get("label"),
-            }
-            for item in request.recipients
-        ]
+        resolved_recipients = []
+        for item in request.recipients:
+            recipient_identity = item.get("wallet") or item.get("recipient") or item.get("recipient_wallet")
+            recipient = await self.resolve_identity_to_wallet(recipient_identity)
+            resolved_recipients.append(
+                {
+                    "wallet": recipient.get("wallet"),
+                    "amount": float(item.get("amount") or item.get("amount_usdc") or 0),
+                    "label": item.get("label") or recipient.get("username") or recipient_identity,
+                    "username": recipient.get("username"),
+                    "identity": recipient_identity,
+                }
+            )
+        recipients = resolved_recipients
         recipients = [item for item in recipients if item["wallet"] and item["amount"] > 0]
         if not recipients:
             raise RuntimeError("Batch distribution requires at least one recipient")
+        executor_agent_wallet_id = request.metadata.get("executor_agent_wallet_id") or self.executor_agent_wallet_id
+        if not executor_agent_wallet_id:
+            executor_wallet = await self.resolve_executor_agent_wallet(creator_wallet)
+            if executor_wallet:
+                executor_agent_wallet_id = executor_wallet.get("id")
         total = round(sum(item["amount"] for item in recipients), 6)
         batch_row: dict[str, Any] = {
             "creator_wallet": creator_wallet,
@@ -237,14 +292,10 @@ class QevorpayClient:
             "recipients": recipients,
             "total_amount": total,
             "status": "pending",
-            "executor_agent_wallet_id": (
-                request.metadata.get("executor_agent_wallet_id")
-                or self.executor_agent_wallet_id
-            ),
+            "executor_agent_wallet_id": executor_agent_wallet_id,
             "executor_state": (
                 "pending_evaluation"
-                if request.metadata.get("executor_agent_wallet_id")
-                or self.executor_agent_wallet_id
+                if executor_agent_wallet_id
                 else "manual"
             ),
         }
@@ -317,6 +368,43 @@ class QevorpayClient:
             response.raise_for_status()
             body = response.json()
         return body if isinstance(body, list) else [body]
+
+    async def _supabase_select(
+        self,
+        table: str,
+        *,
+        select: str,
+        filters: dict[str, str] | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        import httpx
+
+        if not self.supabase_url or not self.supabase_service_role_key:
+            raise RuntimeError(
+                "QEVOR_SUPABASE_URL and QEVOR_SUPABASE_SERVICE_ROLE_KEY are required "
+                "to resolve Qevor usernames"
+            )
+        params: dict[str, str | int] = {"select": select}
+        if filters:
+            params.update(filters)
+        if limit:
+            params["limit"] = limit
+        url = f"{self.supabase_url.rstrip('/')}/rest/v1/{table}"
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(
+                url,
+                params=params,
+                headers={
+                    "apikey": self.supabase_service_role_key,
+                    "Authorization": f"Bearer {self.supabase_service_role_key}",
+                },
+            )
+            response.raise_for_status()
+            body = response.json()
+        return body if isinstance(body, list) else [body]
+
+    def _is_evm_address(self, value: str) -> bool:
+        return bool(re.fullmatch(r"0x[a-fA-F0-9]{40}", value))
 
     def _headers(self) -> dict[str, str]:
         if not self.api_key:

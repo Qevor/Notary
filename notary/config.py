@@ -34,6 +34,7 @@ def _optional_str(name: str) -> str | None:
 
 class Settings(BaseModel):
     notary_env: str = "development"
+    notary_id: str | None = None
     notary_demo_mode: bool = False
     notary_default_privacy_mode: PrivacyMode = PrivacyMode.PROTECTED
     notary_session_secret: str | None = None
@@ -103,6 +104,7 @@ class Settings(BaseModel):
         chain_id = os.getenv("ARC_CHAIN_ID")
         return cls(
             notary_env=os.getenv("NOTARY_ENV", "development"),
+            notary_id=_optional_str("NOTARY_ID"),
             notary_demo_mode=_bool_env("NOTARY_DEMO_MODE", False),
             notary_default_privacy_mode=PrivacyMode(
                 os.getenv("NOTARY_DEFAULT_PRIVACY_MODE", PrivacyMode.PROTECTED.value)

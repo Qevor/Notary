@@ -393,7 +393,22 @@ def _case_cards(items: list[dict[str, Any]]) -> str:
     cards: list[str] = []
     for item in reversed(items):
         upload = item.get("metadata", {}).get("evidenceUploadPath")
-        upload_link = f'<a class="button secondary" href="{escape(upload)}">Evidence link</a>' if upload else ""
+        funding_url = item.get("qevor_payment_url")
+        funding_link = (
+            f'<a class="button secondary" href="{escape(str(funding_url))}">Fund conditional payment</a>'
+            if funding_url and item.get("status") == "awaiting_funding"
+            else ""
+        )
+        upload_link = (
+            f'<a class="button secondary" href="{escape(upload)}">Evidence link</a>'
+            if upload and item.get("status") != "awaiting_funding"
+            else ""
+        )
+        guarded_note = (
+            '<p class="panel-copy">Evidence is locked until the Qevor conditional payment is funded.</p>'
+            if item.get("status") == "awaiting_funding"
+            else ""
+        )
         cards.append(
             f"""
             <article class="record">
@@ -410,7 +425,8 @@ def _case_cards(items: list[dict[str, Any]]) -> str:
                 <div class="fact"><span>Qevor ref</span><code>{escape(_short(item.get("qevor_payment_reference"), 28))}</code></div>
                 <div class="fact"><span>Latest ruling</span><code>{escape(_short(item.get("latest_ruling_id"), 28))}</code></div>
               </div>
-              <div class="actions" style="margin-top:12px">{upload_link}</div>
+              {guarded_note}
+              <div class="actions" style="margin-top:12px">{funding_link}{upload_link}</div>
             </article>
             """
         )
@@ -635,8 +651,15 @@ def render_workspace(state: dict[str, Any], user: dict[str, Any], error: str | N
             <form method="post" action="/ui/cases">
               <label for="instruction">Obligation</label>
               <textarea id="instruction" name="instruction" required placeholder="Pay Daniel $250 when the design package is complete and I approve."></textarea>
+              <label for="payer_identity">Payer Qevor username</label>
+              <input id="payer_identity" name="payer_identity" required placeholder="@maya or marketing.agent" />
+              <label for="payer_type">Payer type</label>
+              <select id="payer_type" name="payer_type">
+                <option value="human">Human</option>
+                <option value="agent">Agent</option>
+              </select>
               <label for="payee_identity">Payee identity</label>
-              <input id="payee_identity" name="payee_identity" required placeholder="daniel@example.com or logistics.agent" />
+              <input id="payee_identity" name="payee_identity" required placeholder="@daniel or logistics.agent" />
               <label for="amount_usdc">Amount USDC</label>
               <input id="amount_usdc" name="amount_usdc" type="number" min="0.01" step="0.01" required />
               <label for="payee_type">Payee type</label>
@@ -711,6 +734,13 @@ def render_workspace(state: dict[str, Any], user: dict[str, Any], error: str | N
 
 def render_case_evidence(case: dict[str, Any], token: str | None, user: dict[str, Any] | None) -> str:
     hidden_token = f'<input name="token" type="hidden" value="{escape(token)}" />' if token else ""
+    is_funded = case.get("status") != "awaiting_funding"
+    funding_notice = (
+        '<div class="notice">This case is not funded yet. Evidence cannot be submitted until Qevor reports the conditional payment as funded.</div>'
+        if not is_funded
+        else ""
+    )
+    disabled = "" if is_funded else "disabled"
     body = f"""
     <main class="signin">
       <section class="panel signin-card">
@@ -722,18 +752,19 @@ def render_case_evidence(case: dict[str, Any], token: str | None, user: dict[str
           <div class="fact"><span>Payee</span><strong>{_text(case.get("payee_identity"))}</strong></div>
           <div class="fact"><span>Qevor ref</span><code>{escape(_short(case.get("qevor_payment_reference"), 28))}</code></div>
         </div>
+        {funding_notice}
         <form method="post" action="/cases/{escape(case.get("case_id"))}/evidence">
           {hidden_token}
           <label for="submitter_identity">Submitter identity</label>
-          <input id="submitter_identity" name="submitter_identity" value="{escape(str((user or {}).get("email") or case.get("payee_identity") or ""))}" required />
+          <input id="submitter_identity" name="submitter_identity" value="{escape(str((user or {}).get("email") or case.get("payee_identity") or ""))}" required {disabled} />
           <label for="submitter_type">Submitter type</label>
-          <select id="submitter_type" name="submitter_type">
+          <select id="submitter_type" name="submitter_type" {disabled}>
             <option value="human">Human</option>
             <option value="agent">Agent</option>
           </select>
           <label for="evidence_text">Evidence</label>
-          <textarea id="evidence_text" name="evidence_text" required placeholder="Timestamped file link, signed approval, commit hash, invoice receipt, delivery notes..."></textarea>
-          <button>Submit evidence to NOTARY</button>
+          <textarea id="evidence_text" name="evidence_text" required placeholder="Timestamped file link, signed approval, commit hash, invoice receipt, delivery notes..." {disabled}></textarea>
+          <button {disabled}>Submit evidence to NOTARY</button>
         </form>
       </section>
     </main>

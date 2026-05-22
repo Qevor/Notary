@@ -180,8 +180,10 @@ async def workspace(request: Request, error: str | None = None) -> HTMLResponse:
 async def ui_create_case(
     request: Request,
     instruction: str = Form(...),
+    payer_identity: str = Form(...),
     payee_identity: str = Form(...),
     amount_usdc: float = Form(...),
+    payer_type: str = Form(default="human"),
     payee_type: str = Form(default="human"),
 ) -> RedirectResponse:
     user = _require_ui_user(request)
@@ -190,12 +192,12 @@ async def ui_create_case(
         await get_app_service().create_conditional_case(
             created_by_identity=identity,
             created_by_type="human",
-            payer_identity=identity,
+            payer_identity=payer_identity,
             payee_identity=payee_identity,
-            approver_identity=identity,
-            payer_type="human",
+            approver_identity=payer_identity,
+            payer_type=payer_type,
             payee_type=payee_type,
-            approver_type="human",
+            approver_type=payer_type,
             instruction=instruction,
             amount_usdc=amount_usdc,
         )
@@ -682,6 +684,7 @@ async def qevorpay_settlement_webhook(request: Request) -> dict:
             existing["status"] = payload.get("status") or existing.get("status")
             existing["settlement"] = payload
             service.store.put("payments", str(payment_ref), existing)
+        service.mark_case_funded_from_qevor(str(payment_ref), payload)
     return {"ok": True, "settlementId": settlement_id}
 
 

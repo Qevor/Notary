@@ -216,7 +216,10 @@ async def test_conditional_case_creates_qevor_reference_and_matches_agent_eviden
     )
     service = NotaryAppService(settings)
 
+    payment_link_requests = []
+
     async def fake_payment_link(self, request):
+        payment_link_requests.append(request)
         return {
             "reference": "qevor_ref_123",
             "url": "/pay/qevor_ref_123",
@@ -230,9 +233,26 @@ async def test_conditional_case_creates_qevor_reference_and_matches_agent_eviden
             "verdict": {"outcome": "full_release"},
         }
 
+    async def fake_resolve_identity(self, identity):
+        wallets = {
+            "marketing.agent": "0x0000000000000000000000000000000000000a11",
+            "logistics.agent": "0x0000000000000000000000000000000000000b22",
+        }
+        return {
+            "identity": identity,
+            "wallet": wallets.get(identity, identity),
+            "username": identity,
+            "resolved": True,
+        }
+
+    async def fake_resolve_executor(self, profile_wallet):
+        return {"id": "agent_wallet_123", "escrow_address": "0x0000000000000000000000000000000000000c33"}
+
     from notary.services.qevorpay import QevorpayClient
 
     monkeypatch.setattr(QevorpayClient, "create_payment_link", fake_payment_link)
+    monkeypatch.setattr(QevorpayClient, "resolve_identity_to_wallet", fake_resolve_identity)
+    monkeypatch.setattr(QevorpayClient, "resolve_executor_agent_wallet", fake_resolve_executor)
     monkeypatch.setattr(NotaryAppService, "submit_witness_obligation", fake_submit_witness)
 
     case = await service.create_conditional_case(
@@ -250,7 +270,26 @@ async def test_conditional_case_creates_qevor_reference_and_matches_agent_eviden
 
     assert case["case_id"].startswith("case_")
     assert case["qevor_payment_reference"] == "qevor_ref_123"
-    assert "/cases/" in case["metadata"]["evidenceUploadPath"]
+    assert case["status"] == "awaiting_funding"
+    assert "evidenceUploadPath" not in case["metadata"]
+    assert payment_link_requests[0].recipient == "0x0000000000000000000000000000000000000c33"
+    assert case["metadata"]["payerWallet"] == "0x0000000000000000000000000000000000000a11"
+    assert case["metadata"]["payeeWallet"] == "0x0000000000000000000000000000000000000b22"
+    assert case["metadata"]["executorAgentWalletId"] == "agent_wallet_123"
+
+    blocked = await service.submit_case_evidence(
+        case_id=case["case_id"],
+        token=case["evidenceInviteToken"],
+        evidence_text="Manifest complete, timestamped, hash-linked, and approved.",
+        submitter_identity="logistics.agent",
+        submitter_type="agent",
+    )
+    assert blocked["error"] == "case_not_funded"
+
+    funded = service.mark_case_funded_from_qevor("qevor_ref_123", {"status": "paid"})
+    assert funded is not None
+    assert funded["status"] == "funded_awaiting_evidence"
+    assert "/cases/" in funded["metadata"]["evidenceUploadPath"]
 
     result = await service.submit_case_evidence(
         case_id=case["case_id"],

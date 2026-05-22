@@ -251,6 +251,8 @@ class NotaryCase(BaseModel):
     qevor_provider: str | None = None
     evidence_invite_token_hash: str
     status: Literal[
+        "awaiting_funding",
+        "funded_awaiting_evidence",
         "awaiting_evidence",
         "under_review",
         "released",

@@ -380,6 +380,21 @@ class NotaryAppService:
     ) -> dict[str, Any]:
         if self.settings.qevorpay_demo_mode:
             raise RuntimeError("QEVORPAY_DEMO_MODE=false is required to create real Qevor payment cases")
+        payer_resolution = await self.qevorpay.resolve_identity_to_wallet(payer_identity)
+        payee_resolution = await self.qevorpay.resolve_identity_to_wallet(payee_identity)
+        approver_resolution = (
+            await self.qevorpay.resolve_identity_to_wallet(approver_identity)
+            if approver_identity
+            else None
+        )
+        executor_wallet = await self.qevorpay.resolve_executor_agent_wallet(
+            payer_resolution.get("wallet")
+        )
+        if not executor_wallet or not executor_wallet.get("escrow_address"):
+            raise RuntimeError(
+                "Payer must have an enrolled Qevor Arc Testnet agent wallet with an escrow address "
+                "before creating a protected NOTARY conditional payment"
+            )
         token = new_id("invite")
         case = NotaryCase(
             created_by_identity=created_by_identity,
@@ -393,16 +408,37 @@ class NotaryAppService:
             instruction=instruction,
             amount_usdc=amount_usdc,
             evidence_invite_token_hash=sha256_hex(token),
+            status="awaiting_funding",
+        )
+        case.metadata.update(
+            {
+                "payerUsername": payer_resolution.get("username"),
+                "payerWallet": payer_resolution.get("wallet"),
+                "payeeUsername": payee_resolution.get("username"),
+                "payeeWallet": payee_resolution.get("wallet"),
+                "approverUsername": approver_resolution.get("username") if approver_resolution else None,
+                "approverWallet": approver_resolution.get("wallet") if approver_resolution else None,
+                "executorAgentWalletId": executor_wallet.get("id") if executor_wallet else None,
+                "executorEscrowAddress": executor_wallet.get("escrow_address") if executor_wallet else None,
+                "fundingRequired": True,
+                "fundingStatus": "awaiting_funding",
+                "pendingEvidenceInviteToken": token,
+            }
         )
         payment = await self.create_payment_link(
             QevorpayPaymentLinkRequest(
                 amount_usdc=amount_usdc,
                 description=f"NOTARY conditional payment {case.case_id}",
-                recipient=payee_identity,
+                recipient=executor_wallet.get("escrow_address"),
                 metadata={
                     "notaryCaseId": case.case_id,
+                    "fundsPurpose": "notary_conditional_payment_reserve",
                     "payerIdentity": payer_identity,
+                    "payerWallet": payer_resolution.get("wallet"),
                     "payeeIdentity": payee_identity,
+                    "payeeWallet": payee_resolution.get("wallet"),
+                    "executorAgentWalletId": executor_wallet.get("id"),
+                    "executorEscrowAddress": executor_wallet.get("escrow_address"),
                     "instruction": instruction,
                 },
             )
@@ -410,9 +446,40 @@ class NotaryAppService:
         case.qevor_payment_reference = payment.get("reference")
         case.qevor_payment_url = payment.get("url")
         case.qevor_provider = payment.get("provider")
-        case.metadata["evidenceUploadPath"] = f"/cases/{case.case_id}/evidence?token={token}"
         self.store.put("cases", case.case_id, case.model_dump(mode="json"))
         return case.model_dump(mode="json") | {"evidenceInviteToken": token}
+
+    def mark_case_funded_from_qevor(self, payment_reference: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+        funded_statuses = {
+            "paid",
+            "funded",
+            "settled",
+            "complete",
+            "completed",
+            "executed",
+            "succeeded",
+            "success",
+        }
+        status = str(payload.get("status") or payload.get("payment_status") or "").lower()
+        if status and status not in funded_statuses:
+            return None
+        for item in self.store.list("cases"):
+            if str(item.get("qevor_payment_reference")) != str(payment_reference):
+                continue
+            case = NotaryCase.model_validate(item)
+            if case.status == "awaiting_funding":
+                token = case.metadata.get("pendingEvidenceInviteToken")
+                if token:
+                    case.metadata["evidenceUploadPath"] = f"/cases/{case.case_id}/evidence?token={token}"
+                    case.metadata.pop("pendingEvidenceInviteToken", None)
+                case.metadata["fundingStatus"] = "funded"
+                case.metadata["fundedAt"] = utc_now().isoformat()
+                case.metadata["fundingEvent"] = payload
+                case.status = "funded_awaiting_evidence"
+                case.updated_at = utc_now()
+                self.store.put("cases", case.case_id, case.model_dump(mode="json"))
+            return case.model_dump(mode="json")
+        return None
 
     async def submit_case_evidence(
         self,
@@ -429,6 +496,12 @@ class NotaryAppService:
         if not case_data:
             return {"error": "case_not_found", "caseId": case_id}
         case = NotaryCase.model_validate(case_data)
+        if case.status == "awaiting_funding":
+            return {
+                "error": "case_not_funded",
+                "caseId": case_id,
+                "message": "Evidence is not actionable until the Qevor conditional payment is funded.",
+            }
         if token and sha256_hex(token) != case.evidence_invite_token_hash:
             return {"error": "invalid_invite_token", "caseId": case_id}
         if submitter_identity not in {case.payee_identity, case.payer_identity, case.approver_identity}:
@@ -461,6 +534,14 @@ class NotaryAppService:
                 "payer_identity": case.payer_identity,
                 "payee_identity": case.payee_identity,
                 "approver_identity": case.approver_identity,
+                "payerWallet": case.metadata.get("payerWallet"),
+                "payeeWallet": case.metadata.get("payeeWallet"),
+                "approverWallet": case.metadata.get("approverWallet"),
+                "payerUsername": case.metadata.get("payerUsername"),
+                "payeeUsername": case.metadata.get("payeeUsername"),
+                "approverUsername": case.metadata.get("approverUsername"),
+                "creator_wallet": case.metadata.get("payerWallet"),
+                "executor_agent_wallet_id": case.metadata.get("executorAgentWalletId"),
             },
         )
         try:
@@ -1254,6 +1335,8 @@ class NotaryAppService:
         return receipt
 
     def _default_notary_id(self) -> str:
+        if self.settings.notary_id:
+            return self.settings.notary_id
         notaries = self.store.list("notaries")
         if notaries:
             return str(notaries[0]["notary_id"])
