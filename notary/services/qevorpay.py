@@ -208,9 +208,16 @@ class QevorpayClient:
             return response.json()
 
     async def _create_supabase_batch(self, request: QevorpayBatchDistributionRequest) -> dict[str, Any]:
-        creator_wallet = request.metadata.get("creator_wallet") or self.creator_wallet
+        creator_wallet = (
+            request.metadata.get("creator_wallet")
+            or request.metadata.get("payerIdentity")
+            or self.creator_wallet
+        )
         if not creator_wallet:
-            raise RuntimeError("QEVOR_CREATOR_WALLET is required for Qevor Supabase batch execution")
+            raise RuntimeError(
+                "Qevor Supabase batch execution requires a creator wallet. "
+                "Pass payer_identity as a wallet address or set QEVOR_CREATOR_WALLET."
+            )
         recipients = [
             {
                 "wallet": item.get("wallet") or item.get("recipient") or item.get("recipient_wallet"),

@@ -142,9 +142,16 @@ class WitnessVerdict(BaseModel):
     outcome: VerdictOutcome
     release_pct: float = Field(ge=0, le=100)
     confidence: float = Field(ge=0, le=1)
+    confidence_gate: Literal[
+        "release",
+        "release_with_dispute_window",
+        "request_more_evidence",
+    ] = "request_more_evidence"
+    dispute_window_open: bool = False
     deficiency: str | None = None
     reasoning_trace: str
     precedent_refs: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utc_now)
 
 
@@ -224,6 +231,37 @@ class PaymentInstruction(BaseModel):
     recipients: list[dict[str, Any]] = Field(default_factory=list)
     attestation_id: str | None = None
     reason: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class NotaryCase(BaseModel):
+    case_id: str = Field(default_factory=lambda: new_id("case"))
+    created_by_identity: str
+    created_by_type: PartyType = PartyType.HUMAN
+    payer_identity: str
+    payee_identity: str
+    approver_identity: str | None = None
+    payer_type: PartyType = PartyType.HUMAN
+    payee_type: PartyType = PartyType.HUMAN
+    approver_type: PartyType = PartyType.HUMAN
+    instruction: str
+    amount_usdc: float = Field(gt=0)
+    qevor_payment_reference: str | None = None
+    qevor_payment_url: str | None = None
+    qevor_provider: str | None = None
+    evidence_invite_token_hash: str
+    status: Literal[
+        "awaiting_evidence",
+        "under_review",
+        "released",
+        "held",
+        "refunded",
+        "revised",
+        "failed",
+    ] = "awaiting_evidence"
+    latest_ruling_id: str | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -318,6 +356,7 @@ class IntegrityReport(BaseModel):
     safety_flags: list[str] = Field(default_factory=list)
     approved: bool
     notes: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class Attestation(BaseModel):

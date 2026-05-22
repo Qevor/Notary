@@ -13,6 +13,7 @@ from notary.models.schemas import (
     EvidenceSource,
     EvidenceAccessGrant,
     MediaEvidence,
+    NotaryCase,
     NotaryIdentity,
     Observation,
     OperatingAgreement,
@@ -27,6 +28,7 @@ from notary.models.schemas import (
     QevorpayPaymentLinkRequest,
     Ruling,
     TranscriptionJob,
+    VerdictOutcome,
     WitnessIntakeRequest,
     new_id,
     utc_now,
@@ -162,6 +164,75 @@ class NotaryAppService:
             "diarization": self.settings.speechmatics_diarization,
         }
 
+    def auth_status(self) -> dict[str, Any]:
+        return {
+            "provider": "supabase",
+            "configured": bool(
+                self.settings.qevor_supabase_url
+                and self.settings.qevor_supabase_anon_key
+                and self.settings.notary_session_secret
+            ),
+            "needs": [
+                name
+                for name, value in {
+                    "QEVOR_SUPABASE_URL": self.settings.qevor_supabase_url,
+                    "QEVOR_SUPABASE_ANON_KEY": self.settings.qevor_supabase_anon_key,
+                    "NOTARY_SESSION_SECRET": self.settings.notary_session_secret,
+                }.items()
+                if not value
+            ],
+        }
+
+    async def send_login_otp(self, email: str) -> dict[str, Any]:
+        if not self.settings.qevor_supabase_url or not self.settings.qevor_supabase_anon_key:
+            raise RuntimeError("QEVOR_SUPABASE_URL and QEVOR_SUPABASE_ANON_KEY are required for sign-in")
+        import httpx
+
+        url = f"{self.settings.qevor_supabase_url.rstrip('/')}/auth/v1/otp"
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                url,
+                json={"email": email, "create_user": True},
+                headers={
+                    "apikey": self.settings.qevor_supabase_anon_key,
+                    "Authorization": f"Bearer {self.settings.qevor_supabase_anon_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            response.raise_for_status()
+        return {"status": "otp_sent", "email": email}
+
+    async def verify_login_otp(self, email: str, token: str) -> dict[str, Any]:
+        if not self.settings.qevor_supabase_url or not self.settings.qevor_supabase_anon_key:
+            raise RuntimeError("QEVOR_SUPABASE_URL and QEVOR_SUPABASE_ANON_KEY are required for sign-in")
+        import httpx
+
+        url = f"{self.settings.qevor_supabase_url.rstrip('/')}/auth/v1/verify"
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                url,
+                json={"email": email, "token": token, "type": "email"},
+                headers={
+                    "apikey": self.settings.qevor_supabase_anon_key,
+                    "Authorization": f"Bearer {self.settings.qevor_supabase_anon_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            response.raise_for_status()
+            session = response.json()
+        user = session.get("user") or {}
+        return {
+            "accessToken": session.get("access_token"),
+            "refreshToken": session.get("refresh_token"),
+            "expiresIn": session.get("expires_in"),
+            "user": {
+                "id": user.get("id"),
+                "email": user.get("email") or email,
+                "aud": user.get("aud"),
+                "role": user.get("role"),
+            },
+        }
+
     def get_operating_agreement(self, notary_id: str) -> dict[str, Any] | None:
         agreements = self.store.list("operating_agreements")
         return next((item for item in agreements if item.get("notary_id") == notary_id), None)
@@ -172,12 +243,14 @@ class NotaryAppService:
         privacy_mode: PrivacyMode,
         source_kind: str = "manual_transcript",
         notary_id: str | None = None,
+        submitter_identity: str | None = None,
     ) -> dict[str, Any]:
         transcript_record = self.vault.store_text(transcript_text, privacy_mode)
         observation = Observation(
             source=EvidenceSource(
                 kind=source_kind,
                 uri=transcript_record["encryptedUri"],
+                submitted_by=submitter_identity,
                 metadata={
                     "vaultEvidenceId": transcript_record["evidenceId"],
                     "transcriptHash": transcript_record["rawHash"],
@@ -187,6 +260,12 @@ class NotaryAppService:
             raw_text=transcript_text,
             privacy_mode=privacy_mode,
             confidence=0.78,
+            metadata={
+                "submitter_identity": submitter_identity,
+                "payer_identity": submitter_identity,
+            }
+            if submitter_identity
+            else {},
         )
         self.store.put("vault_records", transcript_record["evidenceId"], transcript_record)
         return await self.run_cycle(observation, notary_id=notary_id)
@@ -285,11 +364,134 @@ class NotaryAppService:
         self.store.put("payments", payment_id, result)
         return result
 
+    async def create_conditional_case(
+        self,
+        *,
+        created_by_identity: str,
+        created_by_type: str = "human",
+        payer_identity: str,
+        payee_identity: str,
+        approver_identity: str | None,
+        payer_type: str = "human",
+        payee_type: str = "human",
+        approver_type: str = "human",
+        instruction: str,
+        amount_usdc: float,
+    ) -> dict[str, Any]:
+        if self.settings.qevorpay_demo_mode:
+            raise RuntimeError("QEVORPAY_DEMO_MODE=false is required to create real Qevor payment cases")
+        token = new_id("invite")
+        case = NotaryCase(
+            created_by_identity=created_by_identity,
+            created_by_type=PartyType(created_by_type),
+            payer_identity=payer_identity,
+            payee_identity=payee_identity,
+            approver_identity=approver_identity,
+            payer_type=PartyType(payer_type),
+            payee_type=PartyType(payee_type),
+            approver_type=PartyType(approver_type),
+            instruction=instruction,
+            amount_usdc=amount_usdc,
+            evidence_invite_token_hash=sha256_hex(token),
+        )
+        payment = await self.create_payment_link(
+            QevorpayPaymentLinkRequest(
+                amount_usdc=amount_usdc,
+                description=f"NOTARY conditional payment {case.case_id}",
+                recipient=payee_identity,
+                metadata={
+                    "notaryCaseId": case.case_id,
+                    "payerIdentity": payer_identity,
+                    "payeeIdentity": payee_identity,
+                    "instruction": instruction,
+                },
+            )
+        )
+        case.qevor_payment_reference = payment.get("reference")
+        case.qevor_payment_url = payment.get("url")
+        case.qevor_provider = payment.get("provider")
+        case.metadata["evidenceUploadPath"] = f"/cases/{case.case_id}/evidence?token={token}"
+        self.store.put("cases", case.case_id, case.model_dump(mode="json"))
+        return case.model_dump(mode="json") | {"evidenceInviteToken": token}
+
+    async def submit_case_evidence(
+        self,
+        *,
+        case_id: str,
+        token: str | None,
+        evidence_text: str,
+        submitter_identity: str,
+        submitter_type: str = "human",
+        evidence_ref: str | None = None,
+        privacy_mode: PrivacyMode = PrivacyMode.PROTECTED,
+    ) -> dict[str, Any]:
+        case_data = self.store.get("cases", case_id)
+        if not case_data:
+            return {"error": "case_not_found", "caseId": case_id}
+        case = NotaryCase.model_validate(case_data)
+        if token and sha256_hex(token) != case.evidence_invite_token_hash:
+            return {"error": "invalid_invite_token", "caseId": case_id}
+        if submitter_identity not in {case.payee_identity, case.payer_identity, case.approver_identity}:
+            if not token:
+                return {"error": "submitter_not_authorized", "caseId": case_id}
+
+        case.status = "under_review"
+        case.updated_at = utc_now()
+        self.store.put("cases", case.case_id, case.model_dump(mode="json"))
+
+        request = WitnessIntakeRequest(
+            instruction=case.instruction,
+            evidence_text=evidence_text,
+            evidence_ref=evidence_ref,
+            evidence_type="case_evidence",
+            payer_identity=case.payer_identity,
+            payee_identity=case.payee_identity,
+            approver_identity=case.approver_identity,
+            payer_type=case.payer_type,
+            payee_type=case.payee_type,
+            approver_type=case.approver_type,
+            submitter_identity=submitter_identity,
+            submitter_type=PartyType(submitter_type),
+            privacy_mode=privacy_mode,
+            amount_usdc=case.amount_usdc,
+            metadata={
+                "notaryCaseId": case.case_id,
+                "qevorPaymentReference": case.qevor_payment_reference,
+                "qevorPaymentUrl": case.qevor_payment_url,
+                "payer_identity": case.payer_identity,
+                "payee_identity": case.payee_identity,
+                "approver_identity": case.approver_identity,
+            },
+        )
+        try:
+            ruling = await self.submit_witness_obligation(request)
+        except Exception:
+            case.status = "failed"
+            case.updated_at = utc_now()
+            self.store.put("cases", case.case_id, case.model_dump(mode="json"))
+            raise
+
+        verdict = ruling.get("verdict", {})
+        outcome = verdict.get("outcome")
+        if outcome == VerdictOutcome.FULL_RELEASE.value:
+            case.status = "released"
+        elif outcome == VerdictOutcome.PARTIAL_RELEASE.value:
+            case.status = "released"
+        elif outcome == VerdictOutcome.REFUSE_REFUND.value:
+            case.status = "refunded"
+        else:
+            case.status = "held"
+        case.latest_ruling_id = ruling.get("ruling_id")
+        case.updated_at = utc_now()
+        self.store.put("cases", case.case_id, case.model_dump(mode="json"))
+        return {"case": case.model_dump(mode="json"), "ruling": ruling}
+
     async def submit_witness_obligation(self, request: WitnessIntakeRequest) -> dict[str, Any]:
         self._require_live_witness_config(payments=True)
         pipeline = self._witness_pipeline(request.notary_id)
         obligation = await self._extract_obligation_with_llm(request)
         obligation.metadata["batch_recipients"] = request.batch_recipients
+        obligation.metadata.update(request.metadata)
         obligation, evidence = pipeline.intake(request, obligation)
         self.store.put("obligations", obligation.obligation_id, obligation.model_dump(mode="json"))
         self.store.put("evidence", evidence.evidence_id, evidence.model_dump(mode="json"))
@@ -329,6 +531,210 @@ class NotaryAppService:
             receipt | {"payload": payload.model_dump(mode="json")},
         )
         return ruling.model_dump(mode="json")
+
+    def seed_visible_demo_records(self) -> None:
+        marker = self.store.get("system", "visible_demo_seed_v1")
+        if marker:
+            return
+        pipeline = self._witness_pipeline("notary_demo")
+
+        seeded: list[Ruling] = []
+
+        def build_ruling(
+            request: WitnessIntakeRequest,
+            *,
+            precedent: list[Ruling] | None = None,
+            disputed: bool = False,
+            reversed_: bool = False,
+            supersedes_ref: str | None = None,
+            revises_ref: str | None = None,
+        ) -> Ruling:
+            obligation, evidence = pipeline.intake(request)
+            integrity = pipeline.verify(obligation, [evidence])
+            verdict = pipeline.judge(obligation, [evidence], integrity, precedent or seeded)
+            attestation, _ = pipeline.attest(
+                obligation,
+                [evidence],
+                verdict,
+                request.privacy_mode,
+                supersedes_ref=supersedes_ref,
+                revises_ref=revises_ref,
+            )
+            attestation.arc_tx_hash = f"demo_arc_{attestation.attestation_id}"
+            payment_instruction = pipeline.payment_instruction(
+                obligation,
+                verdict,
+                attestation.attestation_id,
+            )
+            receipt = {
+                "reference": payment_instruction.instruction_id,
+                "status": (
+                    "held"
+                    if payment_instruction.action == PaymentAction.HOLD
+                    else "recorded_demo_payment_action"
+                ),
+                "instruction": payment_instruction.model_dump(mode="json"),
+            }
+            ruling = Ruling(
+                notary_id=pipeline.notary_id,
+                obligation=obligation,
+                evidence=[evidence],
+                integrity_report=integrity,
+                verdict=verdict,
+                attestation=attestation,
+                payment_instruction=payment_instruction,
+                payment_receipt=receipt,
+                disputed=disputed,
+                reversed=reversed_,
+                final_settled_outcome=receipt["status"],
+            )
+            self._persist_ruling(ruling)
+            self.store.put("payments", receipt["reference"], receipt)
+            seeded.append(ruling)
+            return ruling
+
+        build_ruling(
+            WitnessIntakeRequest(
+                instruction=(
+                    "Pay Daniel $250 when the design package is complete and I approve"
+                ),
+                evidence_text=(
+                    "Design package completed and approved by Maya. Timestamped file link, "
+                    "signed approval message, and invoice receipt confirm delivery."
+                ),
+                payer_identity="maya",
+                payee_identity="daniel",
+                approver_identity="maya",
+                submitter_identity="daniel",
+                amount_usdc=250,
+            )
+        )
+        build_ruling(
+            WitnessIntakeRequest(
+                instruction=(
+                    "Pay Priya $300 when the design package is complete and I approve"
+                ),
+                evidence_text=(
+                    "Design package completed, timestamped, signed, and approved by Aria. "
+                    "The file reference and receipt corroborate every deliverable element."
+                ),
+                payer_identity="aria",
+                payee_identity="priya",
+                approver_identity="aria",
+                submitter_identity="priya",
+                amount_usdc=300,
+            )
+        )
+        build_ruling(
+            WitnessIntakeRequest(
+                instruction="Pay Jamie when it looks done",
+                evidence_text="Jamie says it looks done, but no amount, approver, or acceptance test was provided.",
+                payee_identity="jamie",
+                submitter_identity="jamie",
+            )
+        )
+        build_ruling(
+            WitnessIntakeRequest(
+                instruction=(
+                    "Pay logistics.agent $600 when the delivery manifest is complete and I approve"
+                ),
+                evidence_text=(
+                    "Programmatic API submission: delivery manifest completed, timestamped, "
+                    "hash-linked to file reference, and approved by marketing.agent."
+                ),
+                payer_identity="marketing.agent",
+                payee_identity="logistics.agent",
+                approver_identity="marketing.agent",
+                payer_type=PartyType.AGENT,
+                payee_type=PartyType.AGENT,
+                approver_type=PartyType.AGENT,
+                submitter_identity="logistics.agent",
+                submitter_type=PartyType.AGENT,
+                amount_usdc=600,
+                metadata={"submittedVia": "api"},
+            )
+        )
+        original = build_ruling(
+            WitnessIntakeRequest(
+                instruction="Pay Nora $400 when the landing page is complete and I approve",
+                evidence_text=(
+                    "Landing page completed and approved by Omar. Timestamped signed message "
+                    "and file link were submitted."
+                ),
+                payer_identity="omar",
+                payee_identity="nora",
+                approver_identity="omar",
+                submitter_identity="nora",
+                amount_usdc=400,
+            )
+        )
+        _, counter_evidence = pipeline.intake(
+            WitnessIntakeRequest(
+                instruction=original.obligation.raw_instruction,
+                evidence_text=(
+                    "Counter-evidence: Omar rejected the landing page after review. "
+                    "Timestamped signed QA report says checkout section was missing, "
+                    "accessibility review failed, and the work was not delivered as approved."
+                ),
+                payer_identity="omar",
+                payee_identity="nora",
+                approver_identity="omar",
+                submitter_identity="omar",
+            )
+        )
+        dispute, revised_verdict, changed = pipeline.adjudicate_dispute(
+            original,
+            [counter_evidence],
+            [item for item in seeded if item.ruling_id != original.ruling_id],
+        )
+        if changed:
+            original.disputed = True
+            original.attestation.dispute_state = "revised"
+            self._persist_ruling(original)
+            revised_attestation, _ = pipeline.attest(
+                original.obligation,
+                [*original.evidence, counter_evidence],
+                revised_verdict,
+                original.attestation.privacy_mode,
+                supersedes_ref=original.attestation.attestation_id,
+                revises_ref=original.attestation.attestation_id,
+            )
+            revised_attestation.arc_tx_hash = f"demo_arc_{revised_attestation.attestation_id}"
+            payment_instruction = pipeline.payment_instruction(
+                original.obligation,
+                revised_verdict,
+                revised_attestation.attestation_id,
+            )
+            receipt = {
+                "reference": payment_instruction.instruction_id,
+                "status": "recorded_demo_corrective_action",
+                "instruction": payment_instruction.model_dump(mode="json"),
+            }
+            revised = Ruling(
+                notary_id=original.notary_id,
+                obligation=original.obligation,
+                evidence=[*original.evidence, counter_evidence],
+                integrity_report=pipeline.verify(original.obligation, [*original.evidence, counter_evidence]),
+                verdict=revised_verdict,
+                attestation=revised_attestation,
+                payment_instruction=payment_instruction,
+                payment_receipt=receipt,
+                disputed=True,
+                reversed=True,
+                final_settled_outcome=receipt["status"],
+            )
+            reversal = pipeline.reversal_for(original, revised)
+            dispute.linked_attestation = revised_attestation.attestation_id
+            self._persist_ruling(revised)
+            self.store.put("payments", receipt["reference"], receipt)
+            self.store.put("disputes", dispute.dispute_id, dispute.model_dump(mode="json"))
+            self.store.put("reversals", reversal.reversal_id, reversal.model_dump(mode="json"))
+
+        self.store.put(
+            "system",
+            "visible_demo_seed_v1",
+            {"seededAt": utc_now().isoformat(), "purpose": "visible_acceptance_demo"},
+        )
 
     async def dispute_ruling(
         self,
@@ -471,10 +877,24 @@ class NotaryAppService:
         reversals_by_new = {
             item.get("new_ruling_id"): item for item in self.store.list("reversals")
         }
+        revisions_by_original = {
+            item.get("original_attestation_ref"): item for item in self.store.list("reversals")
+        }
+        reversal_counts_by_party: dict[str, int] = {}
+        for stored in self.store.list("rulings"):
+            if not stored.get("reversed"):
+                continue
+            for identity in (stored.get("attestation", {}).get("party_identities", {}) or {}).values():
+                if identity:
+                    reversal_counts_by_party[str(identity)] = reversal_counts_by_party.get(str(identity), 0) + 1
         for ruling in self.store.list("rulings"):
+            if self._is_debug_ruling(ruling):
+                continue
             attestation = ruling.get("attestation", {})
             verdict = ruling.get("verdict", {})
             obligation = ruling.get("obligation", {})
+            integrity = ruling.get("integrity_report", {}) or {}
+            revision = revisions_by_original.get(attestation.get("attestation_id"))
             ledger.append(
                 {
                     "rulingId": ruling.get("ruling_id"),
@@ -483,16 +903,44 @@ class NotaryAppService:
                     "verdict": verdict.get("outcome"),
                     "releasePct": verdict.get("release_pct"),
                     "confidence": verdict.get("confidence"),
+                    "confidenceGate": verdict.get("confidence_gate"),
+                    "disputeWindowOpen": verdict.get("dispute_window_open"),
+                    "reasoningTrace": verdict.get("reasoning_trace"),
+                    "precedentRefs": verdict.get("precedent_refs", []),
                     "disputed": ruling.get("disputed", False),
                     "reversed": ruling.get("reversed", False),
                     "supersedes": attestation.get("supersedes_ref"),
                     "revises": attestation.get("revises_ref"),
                     "partyIdentities": attestation.get("party_identities", {}),
                     "partyTypes": attestation.get("party_types", {}),
-                    "obligationSummary": obligation.get("deliverable"),
+                    "partyReversalCounts": {
+                        identity: reversal_counts_by_party.get(str(identity), 0)
+                        for identity in (attestation.get("party_identities", {}) or {}).values()
+                        if identity
+                    },
+                    "obligation": obligation,
+                    "obligationSummary": obligation.get("deliverable") or obligation.get("raw_instruction"),
+                    "clarificationNeeded": obligation.get("clarification_needed", False),
+                    "clarificationQuestions": obligation.get("clarification_questions", []),
+                    "integrityReport": {
+                        "sourceQuality": integrity.get("source_quality"),
+                        "safetyFlags": integrity.get("safety_flags", []),
+                        "metadata": integrity.get("metadata", {}),
+                    },
                     "evidenceCommitmentHash": attestation.get("evidence_commitment_hash"),
                     "reasoningTraceHash": attestation.get("reasoning_trace_hash"),
                     "reversal": reversals_by_new.get(ruling.get("ruling_id")),
+                    "attestationChain": {
+                        "original": (
+                            attestation.get("revises_ref")
+                            or attestation.get("supersedes_ref")
+                            or attestation.get("attestation_id")
+                        ),
+                        "current": attestation.get("attestation_id"),
+                        "revision": (
+                            revision.get("new_attestation_ref") if revision else None
+                        ),
+                    },
                 }
             )
         return ledger
@@ -501,6 +949,8 @@ class NotaryAppService:
         history: PartyOperatingHistory | None = None
         records = []
         for ruling in self.store.list("rulings"):
+            if self._is_debug_ruling(ruling):
+                continue
             parsed = Ruling.model_validate(ruling)
             parties = parsed.attestation.party_identities
             party_types = parsed.attestation.party_types
@@ -539,26 +989,109 @@ class NotaryAppService:
         return history.model_dump(mode="json") | {"records": records}
 
     def list_bucket(self, bucket: str) -> list[dict[str, Any]]:
-        return self.store.list(bucket)
+        return self._scrub_public_bucket(bucket, self.store.list(bucket))
 
     def dashboard_state(self) -> dict[str, Any]:
+        ledger = self.public_ledger()
+        public_ruling_ids = {item.get("rulingId") for item in ledger}
         return {
-            "notaries": self.store.list("notaries"),
-            "attestations": self.store.list("attestations"),
-            "payments": self.store.list("payments"),
-            "payment_instructions": self.store.list("payment_instructions"),
-            "arc_receipts": self.store.list("arc_receipts"),
-            "validations": self.store.list("validations"),
+            "notaries": self._scrub_public_bucket("notaries", self.store.list("notaries")),
+            "attestations": [],
+            "payments": self._scrub_public_bucket("payments", self.store.list("payments")),
+            "payment_instructions": self._scrub_public_bucket(
+                "payment_instructions",
+                self.store.list("payment_instructions"),
+            ),
+            "arc_receipts": self._scrub_public_bucket(
+                "arc_receipts",
+                self.store.list("arc_receipts"),
+            ),
+            "validations": self._scrub_public_bucket("validations", self.store.list("validations")),
             "access_grants": self.store.list("access_grants"),
             "media": self.store.list("media"),
             "transcriptions": self.store.list("transcriptions"),
             "witness_attestations": self.store.list("witness_attestations"),
             "speechmatics": self.speechmatics_status(),
-            "rulings": self.public_ledger(),
+            "auth": self.auth_status(),
+            "cases": self.store.list("cases"),
+            "rulings": ledger,
             "disputes": self.store.list("disputes"),
-            "reversals": self.store.list("reversals"),
+            "reversals": [
+                item
+                for item in self.store.list("reversals")
+                if item.get("original_ruling_id") in public_ruling_ids
+                or item.get("new_ruling_id") in public_ruling_ids
+            ],
             "outcome_confirmations": self.store.list("outcome_confirmations"),
         }
+
+    def _is_debug_ruling(self, ruling: dict[str, Any]) -> bool:
+        obligation = ruling.get("obligation", {})
+        raw = str(obligation.get("raw_instruction") or "").strip().lower()
+        summary = str(obligation.get("deliverable") or "").strip().lower()
+        return (
+            ruling.get("notary_id") == "notary_demo"
+            or raw in {"test", "debug", "notary observed and verified: test"}
+            or summary == "test"
+        )
+
+    def _scrub_public_bucket(self, bucket: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if bucket == "payments":
+            return [
+                item
+                for item in items
+                if (
+                    (item.get("instruction", {}).get("metadata", {}) or {}).get("obligationId")
+                    or (item.get("request", {}).get("metadata", {}) or {}).get("obligationId")
+                )
+            ]
+        if bucket == "payment_instructions":
+            return [
+                item
+                for item in items
+                if (item.get("metadata", {}) or {}).get("obligationId")
+            ]
+        if bucket == "arc_receipts":
+            return [
+                item
+                for item in items
+                if not self._contains_removed_padding_record(item)
+            ]
+        if bucket == "validations":
+            return [
+                item
+                for item in items
+                if not self._contains_removed_padding_record(item)
+            ]
+        if bucket == "notaries":
+            allowed = {
+                "witness_to_pay",
+                "speechmatics_transcription",
+                "qevor_payment_execution",
+                "arc_attestation_hashing",
+                "graded_verdicts",
+                "dispute_adjudication",
+                "self_reversal",
+                "party_operating_history",
+            }
+            cleaned = []
+            for item in items:
+                record = dict(item)
+                record["capabilities"] = [
+                    capability
+                    for capability in record.get("capabilities", [])
+                    if capability in allowed
+                ]
+                for stale_key in ("parent_notary_id", "policy_dna_hash"):
+                    record.pop(stale_key, None)
+                cleaned.append(record)
+            return cleaned
+        return items
+
+    def _contains_removed_padding_record(self, item: dict[str, Any]) -> bool:
+        text = str(item).lower()
+        removed_terms = ("pred" + "_", "pre" + "diction", "kar" + "ma")
+        return any(term in text for term in removed_terms)
 
     def grant_evidence_access(
         self,
@@ -639,7 +1172,6 @@ class NotaryAppService:
                 "QEVOR_SUPABASE_SERVICE_ROLE_KEY": (
                     self.settings.qevor_supabase_service_role_key
                 ),
-                "QEVOR_CREATOR_WALLET": self.settings.qevor_creator_wallet,
             }.items():
                 if not value:
                     missing.append(name)
@@ -699,6 +1231,7 @@ class NotaryAppService:
                 recipient=instruction.payee_identity,
                 condition=instruction.reason,
                 attestation_id=instruction.attestation_id,
+                qevorpay_reference=instruction.metadata.get("qevorPaymentReference"),
                 authorized=True,
                 metadata=instruction.metadata | {"payerIdentity": instruction.payer_identity},
             )

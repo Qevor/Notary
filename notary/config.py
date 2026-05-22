@@ -36,6 +36,7 @@ class Settings(BaseModel):
     notary_env: str = "development"
     notary_demo_mode: bool = False
     notary_default_privacy_mode: PrivacyMode = PrivacyMode.PROTECTED
+    notary_session_secret: str | None = None
 
     claude_api_key: str | None = None
     claude_model: str = "claude-3-5-sonnet-20241022"
@@ -77,6 +78,7 @@ class Settings(BaseModel):
     qevorpay_payment_status_path_template: str | None = None
     qevorpay_webhook_signature_header: str = "x-signature"
     qevor_supabase_url: str | None = None
+    qevor_supabase_anon_key: str | None = None
     qevor_supabase_service_role_key: str | None = None
     qevor_executor_agent_wallet_id: str | None = None
     qevor_creator_wallet: str | None = None
@@ -105,6 +107,7 @@ class Settings(BaseModel):
             notary_default_privacy_mode=PrivacyMode(
                 os.getenv("NOTARY_DEFAULT_PRIVACY_MODE", PrivacyMode.PROTECTED.value)
             ),
+            notary_session_secret=_optional_str("NOTARY_SESSION_SECRET"),
             claude_api_key=_optional_str("CLAUDE_API_KEY"),
             claude_model=os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6"),
             claude_api_base_url=os.getenv("CLAUDE_API_BASE_URL", "https://api.anthropic.com"),
@@ -140,6 +143,10 @@ class Settings(BaseModel):
             qevorpay_payment_status_path_template=_optional_str("QEVORPAY_PAYMENT_STATUS_PATH_TEMPLATE"),
             qevorpay_webhook_signature_header=os.getenv("QEVORPAY_WEBHOOK_SIGNATURE_HEADER", "x-signature"),
             qevor_supabase_url=_optional_str("QEVOR_SUPABASE_URL") or _optional_str("SUPABASE_URL"),
+            qevor_supabase_anon_key=(
+                _optional_str("QEVOR_SUPABASE_ANON_KEY")
+                or _optional_str("SUPABASE_ANON_KEY")
+            ),
             qevor_supabase_service_role_key=(
                 _optional_str("QEVOR_SUPABASE_SERVICE_ROLE_KEY")
                 or _optional_str("SUPABASE_SERVICE_ROLE_KEY")
