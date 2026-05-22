@@ -24,7 +24,6 @@ contract AttestationRegistry {
     }
 
     mapping(bytes32 => AttestationRecord) public attestations;
-    mapping(bytes32 => bytes32) public predictions;
 
     event AttestationRecorded(
         bytes32 indexed attestationId,
@@ -35,7 +34,6 @@ contract AttestationRegistry {
         address signer
     );
     event AttestationStatusChanged(bytes32 indexed attestationId, Status status);
-    event PredictionRecorded(bytes32 indexed predictionId, bytes32 indexed predictionHash);
 
     function recordAttestation(
         bytes32 attestationId,
@@ -76,10 +74,4 @@ contract AttestationRegistry {
         emit AttestationStatusChanged(attestationId, status);
     }
 
-    function recordPrediction(bytes32 predictionId, bytes32 predictionHash) external {
-        require(predictions[predictionId] == bytes32(0), "PREDICTION_EXISTS");
-        predictions[predictionId] = predictionHash;
-        emit PredictionRecorded(predictionId, predictionHash);
-    }
 }
-

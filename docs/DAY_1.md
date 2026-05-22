@@ -1,17 +1,6 @@
-# Day 1 Build Notes
+# Day 1
 
-This repo has two runnable paths:
-
-1. `python main.py` starts the dependency-light live app using Python stdlib HTTP.
-2. `uvicorn apps.api.main:app --reload` starts the FastAPI app after dependencies are installed.
-
-The live app supports:
-
-- Create Notary
-- Choose privacy mode
-- Upload evidence
-- Paste transcript fallback when Speedmatic is not connected
-- Run Witness-to-Pay
-- Persist attestations, predictions, payment triggers, and karma in SQLite
-- Create local Qevorpay payment links
-
+- Implemented the NOTARY witness pipeline.
+- Persisted obligations, evidence commitments, integrity reports, verdicts, attestations, disputes, reversals, and payment instructions in SQLite.
+- Added live Arc/Qevor configuration checks before signed witness execution.
+- Added public ledger and per-party operating history views.

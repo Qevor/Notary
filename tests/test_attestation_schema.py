@@ -1,14 +1,13 @@
-from datetime import timedelta
-
-from notary.models.schemas import Prediction, utc_now
+from notary.models.schemas import VerdictOutcome, WitnessVerdict
 
 
-def test_prediction_schema_accepts_future_horizon() -> None:
-    prediction = Prediction(
-        question="Will NOTARY complete the demo?",
-        probability=0.8,
-        horizon=utc_now() + timedelta(hours=1),
-        rationale="The starter code is in place.",
+def test_witness_verdict_schema_accepts_graded_outcome() -> None:
+    verdict = WitnessVerdict(
+        obligation_id="obl_test",
+        outcome=VerdictOutcome.PARTIAL_RELEASE,
+        release_pct=65,
+        confidence=0.78,
+        deficiency="One deliverable element was incomplete.",
+        reasoning_trace="NOTARY TESTIMONY",
     )
-    assert prediction.probability == 0.8
-
+    assert verdict.release_pct == 65

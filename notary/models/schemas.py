@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, HttpUrl
 
 
 def utc_now() -> datetime:
@@ -27,7 +27,6 @@ class DisclosureLevel(str, Enum):
     COUNTERPARTY = "counterparty"
     ARBITRATOR = "arbitrator"
     INTERNAL = "internal"
-    PAY_TO_PEEK = "pay_to_peek"
 
 
 class AttestationStatus(str, Enum):
@@ -42,9 +41,34 @@ class AttestationStatus(str, Enum):
 class PaymentAction(str, Enum):
     CREATE_LINK = "create_link"
     RELEASE_ESCROW = "release_escrow"
+    RELEASE_PARTIAL = "release_partial"
+    HOLD = "hold"
     BATCH_DISTRIBUTE = "batch_distribute"
     REFUND = "refund"
-    SETTLE_MICRO_SHARES = "settle_micro_shares"
+
+
+class PartyType(str, Enum):
+    HUMAN = "human"
+    AGENT = "agent"
+
+
+class VerdictOutcome(str, Enum):
+    FULL_RELEASE = "full_release"
+    PARTIAL_RELEASE = "partial_release"
+    HOLD_PENDING_CLARIFICATION = "hold_pending_clarification"
+    REFUSE_REFUND = "refuse_refund"
+
+
+class DisputeOutcome(str, Enum):
+    UPHELD = "upheld"
+    REVISED = "revised"
+
+
+class CorrectivePaymentAction(str, Enum):
+    NONE = "none"
+    TOP_UP_RELEASE = "top_up_release"
+    PARTIAL_CLAWBACK_REQUEST = "partial_clawback_request"
+    REFUND = "refund"
 
 
 class EvidenceSource(BaseModel):
@@ -54,6 +78,163 @@ class EvidenceSource(BaseModel):
     submitted_by: str | None = None
     captured_at: datetime = Field(default_factory=utc_now)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class Obligation(BaseModel):
+    obligation_id: str = Field(default_factory=lambda: new_id("obl"))
+    raw_instruction: str
+    payer_identity: str | None = None
+    payee_identity: str | None = None
+    approver_identity: str | None = None
+    deliverable: str | None = None
+    acceptance_criterion: str | None = None
+    authorized_approver: str | None = None
+    deadline: str | None = None
+    satisfying_evidence: list[str] = Field(default_factory=list)
+    amount_usdc: float | None = Field(default=None, ge=0)
+    payer_type: PartyType = PartyType.HUMAN
+    payee_type: PartyType = PartyType.HUMAN
+    approver_type: PartyType = PartyType.HUMAN
+    clarification_needed: bool = False
+    clarification_questions: list[str] = Field(default_factory=list)
+    extraction_confidence: float = Field(default=0.5, ge=0, le=1)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class Evidence(BaseModel):
+    evidence_id: str = Field(default_factory=lambda: new_id("ev"))
+    type: str
+    ref: str | None = None
+    text: str | None = None
+    commitment_hash: str
+    encrypted_blob_ref: str | None = None
+    submitter_identity: str
+    submitter_type: PartyType = PartyType.HUMAN
+    privacy_mode: PrivacyMode = PrivacyMode.PROTECTED
+    submitted_at: datetime = Field(default_factory=utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class WitnessIntakeRequest(BaseModel):
+    instruction: str
+    evidence_text: str | None = None
+    evidence_ref: str | None = None
+    evidence_type: str = "text"
+    payer_identity: str | None = None
+    payee_identity: str | None = None
+    approver_identity: str | None = None
+    payer_type: PartyType = PartyType.HUMAN
+    payee_type: PartyType = PartyType.HUMAN
+    approver_type: PartyType = PartyType.HUMAN
+    submitter_identity: str = "unknown_submitter"
+    submitter_type: PartyType = PartyType.HUMAN
+    privacy_mode: PrivacyMode = PrivacyMode.PROTECTED
+    amount_usdc: float | None = Field(default=None, ge=0)
+    batch_recipients: list[dict[str, Any]] = Field(default_factory=list)
+    notary_id: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class WitnessVerdict(BaseModel):
+    verdict_id: str = Field(default_factory=lambda: new_id("verdict"))
+    obligation_id: str
+    outcome: VerdictOutcome
+    release_pct: float = Field(ge=0, le=100)
+    confidence: float = Field(ge=0, le=1)
+    deficiency: str | None = None
+    reasoning_trace: str
+    precedent_refs: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class WitnessAttestation(BaseModel):
+    attestation_id: str = Field(default_factory=lambda: new_id("watt"))
+    obligation_id: str
+    verdict_id: str
+    evidence_commitment_hash: str
+    reasoning_trace_hash: str
+    verdict_hash: str
+    signer: str | None = None
+    signature: str | None = None
+    timestamp: datetime = Field(default_factory=utc_now)
+    dispute_state: Literal["none", "open", "upheld", "revised"] = "none"
+    privacy_mode: PrivacyMode = PrivacyMode.PROTECTED
+    party_identities: dict[str, str | None] = Field(default_factory=dict)
+    party_types: dict[str, PartyType] = Field(default_factory=dict)
+    supersedes_ref: str | None = None
+    revises_ref: str | None = None
+    arc_tx_hash: str | None = None
+
+
+class Ruling(BaseModel):
+    ruling_id: str = Field(default_factory=lambda: new_id("ruling"))
+    notary_id: str
+    obligation: Obligation
+    evidence: list[Evidence] = Field(default_factory=list)
+    integrity_report: "IntegrityReport | None" = None
+    verdict: WitnessVerdict
+    attestation: WitnessAttestation
+    payment_instruction: "PaymentInstruction | None" = None
+    payment_receipt: dict[str, Any] | None = None
+    disputed: bool = False
+    reversed: bool = False
+    final_settled_outcome: str | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class Dispute(BaseModel):
+    dispute_id: str = Field(default_factory=lambda: new_id("disp"))
+    original_ruling_id: str
+    original_attestation_ref: str
+    counter_evidence: list[Evidence] = Field(default_factory=list)
+    outcome: DisputeOutcome
+    justification: str
+    linked_attestation: str | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class Reversal(BaseModel):
+    reversal_id: str = Field(default_factory=lambda: new_id("rev"))
+    original_attestation_ref: str
+    new_attestation_ref: str
+    original_ruling_id: str
+    new_ruling_id: str
+    what_changed: str
+    corrective_payment_action: CorrectivePaymentAction
+    outstanding_delta: float = 0
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class PartyOperatingHistory(BaseModel):
+    party_identity: str
+    party_type: PartyType
+    rulings: list[str] = Field(default_factory=list)
+    dispute_flags: list[str] = Field(default_factory=list)
+    reversal_flags: list[str] = Field(default_factory=list)
+
+
+class PaymentInstruction(BaseModel):
+    instruction_id: str = Field(default_factory=lambda: new_id("payins"))
+    action: PaymentAction
+    amount_usdc: float | None = Field(default=None, ge=0)
+    release_pct: float = Field(default=0, ge=0, le=100)
+    payer_identity: str | None = None
+    payee_identity: str | None = None
+    recipients: list[dict[str, Any]] = Field(default_factory=list)
+    attestation_id: str | None = None
+    reason: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class OutcomeConfirmation(BaseModel):
+    confirmation_id: str = Field(default_factory=lambda: new_id("confirm"))
+    ruling_id: str
+    party_identity: str
+    party_type: PartyType = PartyType.HUMAN
+    outcome: Literal["confirmed", "contested", "settled_outside_notary"]
+    notes: str | None = None
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class MediaEvidence(BaseModel):
@@ -139,19 +320,6 @@ class IntegrityReport(BaseModel):
     notes: str
 
 
-class RiskDecision(BaseModel):
-    decision_id: str = Field(default_factory=lambda: new_id("risk"))
-    approved: bool
-    confidence_threshold: float = Field(default=0.7, ge=0, le=1)
-    payment_authorized: bool = False
-    trade_authorized: bool = False
-    public_post_authorized: bool = False
-    dispute_window_seconds: int = 86_400
-    max_payment_usdc: float | None = Field(default=None, ge=0)
-    max_trade_usdc: float | None = Field(default=None, ge=0)
-    reasons: list[str] = Field(default_factory=list)
-
-
 class Attestation(BaseModel):
     attestation_id: str = Field(default_factory=lambda: new_id("att"))
     observation_id: str
@@ -165,27 +333,6 @@ class Attestation(BaseModel):
     signature: str | None = None
     status: AttestationStatus = AttestationStatus.DRAFT
     created_at: datetime = Field(default_factory=utc_now)
-
-
-class Prediction(BaseModel):
-    prediction_id: str = Field(default_factory=lambda: new_id("pred"))
-    question: str
-    probability: float = Field(ge=0, le=1)
-    horizon: datetime
-    rationale: str
-    counterarguments: list[str] = Field(default_factory=list)
-    resolution_source: str | None = None
-    reasoning_trace_hash: str | None = None
-    signature: str | None = None
-    resolved: bool = False
-    outcome: bool | None = None
-
-    @field_validator("horizon")
-    @classmethod
-    def horizon_must_be_futureish(cls, value: datetime) -> datetime:
-        if value < utc_now() - timedelta(minutes=5):
-            raise ValueError("prediction horizon is in the past")
-        return value
 
 
 class PaymentTrigger(BaseModel):
@@ -214,36 +361,11 @@ class QevorpayBatchDistributionRequest(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class MicroShare(BaseModel):
-    share_id: str = Field(default_factory=lambda: new_id("share"))
-    notary_id: str
-    buyer: str
-    target_kind: Literal["prediction", "attestation", "trace", "treasury"]
-    target_id: str | None = None
-    amount_usdc: float = Field(gt=0)
-    price_usdc: float = Field(gt=0)
-    created_at: datetime = Field(default_factory=utc_now)
-
-
-class KarmaCheckpoint(BaseModel):
-    checkpoint_id: str = Field(default_factory=lambda: new_id("karma"))
-    notary_id: str
-    accuracy: float = Field(default=0.5, ge=0, le=1)
-    safety: float = Field(default=1.0, ge=0, le=1)
-    payment_reliability: float = Field(default=1.0, ge=0, le=1)
-    privacy_score: float = Field(default=1.0, ge=0, le=1)
-    dispute_rate: float = Field(default=0.0, ge=0, le=1)
-    arbitrage_pnl_usdc: float = 0.0
-    score: float = Field(default=0.5, ge=0, le=1)
-    signature: str | None = None
-    created_at: datetime = Field(default_factory=utc_now)
-
-
 class OperatingAgreement(BaseModel):
     agreement_id: str = Field(default_factory=lambda: new_id("oa"))
     notary_id: str
     legal_framework: str = "Wyoming DAO LLC / Bayern mechanism inspired"
-    algorithmic_manager: str = "NOTARY 6-agent swarm"
+    algorithmic_manager: str = "NOTARY witness pipeline"
     permitted_actions: list[str] = Field(default_factory=list)
     treasury_constraints: dict[str, Any] = Field(default_factory=dict)
     privacy_rules: dict[str, Any] = Field(default_factory=dict)
@@ -271,9 +393,7 @@ class NotaryIdentity(BaseModel):
     endpoint: HttpUrl | None = None
     capabilities: list[str] = Field(default_factory=list)
     operating_agreement_hash: str | None = None
-    policy_dna_hash: str | None = None
     privacy_policy_hash: str | None = None
-    parent_notary_id: str | None = None
     status: Literal["active", "paused", "retired"] = "active"
     created_at: datetime = Field(default_factory=utc_now)
 
@@ -289,45 +409,9 @@ class ValidationRecord(BaseModel):
     created_at: datetime = Field(default_factory=utc_now)
 
 
-class ArbitrageOpportunity(BaseModel):
-    opportunity_id: str = Field(default_factory=lambda: new_id("arb"))
-    route: str
-    expected_profit_usdc: float
-    max_loss_usdc: float
-    confidence: float = Field(ge=0, le=1)
-    slippage_bps: int = Field(ge=0)
-    approved: bool = False
-
-
 class ArcTransactionPayload(BaseModel):
     contract_name: str
     method: str
     args: list[Any] = Field(default_factory=list)
     value: int = 0
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class AgentDecision(BaseModel):
-    agent_name: str
-    approved: bool
-    summary: str
-    trace: ReasoningTrace
-    payload: dict[str, Any] = Field(default_factory=dict)
-
-
-class NotaryState(BaseModel):
-    notary_id: str = Field(default_factory=lambda: new_id("notary"))
-    cycle_id: str = Field(default_factory=lambda: new_id("cycle"))
-    privacy_mode: PrivacyMode = PrivacyMode.PROTECTED
-    observations: list[Observation] = Field(default_factory=list)
-    integrity_reports: list[IntegrityReport] = Field(default_factory=list)
-    risk_decisions: list[RiskDecision] = Field(default_factory=list)
-    attestations: list[Attestation] = Field(default_factory=list)
-    predictions: list[Prediction] = Field(default_factory=list)
-    payment_triggers: list[PaymentTrigger] = Field(default_factory=list)
-    arbitrage_opportunities: list[ArbitrageOpportunity] = Field(default_factory=list)
-    traces: list[ReasoningTrace] = Field(default_factory=list)
-    karma: KarmaCheckpoint | None = None
-    arc_payloads: list[ArcTransactionPayload] = Field(default_factory=list)
-    should_continue: bool = False
     metadata: dict[str, Any] = Field(default_factory=dict)

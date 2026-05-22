@@ -26,6 +26,10 @@ class QevorpayClient:
     payment_status_path_template: str | None = None
     webhook_secret: str | None = None
     webhook_signature_header: str = "x-signature"
+    supabase_url: str | None = None
+    supabase_service_role_key: str | None = None
+    executor_agent_wallet_id: str | None = None
+    creator_wallet: str | None = None
 
     async def create_payment_link(self, request: QevorpayPaymentLinkRequest) -> dict[str, Any]:
         if self.demo_mode:
@@ -37,7 +41,29 @@ class QevorpayClient:
                 "provider": "local_qevorpay",
                 "request": request.model_dump(mode="json"),
             }
-        return await self._post(self._required_path(self.payment_link_path, "QEVORPAY_PAYMENT_LINK_PATH"), request.model_dump(mode="json"))
+        if not self.payment_link_path and self.supabase_url:
+            rows = await self._supabase_insert(
+                "payment_links",
+                {
+                    "receiver_wallet": request.recipient,
+                    "amount": request.amount_usdc,
+                    "expires_at": request.metadata.get("expires_at"),
+                    "max_uses": request.metadata.get("max_uses"),
+                    "group_id": request.metadata.get("group_id"),
+                },
+            )
+            row = rows[0]
+            return {
+                "reference": row["id"],
+                "url": f"/pay/{row['id']}",
+                "status": "created",
+                "provider": "qevor_supabase",
+                "request": request.model_dump(mode="json"),
+            }
+        return await self._post(
+            self._required_path(self.payment_link_path, "QEVORPAY_PAYMENT_LINK_PATH"),
+            request.model_dump(mode="json"),
+        )
 
     async def create_batch_distribution(self, request: QevorpayBatchDistributionRequest) -> dict[str, Any]:
         if self.demo_mode:
@@ -46,6 +72,8 @@ class QevorpayClient:
                 "status": "queued",
                 "request": request.model_dump(mode="json"),
             }
+        if not self.batch_distribution_path and self.supabase_url:
+            return await self._create_supabase_batch(request)
         return await self._post(
             self._required_path(self.batch_distribution_path, "QEVORPAY_BATCH_DISTRIBUTION_PATH"),
             request.model_dump(mode="json"),
@@ -58,6 +86,26 @@ class QevorpayClient:
                 "status": "released",
                 "trigger": trigger.model_dump(mode="json"),
             }
+        if not self.release_escrow_path and self.supabase_url:
+            recipient = trigger.recipient
+            if not recipient:
+                raise RuntimeError("Qevor release requires a recipient wallet/identity")
+            amount = trigger.amount_usdc
+            if not amount or amount <= 0:
+                raise RuntimeError("Qevor release requires a positive amount_usdc")
+            return await self.create_batch_distribution(
+                QevorpayBatchDistributionRequest(
+                    recipients=[
+                        {
+                            "wallet": recipient,
+                            "amount": amount,
+                            "label": "NOTARY release",
+                        }
+                    ],
+                    reason=trigger.condition,
+                    metadata=trigger.metadata | {"attestationId": trigger.attestation_id},
+                )
+            )
         return await self._post(
             self._required_path(self.release_escrow_path, "QEVORPAY_RELEASE_ESCROW_PATH"),
             trigger.model_dump(mode="json"),
@@ -70,7 +118,39 @@ class QevorpayClient:
                 "status": "refunded",
                 "trigger": trigger.model_dump(mode="json"),
             }
-        return await self._post(self._required_path(self.refund_path, "QEVORPAY_REFUND_PATH"), trigger.model_dump(mode="json"))
+        if not self.refund_path and self.supabase_url:
+            refund_recipient = trigger.metadata.get("payerIdentity")
+            if not refund_recipient:
+                raise RuntimeError("Qevor refund requires payerIdentity metadata")
+            return await self.create_batch_distribution(
+                QevorpayBatchDistributionRequest(
+                    recipients=[
+                        {
+                            "wallet": refund_recipient,
+                            "amount": trigger.amount_usdc or 0,
+                            "label": "NOTARY refund",
+                        }
+                    ],
+                    reason=trigger.condition,
+                    metadata=trigger.metadata | {"attestationId": trigger.attestation_id},
+                )
+            )
+        return await self._post(
+            self._required_path(self.refund_path, "QEVORPAY_REFUND_PATH"),
+            trigger.model_dump(mode="json"),
+        )
+
+    async def hold_payment(self, trigger: PaymentTrigger) -> dict[str, Any]:
+        if self.demo_mode:
+            return {
+                "reference": new_id("qevor_hold"),
+                "status": "held",
+                "trigger": trigger.model_dump(mode="json"),
+            }
+        return await self._post(
+            self._required_path(self.release_escrow_path, "QEVORPAY_RELEASE_ESCROW_PATH"),
+            trigger.model_dump(mode="json"),
+        )
 
     async def get_payment_status(self, reference: str) -> dict[str, Any]:
         if self.demo_mode:
@@ -90,10 +170,12 @@ class QevorpayClient:
         return hmac.compare_digest(signature, expected)
 
     async def execute_trigger(self, trigger: PaymentTrigger) -> dict[str, Any]:
-        if trigger.action == PaymentAction.RELEASE_ESCROW:
+        if trigger.action in {PaymentAction.RELEASE_ESCROW, PaymentAction.RELEASE_PARTIAL}:
             return await self.release_escrow(trigger)
         if trigger.action == PaymentAction.REFUND:
             return await self.refund_payment(trigger)
+        if trigger.action == PaymentAction.HOLD:
+            return await self.hold_payment(trigger)
         if trigger.action == PaymentAction.CREATE_LINK:
             return await self.create_payment_link(
                 QevorpayPaymentLinkRequest(
@@ -124,6 +206,88 @@ class QevorpayClient:
             response = await client.get(path, headers=self._headers())
             response.raise_for_status()
             return response.json()
+
+    async def _create_supabase_batch(self, request: QevorpayBatchDistributionRequest) -> dict[str, Any]:
+        creator_wallet = request.metadata.get("creator_wallet") or self.creator_wallet
+        if not creator_wallet:
+            raise RuntimeError("QEVOR_CREATOR_WALLET is required for Qevor Supabase batch execution")
+        recipients = [
+            {
+                "wallet": item.get("wallet") or item.get("recipient") or item.get("recipient_wallet"),
+                "amount": float(item.get("amount") or item.get("amount_usdc") or 0),
+                "label": item.get("label"),
+            }
+            for item in request.recipients
+        ]
+        recipients = [item for item in recipients if item["wallet"] and item["amount"] > 0]
+        if not recipients:
+            raise RuntimeError("Batch distribution requires at least one recipient")
+        total = round(sum(item["amount"] for item in recipients), 6)
+        batch_rows = await self._supabase_insert(
+            "batch_requests",
+            {
+                "creator_wallet": creator_wallet,
+                "title": request.metadata.get("title", "NOTARY verdict release"),
+                "description": request.reason,
+                "recipients": recipients,
+                "total_amount": total,
+                "status": "pending",
+                "executor_agent_wallet_id": (
+                    request.metadata.get("executor_agent_wallet_id")
+                    or self.executor_agent_wallet_id
+                ),
+                "executor_state": (
+                    "pending_evaluation"
+                    if request.metadata.get("executor_agent_wallet_id")
+                    or self.executor_agent_wallet_id
+                    else "manual"
+                ),
+            },
+        )
+        batch = batch_rows[0]
+        payment_rows = [
+            {
+                "batch_request_id": batch["id"],
+                "payer_wallet": creator_wallet,
+                "recipient_wallet": item["wallet"],
+                "amount": item["amount"],
+                "tx_hash": "pending_executor",
+                "status": "pending",
+            }
+            for item in recipients
+        ]
+        await self._supabase_insert("batch_payments", payment_rows)
+        return {
+            "reference": batch["id"],
+            "status": "queued",
+            "provider": "qevor_supabase",
+            "request": request.model_dump(mode="json"),
+            "batchRequest": batch,
+        }
+
+    async def _supabase_insert(self, table: str, payload: dict[str, Any] | list[dict[str, Any]]) -> list[dict[str, Any]]:
+        import httpx
+
+        if not self.supabase_url or not self.supabase_service_role_key:
+            raise RuntimeError(
+                "QEVOR_SUPABASE_URL and QEVOR_SUPABASE_SERVICE_ROLE_KEY are required "
+                "for Qevor Supabase integration"
+            )
+        url = f"{self.supabase_url.rstrip('/')}/rest/v1/{table}"
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                url,
+                json=payload,
+                headers={
+                    "apikey": self.supabase_service_role_key,
+                    "Authorization": f"Bearer {self.supabase_service_role_key}",
+                    "Content-Type": "application/json",
+                    "Prefer": "return=representation",
+                },
+            )
+            response.raise_for_status()
+            body = response.json()
+        return body if isinstance(body, list) else [body]
 
     def _headers(self) -> dict[str, str]:
         if not self.api_key:

@@ -11,7 +11,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS = [
     ("NotaryIdentityRegistry", ROOT / "contracts" / "NotaryIdentityRegistry.sol"),
-    ("HelixAIKarma", ROOT / "contracts" / "HelixAIKarma.sol"),
     ("AttestationRegistry", ROOT / "contracts" / "AttestationRegistry.sol"),
     ("NotaryValidationRegistry", ROOT / "contracts" / "NotaryValidationRegistry.sol"),
     ("NotaryGovernance", ROOT / "contracts" / "NotaryGovernance.sol"),

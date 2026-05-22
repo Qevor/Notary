@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from apps.api.dashboard import render_dashboard
@@ -14,6 +14,7 @@ from notary.models.schemas import (
     Observation,
     PrivacyMode,
     QevorpayPaymentLinkRequest,
+    WitnessIntakeRequest,
 )
 
 app = FastAPI(title="NOTARY", version="0.1.0")
@@ -83,14 +84,84 @@ async def submit_observation_and_run_cycle(observation: Observation) -> dict:
     return await get_app_service().run_cycle(observation)
 
 
+@app.post("/witness/obligations")
+async def submit_witness_obligation(request: WitnessIntakeRequest) -> dict:
+    try:
+        return await get_app_service().submit_witness_obligation(request)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/witness/rulings/{ruling_id}/dispute")
+async def dispute_witness_ruling(
+    ruling_id: str,
+    counter_evidence_text: str = Form(...),
+    submitter_identity: str = Form(...),
+    submitter_type: str = Form(default="human"),
+    evidence_ref: str | None = Form(default=None),
+) -> dict:
+    try:
+        return await get_app_service().dispute_ruling(
+            ruling_id,
+            counter_evidence_text=counter_evidence_text,
+            submitter_identity=submitter_identity,
+            submitter_type=submitter_type,
+            evidence_ref=evidence_ref,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/witness/rulings/{ruling_id}/reverse")
+async def reverse_witness_ruling(
+    ruling_id: str,
+    new_evidence_text: str = Form(...),
+    submitter_identity: str = Form(...),
+    submitter_type: str = Form(default="human"),
+    evidence_ref: str | None = Form(default=None),
+) -> dict:
+    try:
+        return await get_app_service().reverse_ruling_with_new_evidence(
+            ruling_id,
+            new_evidence_text=new_evidence_text,
+            submitter_identity=submitter_identity,
+            submitter_type=submitter_type,
+            evidence_ref=evidence_ref,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/witness/rulings/{ruling_id}/confirm")
+async def confirm_witness_ruling(
+    ruling_id: str,
+    party_identity: str = Form(...),
+    party_type: str = Form(default="human"),
+    outcome: str = Form(...),
+    notes: str | None = Form(default=None),
+) -> dict:
+    return get_app_service().confirm_ruling_outcome(
+        ruling_id=ruling_id,
+        party_identity=party_identity,
+        party_type=party_type,
+        outcome=outcome,
+        notes=notes,
+    )
+
+
+@app.get("/witness/ledger")
+async def witness_public_ledger() -> list[dict]:
+    return get_app_service().public_ledger()
+
+
+@app.get("/witness/parties/{party_identity}/history")
+async def witness_party_history(party_identity: str) -> dict:
+    return get_app_service().party_operating_history(party_identity)
+
+
 @app.get("/attestations")
 async def list_attestations() -> list[dict]:
-    return get_app_service().list_bucket("attestations")
-
-
-@app.get("/predictions")
-async def list_predictions() -> list[dict]:
-    return get_app_service().list_bucket("predictions")
+    return get_app_service().list_bucket("witness_attestations")
 
 
 @app.get("/payments")
@@ -98,7 +169,7 @@ async def list_payments() -> dict[str, list[dict]]:
     service = get_app_service()
     return {
         "paymentLinks": service.list_bucket("payments"),
-        "paymentTriggers": service.list_bucket("payment_triggers"),
+        "paymentInstructions": service.list_bucket("payment_instructions"),
     }
 
 
@@ -151,11 +222,6 @@ async def local_payment_page(reference: str) -> HTMLResponse:
         </html>
         """
     )
-
-
-@app.get("/karma")
-async def list_karma() -> list[dict]:
-    return get_app_service().list_bucket("karma")
 
 
 @app.post("/media/transcribe")

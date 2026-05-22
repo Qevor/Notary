@@ -24,9 +24,9 @@ def _attestation_rows(items: list[dict[str, Any]]) -> str:
             f"""
             <tr>
               <td><span class="pill">{escape(item.get("privacy_mode", "protected"))}</span></td>
-              <td>{escape(_short(item.get("statement", "Attestation"), 92))}</td>
-              <td>{escape(str(item.get("confidence", "n/a")))}</td>
-              <td>{_status(item.get("status"))}</td>
+              <td>{escape(_short(item.get("verdict_hash", "Attestation"), 92))}</td>
+              <td><code>{escape(_short(item.get("reasoning_trace_hash", ""), 18))}</code></td>
+              <td>{_status(item.get("dispute_state"))}</td>
               <td><code>{escape(_short(item.get("attestation_id", ""), 18))}</code></td>
             </tr>
             """
@@ -34,18 +34,19 @@ def _attestation_rows(items: list[dict[str, Any]]) -> str:
     return "".join(rows)
 
 
-def _prediction_rows(items: list[dict[str, Any]]) -> str:
+def _ruling_rows(items: list[dict[str, Any]]) -> str:
     if not items:
-        return '<tr><td colspan="4" class="empty">No predictions yet.</td></tr>'
+        return '<tr><td colspan="5" class="empty">No witness rulings yet.</td></tr>'
     rows = []
-    for item in reversed(items[-6:]):
+    for item in reversed(items[-8:]):
         rows.append(
             f"""
             <tr>
-              <td>{escape(_short(item.get("question", "Prediction"), 84))}</td>
-              <td>{escape(str(item.get("probability", "n/a")))}</td>
-              <td>{_status("resolved" if item.get("resolved") else "open")}</td>
-              <td><code>{escape(_short(item.get("prediction_id", ""), 18))}</code></td>
+              <td>{escape(_short(item.get("obligationSummary", "Obligation"), 72))}</td>
+              <td>{_status(item.get("verdict"))}</td>
+              <td>{escape(str(item.get("releasePct", "n/a")))}</td>
+              <td>{_status("reversed" if item.get("reversed") else "current")}</td>
+              <td><code>{escape(_short(item.get("attestationId", ""), 18))}</code></td>
             </tr>
             """
         )
@@ -72,10 +73,10 @@ def _payment_rows(links: list[dict[str, Any]], triggers: list[dict[str, Any]]) -
             f"""
             <tr>
               <td>{escape(str(item.get("action", "trigger")).replace("_", " "))}</td>
-              <td>{escape(_short(item.get("condition", "Payment trigger"), 64))}</td>
+              <td>{escape(_short(item.get("reason", "Payment instruction"), 64))}</td>
               <td>{escape(str(item.get("amount_usdc", "n/a")))}</td>
-              <td>{_status("authorized" if item.get("authorized") else "blocked")}</td>
-              <td><code>{escape(_short(item.get("trigger_id", ""), 18))}</code></td>
+              <td>{_status(item.get("action"))}</td>
+              <td><code>{escape(_short(item.get("instruction_id", ""), 18))}</code></td>
             </tr>
             """
         )
@@ -86,11 +87,11 @@ def _payment_rows(links: list[dict[str, Any]], triggers: list[dict[str, Any]]) -
 
 def render_dashboard(state: dict[str, Any]) -> str:
     notary_count = len(state.get("notaries", []))
-    attestation_count = len(state.get("attestations", []))
-    prediction_count = len(state.get("predictions", []))
-    payment_count = len(state.get("payments", [])) + len(state.get("payment_triggers", []))
-    karma = state.get("karma", [])[-1] if state.get("karma") else None
-    karma_score = karma.get("score", "n/a") if karma else "n/a"
+    rulings = state.get("rulings", [])
+    attestation_count = len(state.get("witness_attestations", []))
+    dispute_count = len(state.get("disputes", []))
+    reversal_count = len(state.get("reversals", []))
+    payment_count = len(state.get("payments", [])) + len(state.get("payment_instructions", []))
     speechmatics = state.get("speechmatics", {})
     speechmatics_configured = "Configured" if speechmatics.get("configured") else "Needs key"
     speechmatics_mode = "Live" if not speechmatics.get("demoMode", True) else "Demo"
@@ -315,7 +316,7 @@ def render_dashboard(state: dict[str, Any]) -> str:
         <header>
           <div class="brand">
             <h1>NOTARY</h1>
-            <p>Witness-to-Pay terminal for Qevorpay on Arc</p>
+            <p>Single witness pipeline for Qevor payments on Arc</p>
           </div>
           <nav class="top-actions">
             <a href="/state">State JSON</a>
@@ -326,12 +327,12 @@ def render_dashboard(state: dict[str, Any]) -> str:
 
         <section class="metrics">
           <div class="metric"><span>Notaries</span><strong>{notary_count}</strong></div>
+          <div class="metric"><span>Rulings</span><strong>{len(rulings)}</strong></div>
           <div class="metric"><span>Attestations</span><strong>{attestation_count}</strong></div>
-          <div class="metric"><span>Predictions</span><strong>{prediction_count}</strong></div>
+          <div class="metric"><span>Disputes</span><strong>{dispute_count}</strong></div>
+          <div class="metric"><span>Reversals</span><strong>{reversal_count}</strong></div>
           <div class="metric"><span>Payments</span><strong>{payment_count}</strong></div>
-          <div class="metric"><span>Karma</span><strong>{escape(str(karma_score))}</strong></div>
           <div class="metric"><span>Speechmatics</span><strong>{speechmatics_configured}</strong></div>
-          <div class="metric"><span>Mode</span><strong>{speechmatics_mode}</strong></div>
         </section>
 
         <main class="app">
@@ -394,23 +395,23 @@ def render_dashboard(state: dict[str, Any]) -> str:
               <div class="table-title"><h2>Payment Activity</h2><span>{payment_count} total</span></div>
               <table>
                 <thead><tr><th>Type</th><th>Detail</th><th>USDC</th><th>Status</th><th>Reference</th></tr></thead>
-                <tbody>{_payment_rows(state.get("payments", []), state.get("payment_triggers", []))}</tbody>
+                <tbody>{_payment_rows(state.get("payments", []), state.get("payment_instructions", []))}</tbody>
+              </table>
+            </div>
+
+            <div class="table-panel">
+              <div class="table-title"><h2>Public Ledger</h2><span>{len(rulings)} rulings</span></div>
+              <table>
+                <thead><tr><th>Obligation</th><th>Verdict</th><th>Release %</th><th>Status</th><th>Attestation</th></tr></thead>
+                <tbody>{_ruling_rows(rulings)}</tbody>
               </table>
             </div>
 
             <div class="table-panel">
               <div class="table-title"><h2>Attestations</h2><span>{attestation_count} signed</span></div>
               <table>
-                <thead><tr><th>Privacy</th><th>Statement</th><th>Confidence</th><th>Status</th><th>ID</th></tr></thead>
-                <tbody>{_attestation_rows(state.get("attestations", []))}</tbody>
-              </table>
-            </div>
-
-            <div class="table-panel">
-              <div class="table-title"><h2>Predictions</h2><span>{prediction_count} tracked</span></div>
-              <table>
-                <thead><tr><th>Question</th><th>Probability</th><th>Status</th><th>ID</th></tr></thead>
-                <tbody>{_prediction_rows(state.get("predictions", []))}</tbody>
+                <thead><tr><th>Privacy</th><th>Verdict Hash</th><th>Trace Hash</th><th>Status</th><th>ID</th></tr></thead>
+                <tbody>{_attestation_rows(state.get("witness_attestations", []))}</tbody>
               </table>
             </div>
 

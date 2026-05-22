@@ -26,17 +26,9 @@ METHOD_SPECS: dict[tuple[str, str], MethodSpec] = {
         "recordAttestation(bytes32,bytes32,bytes32,bytes32,bytes32,uint64,uint8,address)",
         ["bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "uint64", "uint8", "address"],
     ),
-    ("AttestationRegistry", "recordPrediction"): (
-        "recordPrediction(bytes32,bytes32)",
-        ["bytes32", "bytes32"],
-    ),
-    ("HelixAIKarma", "recordCheckpoint"): (
-        "recordCheckpoint(bytes32,bytes32,uint64,uint64,uint64,uint64,int256,address)",
-        ["bytes32", "bytes32", "uint64", "uint64", "uint64", "uint64", "int256", "address"],
-    ),
     ("NotaryIdentityRegistry", "createNotary"): (
-        "createNotary(bytes32,address,address,bytes32,bytes32,bytes32,bytes32,bytes32)",
-        ["bytes32", "address", "address", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32"],
+        "createNotary(bytes32,address,address,bytes32,bytes32,bytes32,bytes32)",
+        ["bytes32", "address", "address", "bytes32", "bytes32", "bytes32", "bytes32"],
     ),
     ("NotaryValidationRegistry", "recordValidation"): (
         "recordValidation(bytes32,bytes32,bytes32,bytes32,bytes32,address)",
@@ -166,24 +158,6 @@ class ArcClient:
             "from": self.sender,
             "to": to_checksum_address(contract_address),
         }
-
-    async def submit_attestation_hash(self, attestation_id: str, attestation_hash: str) -> dict[str, Any]:
-        return await self.submit_payload(
-            ArcTransactionPayload(
-                contract_name="AttestationRegistry",
-                method="recordPrediction",
-                args=[attestation_id, attestation_hash],
-            )
-        )
-
-    async def submit_karma_checkpoint(self, notary_id: str, checkpoint_hash: str) -> dict[str, Any]:
-        return await self.submit_payload(
-            ArcTransactionPayload(
-                contract_name="HelixAIKarma",
-                method="recordCheckpoint",
-                args=[notary_id, checkpoint_hash, 0, 0, 0, 0, 0, self.sender],
-            )
-        )
 
     async def _rpc(self, method: str, params: list[Any]) -> Any:
         if not self.rpc_url:

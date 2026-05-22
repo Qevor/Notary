@@ -34,7 +34,7 @@ def _optional_str(name: str) -> str | None:
 
 class Settings(BaseModel):
     notary_env: str = "development"
-    notary_demo_mode: bool = True
+    notary_demo_mode: bool = False
     notary_default_privacy_mode: PrivacyMode = PrivacyMode.PROTECTED
 
     claude_api_key: str | None = None
@@ -49,14 +49,13 @@ class Settings(BaseModel):
     validator_eip712_name: str = "NOTARY"
     validator_eip712_version: str = "1"
 
-    arc_demo_mode: bool = True
+    arc_demo_mode: bool = False
     arc_rpc_url: str | None = None
     arc_chain_id: int | None = None
     arc_cli_path: str = "arc"
     arc_operator_private_key: str | None = None
     arc_notary_identity_registry: str | None = None
     arc_attestation_registry: str | None = None
-    arc_karma_registry: str | None = None
     arc_validation_registry: str | None = None
     arc_governance: str | None = None
 
@@ -67,7 +66,7 @@ class Settings(BaseModel):
     circle_gateway_enabled: bool = True
     circle_paymaster_enabled: bool = True
 
-    qevorpay_demo_mode: bool = True
+    qevorpay_demo_mode: bool = False
     qevorpay_api_base_url: str | None = None
     qevorpay_api_key: str | None = None
     qevorpay_webhook_secret: str | None = None
@@ -77,8 +76,12 @@ class Settings(BaseModel):
     qevorpay_refund_path: str | None = None
     qevorpay_payment_status_path_template: str | None = None
     qevorpay_webhook_signature_header: str = "x-signature"
+    qevor_supabase_url: str | None = None
+    qevor_supabase_service_role_key: str | None = None
+    qevor_executor_agent_wallet_id: str | None = None
+    qevor_creator_wallet: str | None = None
 
-    speechmatics_demo_mode: bool = True
+    speechmatics_demo_mode: bool = False
     speechmatics_api_base_url: str | None = "https://asr.api.speechmatics.com/v2"
     speechmatics_api_key: str | None = None
     speechmatics_transcriptions_path: str | None = "/jobs"
@@ -98,7 +101,7 @@ class Settings(BaseModel):
         chain_id = os.getenv("ARC_CHAIN_ID")
         return cls(
             notary_env=os.getenv("NOTARY_ENV", "development"),
-            notary_demo_mode=_bool_env("NOTARY_DEMO_MODE", True),
+            notary_demo_mode=_bool_env("NOTARY_DEMO_MODE", False),
             notary_default_privacy_mode=PrivacyMode(
                 os.getenv("NOTARY_DEFAULT_PRIVACY_MODE", PrivacyMode.PROTECTED.value)
             ),
@@ -111,14 +114,13 @@ class Settings(BaseModel):
             validator_private_key=_optional_str("VALIDATOR_PRIVATE_KEY"),
             validator_eip712_name=os.getenv("VALIDATOR_EIP712_NAME", "NOTARY"),
             validator_eip712_version=os.getenv("VALIDATOR_EIP712_VERSION", "1"),
-            arc_demo_mode=_bool_env("ARC_DEMO_MODE", True),
+            arc_demo_mode=_bool_env("ARC_DEMO_MODE", False),
             arc_rpc_url=_optional_str("ARC_RPC_URL"),
             arc_chain_id=int(chain_id) if chain_id else None,
             arc_cli_path=os.getenv("ARC_CLI_PATH", "arc"),
             arc_operator_private_key=_optional_str("ARC_OPERATOR_PRIVATE_KEY"),
             arc_notary_identity_registry=_optional_str("ARC_NOTARY_IDENTITY_REGISTRY"),
             arc_attestation_registry=_optional_str("ARC_ATTESTATION_REGISTRY"),
-            arc_karma_registry=_optional_str("ARC_KARMA_REGISTRY"),
             arc_validation_registry=_optional_str("ARC_VALIDATION_REGISTRY"),
             arc_governance=_optional_str("ARC_GOVERNANCE"),
             circle_cli_path=os.getenv("CIRCLE_CLI_PATH", "circle"),
@@ -127,7 +129,7 @@ class Settings(BaseModel):
             circle_testnet=_bool_env("CIRCLE_TESTNET", True),
             circle_gateway_enabled=_bool_env("CIRCLE_GATEWAY_ENABLED", True),
             circle_paymaster_enabled=_bool_env("CIRCLE_PAYMASTER_ENABLED", True),
-            qevorpay_demo_mode=_bool_env("QEVORPAY_DEMO_MODE", True),
+            qevorpay_demo_mode=_bool_env("QEVORPAY_DEMO_MODE", False),
             qevorpay_api_base_url=_optional_str("QEVORPAY_API_BASE_URL"),
             qevorpay_api_key=_optional_str("QEVORPAY_API_KEY"),
             qevorpay_webhook_secret=_optional_str("QEVORPAY_WEBHOOK_SECRET"),
@@ -137,9 +139,16 @@ class Settings(BaseModel):
             qevorpay_refund_path=_optional_str("QEVORPAY_REFUND_PATH"),
             qevorpay_payment_status_path_template=_optional_str("QEVORPAY_PAYMENT_STATUS_PATH_TEMPLATE"),
             qevorpay_webhook_signature_header=os.getenv("QEVORPAY_WEBHOOK_SIGNATURE_HEADER", "x-signature"),
+            qevor_supabase_url=_optional_str("QEVOR_SUPABASE_URL") or _optional_str("SUPABASE_URL"),
+            qevor_supabase_service_role_key=(
+                _optional_str("QEVOR_SUPABASE_SERVICE_ROLE_KEY")
+                or _optional_str("SUPABASE_SERVICE_ROLE_KEY")
+            ),
+            qevor_executor_agent_wallet_id=_optional_str("QEVOR_EXECUTOR_AGENT_WALLET_ID"),
+            qevor_creator_wallet=_optional_str("QEVOR_CREATOR_WALLET"),
             speechmatics_demo_mode=_bool_env(
                 "SPEECHMATICS_DEMO_MODE",
-                _bool_env("SPEEDMATIC_DEMO_MODE", True),
+                _bool_env("SPEEDMATIC_DEMO_MODE", False),
             ),
             speechmatics_api_base_url=(
                 _optional_str("SPEECHMATICS_API_BASE_URL")

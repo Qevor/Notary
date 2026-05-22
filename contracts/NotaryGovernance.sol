@@ -6,8 +6,8 @@ contract NotaryGovernance {
         bytes32 operatingAgreementHash;
         bytes32 permittedActionPolicyHash;
         bytes32 privacyPolicyHash;
-        bytes32 replicationPolicyHash;
-        address swarmManager;
+        bytes32 accountabilityPolicyHash;
+        address witnessManager;
         uint256 updatedAt;
     }
 
@@ -19,8 +19,8 @@ contract NotaryGovernance {
         bytes32 operatingAgreementHash,
         bytes32 permittedActionPolicyHash,
         bytes32 privacyPolicyHash,
-        bytes32 replicationPolicyHash,
-        address swarmManager
+        bytes32 accountabilityPolicyHash,
+        address witnessManager
     );
 
     modifier onlyOwner() {
@@ -37,15 +37,15 @@ contract NotaryGovernance {
         bytes32 operatingAgreementHash,
         bytes32 permittedActionPolicyHash,
         bytes32 privacyPolicyHash,
-        bytes32 replicationPolicyHash,
-        address swarmManager
+        bytes32 accountabilityPolicyHash,
+        address witnessManager
     ) external onlyOwner {
         records[notaryId] = GovernanceRecord({
             operatingAgreementHash: operatingAgreementHash,
             permittedActionPolicyHash: permittedActionPolicyHash,
             privacyPolicyHash: privacyPolicyHash,
-            replicationPolicyHash: replicationPolicyHash,
-            swarmManager: swarmManager,
+            accountabilityPolicyHash: accountabilityPolicyHash,
+            witnessManager: witnessManager,
             updatedAt: block.timestamp
         });
         emit GovernanceUpdated(
@@ -53,9 +53,8 @@ contract NotaryGovernance {
             operatingAgreementHash,
             permittedActionPolicyHash,
             privacyPolicyHash,
-            replicationPolicyHash,
-            swarmManager
+            accountabilityPolicyHash,
+            witnessManager
         );
     }
 }
-

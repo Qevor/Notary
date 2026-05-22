@@ -9,28 +9,36 @@ from notary.legal.operating_agreement import generate_operating_agreement
 from notary.models.schemas import (
     ArcTransactionPayload,
     DisclosureLevel,
+    Evidence,
     EvidenceSource,
     EvidenceAccessGrant,
     MediaEvidence,
     NotaryIdentity,
-    NotaryState,
     Observation,
     OperatingAgreement,
+    OutcomeConfirmation,
+    PartyType,
+    PartyOperatingHistory,
+    PaymentAction,
+    PaymentInstruction,
+    PaymentTrigger,
     PrivacyMode,
+    QevorpayBatchDistributionRequest,
     QevorpayPaymentLinkRequest,
+    Ruling,
     TranscriptionJob,
-    ValidationRecord,
+    WitnessIntakeRequest,
     new_id,
     utc_now,
 )
 from notary.services.arc import ArcClient
 from notary.services.circle_agent import CircleAgentClient
 from notary.services.evidence_vault import EvidenceVault
+from notary.services.obligation_extractor import GroqObligationExtractor
 from notary.services.qevorpay import QevorpayClient
-from notary.services.reasoning import AnthropicReasoner, GroqReasoner, SwarmReasoningEngine
 from notary.services.speechmatics import SpeechmaticsClient
 from notary.storage.sqlite import SQLiteStore
-from notary.swarm.notary_swarm import run_notary_cycle
+from notary.witness_pipeline import WitnessPipeline
 
 ZERO_BYTES32 = "0x" + "0" * 64
 ZERO_ADDRESS = "0x" + "0" * 40
@@ -65,6 +73,10 @@ class NotaryAppService:
             payment_status_path_template=settings.qevorpay_payment_status_path_template,
             webhook_secret=settings.qevorpay_webhook_secret,
             webhook_signature_header=settings.qevorpay_webhook_signature_header,
+            supabase_url=settings.qevor_supabase_url,
+            supabase_service_role_key=settings.qevor_supabase_service_role_key,
+            executor_agent_wallet_id=settings.qevor_executor_agent_wallet_id,
+            creator_wallet=settings.qevor_creator_wallet,
         )
         self.arc = ArcClient(
             rpc_url=settings.arc_rpc_url,
@@ -74,7 +86,6 @@ class NotaryAppService:
             contract_addresses={
                 "NotaryIdentityRegistry": settings.arc_notary_identity_registry or "",
                 "AttestationRegistry": settings.arc_attestation_registry or "",
-                "HelixAIKarma": settings.arc_karma_registry or "",
                 "NotaryValidationRegistry": settings.arc_validation_registry or "",
                 "NotaryGovernance": settings.arc_governance or "",
             },
@@ -90,22 +101,6 @@ class NotaryAppService:
             operating_point=settings.speechmatics_operating_point,
             diarization=settings.speechmatics_diarization,
         )
-        self.reasoning = SwarmReasoningEngine(
-            groq=GroqReasoner(
-                api_key=settings.groq_api_key,
-                model=settings.groq_model,
-                api_base_url=settings.groq_api_base_url,
-            )
-            if settings.groq_api_key
-            else None,
-            reflector=AnthropicReasoner(
-                api_key=settings.claude_api_key,
-                model=settings.claude_model,
-                api_base_url=settings.claude_api_base_url,
-            )
-            if settings.claude_api_key
-            else None,
-        )
         self.vault = EvidenceVault(
             root=settings.evidence_vault_local_dir,
             passphrase=settings.evidence_vault_passphrase,
@@ -116,11 +111,12 @@ class NotaryAppService:
             capabilities=[
                 "witness_to_pay",
                 "speechmatics_transcription",
-                "qevorpay_payment_triggers",
+                "qevor_payment_execution",
                 "arc_attestation_hashing",
-                "privacy_modes",
-                "micro_shares",
-                "treasury_intelligence",
+                "graded_verdicts",
+                "dispute_adjudication",
+                "self_reversal",
+                "party_operating_history",
             ],
             endpoint=None,
         )
@@ -129,7 +125,6 @@ class NotaryAppService:
         identity.treasury_address = wallet["address"]
         agreement = generate_operating_agreement(identity.notary_id)
         identity.operating_agreement_hash = agreement.hash
-        identity.policy_dna_hash = agreement.hash
         identity.privacy_policy_hash = agreement.hash
 
         self.store.put("notaries", identity.notary_id, identity.model_dump(mode="json"))
@@ -232,14 +227,9 @@ class NotaryAppService:
         elif not self.settings.speechmatics_demo_mode and self.settings.speechmatics_api_key:
             job = await self.speechmatics.transcribe_file(file_path, evidence.evidence_id, privacy_mode)
         else:
-            job = TranscriptionJob(
-                evidence_id=evidence.evidence_id,
-                status="queued",
-                provider="speechmatics",
-                metadata={
-                    "nextStep": "Configure Speechmatics credentials or submit transcript_text.",
-                    "localFile": str(file_path),
-                },
+            raise RuntimeError(
+                "SPEECHMATICS_API_KEY is required for recording transcription. "
+                "Alternatively submit transcript_text with the upload."
             )
 
         if job.transcript_text and "transcriptHash" not in job.metadata:
@@ -260,33 +250,293 @@ class NotaryAppService:
         return response
 
     async def run_cycle(self, observation: Observation, notary_id: str | None = None) -> dict[str, Any]:
-        state = NotaryState(
-            notary_id=notary_id or self._default_notary_id(),
+        metadata = observation.metadata
+        request = WitnessIntakeRequest(
+            instruction=str(metadata.get("instruction") or observation.raw_text or observation.summary),
+            evidence_text=observation.raw_text or observation.summary,
+            evidence_ref=observation.source.uri,
+            evidence_type=observation.source.kind,
+            payer_identity=metadata.get("payer_identity"),
+            payee_identity=metadata.get("payee_identity"),
+            approver_identity=metadata.get("approver_identity"),
+            payer_type=PartyType(metadata.get("payer_type", PartyType.HUMAN.value)),
+            payee_type=PartyType(metadata.get("payee_type", PartyType.HUMAN.value)),
+            approver_type=PartyType(metadata.get("approver_type", PartyType.HUMAN.value)),
+            submitter_identity=str(
+                metadata.get("submitter_identity")
+                or observation.source.submitted_by
+                or "unknown_submitter"
+            ),
+            submitter_type=PartyType(metadata.get("submitter_type", PartyType.HUMAN.value)),
             privacy_mode=observation.privacy_mode,
-            observations=[observation],
+            amount_usdc=metadata.get("amount_usdc"),
+            notary_id=notary_id,
             metadata={
-                "validatorPrivateKey": self.settings.validator_private_key,
-                "validatorDomainName": self.settings.validator_eip712_name,
-                "validatorDomainVersion": self.settings.validator_eip712_version,
-                "arcChainId": self.settings.arc_chain_id,
-                "verifyingContracts": {
-                    "AttestationRegistry": self.settings.arc_attestation_registry,
-                    "HelixAIKarma": self.settings.arc_karma_registry,
-                },
+                "observationId": observation.observation_id,
+                "source": observation.source.model_dump(mode="json"),
+                **metadata,
             },
         )
-        result = await run_notary_cycle(state, reasoning=self.reasoning if self.reasoning.enabled else None)
-        await self._submit_arc_payloads(result.arc_payloads)
-        await self._execute_payment_triggers(result)
-        await self._write_validation_records(result)
-        self._persist_state(result)
-        return result.model_dump(mode="json")
+        return await self.submit_witness_obligation(request)
 
     async def create_payment_link(self, request: QevorpayPaymentLinkRequest) -> dict[str, Any]:
         result = await self.qevorpay.create_payment_link(request)
         payment_id = result.get("reference") or new_id("payment")
         self.store.put("payments", payment_id, result)
         return result
+
+    async def submit_witness_obligation(self, request: WitnessIntakeRequest) -> dict[str, Any]:
+        self._require_live_witness_config(payments=True)
+        pipeline = self._witness_pipeline(request.notary_id)
+        obligation = await self._extract_obligation_with_llm(request)
+        obligation.metadata["batch_recipients"] = request.batch_recipients
+        obligation, evidence = pipeline.intake(request, obligation)
+        self.store.put("obligations", obligation.obligation_id, obligation.model_dump(mode="json"))
+        self.store.put("evidence", evidence.evidence_id, evidence.model_dump(mode="json"))
+
+        integrity = pipeline.verify(obligation, [evidence])
+        verdict = pipeline.judge(obligation, [evidence], integrity, self._precedent())
+        attestation, payload = pipeline.attest(
+            obligation,
+            [evidence],
+            verdict,
+            request.privacy_mode,
+        )
+        receipt = await self.arc.submit_payload(payload)
+        attestation.arc_tx_hash = receipt.get("txHash")
+
+        payment_instruction = pipeline.payment_instruction(
+            obligation,
+            verdict,
+            attestation.attestation_id,
+        )
+        payment_receipt = await self._execute_payment_instruction(payment_instruction)
+        ruling = Ruling(
+            notary_id=pipeline.notary_id,
+            obligation=obligation,
+            evidence=[evidence],
+            integrity_report=integrity,
+            verdict=verdict,
+            attestation=attestation,
+            payment_instruction=payment_instruction,
+            payment_receipt=payment_receipt,
+            final_settled_outcome=payment_receipt.get("status"),
+        )
+        self._persist_ruling(ruling)
+        self.store.put(
+            "arc_receipts",
+            receipt.get("txHash") or new_id("arc_receipt"),
+            receipt | {"payload": payload.model_dump(mode="json")},
+        )
+        return ruling.model_dump(mode="json")
+
+    async def dispute_ruling(
+        self,
+        ruling_id: str,
+        *,
+        counter_evidence_text: str,
+        submitter_identity: str,
+        submitter_type: str = "human",
+        evidence_ref: str | None = None,
+    ) -> dict[str, Any]:
+        self._require_live_witness_config(payments=True)
+        original_data = self.store.get("rulings", ruling_id)
+        if not original_data:
+            return {"error": "not_found", "rulingId": ruling_id}
+        original = Ruling.model_validate(original_data)
+        pipeline = self._witness_pipeline(original.notary_id)
+        counter_evidence = Evidence(
+            type="counter_evidence",
+            ref=evidence_ref,
+            text=counter_evidence_text,
+            commitment_hash=sha256_hex(
+                {
+                    "rulingId": ruling_id,
+                    "text": counter_evidence_text,
+                    "ref": evidence_ref,
+                    "submitter": submitter_identity,
+                }
+            ),
+            submitter_identity=submitter_identity,
+            submitter_type=submitter_type,
+            privacy_mode=original.attestation.privacy_mode,
+        )
+        dispute, revised_verdict, changed = pipeline.adjudicate_dispute(
+            original,
+            [counter_evidence],
+            self._precedent(exclude_ruling_id=original.ruling_id),
+        )
+        original.disputed = True
+        original.attestation.dispute_state = "revised" if changed else "upheld"
+        self._persist_ruling(original)
+
+        if not changed:
+            dispute.linked_attestation = original.attestation.attestation_id
+            self.store.put("disputes", dispute.dispute_id, dispute.model_dump(mode="json"))
+            return {
+                "dispute": dispute.model_dump(mode="json"),
+                "ruling": original.model_dump(mode="json"),
+            }
+
+        all_evidence = [*original.evidence, counter_evidence]
+        new_attestation, payload = pipeline.attest(
+            original.obligation,
+            all_evidence,
+            revised_verdict,
+            original.attestation.privacy_mode,
+            supersedes_ref=original.attestation.attestation_id,
+            revises_ref=original.attestation.attestation_id,
+        )
+        receipt = await self.arc.submit_payload(payload)
+        new_attestation.arc_tx_hash = receipt.get("txHash")
+        payment_instruction = pipeline.payment_instruction(
+            original.obligation,
+            revised_verdict,
+            new_attestation.attestation_id,
+        )
+        payment_receipt = await self._execute_payment_instruction(payment_instruction)
+        new_ruling = Ruling(
+            notary_id=original.notary_id,
+            obligation=original.obligation,
+            evidence=all_evidence,
+            integrity_report=pipeline.verify(original.obligation, all_evidence),
+            verdict=revised_verdict,
+            attestation=new_attestation,
+            payment_instruction=payment_instruction,
+            payment_receipt=payment_receipt,
+            disputed=True,
+            reversed=True,
+            final_settled_outcome=payment_receipt.get("status"),
+        )
+        reversal = pipeline.reversal_for(original, new_ruling)
+        dispute.linked_attestation = new_attestation.attestation_id
+        self._persist_ruling(new_ruling)
+        self.store.put("disputes", dispute.dispute_id, dispute.model_dump(mode="json"))
+        self.store.put("reversals", reversal.reversal_id, reversal.model_dump(mode="json"))
+        self.store.put(
+            "arc_receipts",
+            receipt.get("txHash") or new_attestation.attestation_id,
+            receipt | {"payload": payload.model_dump(mode="json")},
+        )
+        return {
+            "dispute": dispute.model_dump(mode="json"),
+            "reversal": reversal.model_dump(mode="json"),
+            "ruling": new_ruling.model_dump(mode="json"),
+        }
+
+    async def reverse_ruling_with_new_evidence(
+        self,
+        ruling_id: str,
+        *,
+        new_evidence_text: str,
+        submitter_identity: str,
+        submitter_type: str = "human",
+        evidence_ref: str | None = None,
+    ) -> dict[str, Any]:
+        return await self.dispute_ruling(
+            ruling_id,
+            counter_evidence_text=new_evidence_text,
+            submitter_identity=submitter_identity,
+            submitter_type=submitter_type,
+            evidence_ref=evidence_ref,
+        )
+
+    def confirm_ruling_outcome(
+        self,
+        *,
+        ruling_id: str,
+        party_identity: str,
+        party_type: str = "human",
+        outcome: str,
+        notes: str | None = None,
+    ) -> dict[str, Any]:
+        if not self.store.get("rulings", ruling_id):
+            return {"error": "not_found", "rulingId": ruling_id}
+        confirmation = OutcomeConfirmation(
+            ruling_id=ruling_id,
+            party_identity=party_identity,
+            party_type=party_type,
+            outcome=outcome,
+            notes=notes,
+        )
+        self.store.put(
+            "outcome_confirmations",
+            confirmation.confirmation_id,
+            confirmation.model_dump(mode="json"),
+        )
+        return confirmation.model_dump(mode="json")
+
+    def public_ledger(self) -> list[dict[str, Any]]:
+        ledger: list[dict[str, Any]] = []
+        reversals_by_new = {
+            item.get("new_ruling_id"): item for item in self.store.list("reversals")
+        }
+        for ruling in self.store.list("rulings"):
+            attestation = ruling.get("attestation", {})
+            verdict = ruling.get("verdict", {})
+            obligation = ruling.get("obligation", {})
+            ledger.append(
+                {
+                    "rulingId": ruling.get("ruling_id"),
+                    "attestationId": attestation.get("attestation_id"),
+                    "arcTxHash": attestation.get("arc_tx_hash"),
+                    "verdict": verdict.get("outcome"),
+                    "releasePct": verdict.get("release_pct"),
+                    "confidence": verdict.get("confidence"),
+                    "disputed": ruling.get("disputed", False),
+                    "reversed": ruling.get("reversed", False),
+                    "supersedes": attestation.get("supersedes_ref"),
+                    "revises": attestation.get("revises_ref"),
+                    "partyIdentities": attestation.get("party_identities", {}),
+                    "partyTypes": attestation.get("party_types", {}),
+                    "obligationSummary": obligation.get("deliverable"),
+                    "evidenceCommitmentHash": attestation.get("evidence_commitment_hash"),
+                    "reasoningTraceHash": attestation.get("reasoning_trace_hash"),
+                    "reversal": reversals_by_new.get(ruling.get("ruling_id")),
+                }
+            )
+        return ledger
+
+    def party_operating_history(self, party_identity: str) -> dict[str, Any]:
+        history: PartyOperatingHistory | None = None
+        records = []
+        for ruling in self.store.list("rulings"):
+            parsed = Ruling.model_validate(ruling)
+            parties = parsed.attestation.party_identities
+            party_types = parsed.attestation.party_types
+            role = next(
+                (role for role, identity in parties.items() if identity == party_identity),
+                None,
+            )
+            if not role:
+                continue
+            party_type = party_types.get(role)
+            if history is None:
+                history = PartyOperatingHistory(
+                    party_identity=party_identity,
+                    party_type=party_type,
+                )
+            history.rulings.append(parsed.ruling_id)
+            if parsed.disputed:
+                history.dispute_flags.append(parsed.ruling_id)
+            if parsed.reversed:
+                history.reversal_flags.append(parsed.ruling_id)
+            records.append(
+                {
+                    "rulingId": parsed.ruling_id,
+                    "role": role,
+                    "verdict": parsed.verdict.outcome.value,
+                    "releasePct": parsed.verdict.release_pct,
+                    "confidence": parsed.verdict.confidence,
+                    "disputed": parsed.disputed,
+                    "reversed": parsed.reversed,
+                    "attestationId": parsed.attestation.attestation_id,
+                    "createdAt": parsed.created_at.isoformat(),
+                }
+            )
+        if history is None:
+            history = PartyOperatingHistory(party_identity=party_identity, party_type="human")
+        return history.model_dump(mode="json") | {"records": records}
 
     def list_bucket(self, bucket: str) -> list[dict[str, Any]]:
         return self.store.list(bucket)
@@ -295,17 +545,19 @@ class NotaryAppService:
         return {
             "notaries": self.store.list("notaries"),
             "attestations": self.store.list("attestations"),
-            "predictions": self.store.list("predictions"),
             "payments": self.store.list("payments"),
-            "payment_triggers": self.store.list("payment_triggers"),
+            "payment_instructions": self.store.list("payment_instructions"),
             "arc_receipts": self.store.list("arc_receipts"),
             "validations": self.store.list("validations"),
             "access_grants": self.store.list("access_grants"),
-            "cycles": self.store.list("cycles"),
             "media": self.store.list("media"),
             "transcriptions": self.store.list("transcriptions"),
-            "karma": self.store.list("karma"),
+            "witness_attestations": self.store.list("witness_attestations"),
             "speechmatics": self.speechmatics_status(),
+            "rulings": self.public_ledger(),
+            "disputes": self.store.list("disputes"),
+            "reversals": self.store.list("reversals"),
+            "outcome_confirmations": self.store.list("outcome_confirmations"),
         }
 
     def grant_evidence_access(
@@ -320,18 +572,131 @@ class NotaryAppService:
         self.store.put("access_grants", grant.grant_id, grant.model_dump(mode="json"))
         return grant.model_dump(mode="json")
 
-    def _persist_state(self, state: NotaryState) -> None:
-        self.store.put("cycles", state.cycle_id, state.model_dump(mode="json"))
-        for observation in state.observations:
-            self.store.put("observations", observation.observation_id, observation.model_dump(mode="json"))
-        for attestation in state.attestations:
-            self.store.put("attestations", attestation.attestation_id, attestation.model_dump(mode="json"))
-        for prediction in state.predictions:
-            self.store.put("predictions", prediction.prediction_id, prediction.model_dump(mode="json"))
-        for trigger in state.payment_triggers:
-            self.store.put("payment_triggers", trigger.trigger_id, trigger.model_dump(mode="json"))
-        if state.karma:
-            self.store.put("karma", state.karma.checkpoint_id, state.karma.model_dump(mode="json"))
+    def _persist_ruling(self, ruling: Ruling) -> None:
+        self.store.put("rulings", ruling.ruling_id, ruling.model_dump(mode="json"))
+        self.store.put(
+            "witness_attestations",
+            ruling.attestation.attestation_id,
+            ruling.attestation.model_dump(mode="json"),
+        )
+        self.store.put(
+            "verdicts",
+            ruling.verdict.verdict_id,
+            ruling.verdict.model_dump(mode="json"),
+        )
+        if ruling.payment_instruction:
+            self.store.put(
+                "payment_instructions",
+                ruling.payment_instruction.instruction_id,
+                ruling.payment_instruction.model_dump(mode="json"),
+            )
+
+    def _precedent(self, exclude_ruling_id: str | None = None) -> list[Ruling]:
+        return [
+            Ruling.model_validate(item)
+            for item in self.store.list("rulings")
+            if item.get("ruling_id") != exclude_ruling_id
+        ]
+
+    def _witness_pipeline(self, notary_id: str | None = None) -> WitnessPipeline:
+        return WitnessPipeline(
+            notary_id=notary_id or self._default_notary_id(),
+            signer=self._witness_signer(),
+            attestation_registry=self.settings.arc_attestation_registry,
+        )
+
+    def _witness_signer(self):
+        from notary.crypto.eip712 import EIP712Signer
+
+        return EIP712Signer(
+            private_key=self.settings.validator_private_key,
+            domain_name=self.settings.validator_eip712_name,
+            domain_version=self.settings.validator_eip712_version,
+            chain_id=self.settings.arc_chain_id,
+        )
+
+    def _require_live_witness_config(self, *, payments: bool) -> None:
+        missing = []
+        if not self.settings.groq_api_key:
+            missing.append("GROQ_API_KEY")
+        if not self.settings.validator_private_key:
+            missing.append("VALIDATOR_PRIVATE_KEY")
+        if self.settings.arc_demo_mode:
+            missing.append("ARC_DEMO_MODE=false")
+        for name, value in {
+            "ARC_RPC_URL": self.settings.arc_rpc_url,
+            "ARC_CHAIN_ID": self.settings.arc_chain_id,
+            "ARC_OPERATOR_PRIVATE_KEY": self.settings.arc_operator_private_key,
+            "ARC_ATTESTATION_REGISTRY": self.settings.arc_attestation_registry,
+        }.items():
+            if not value:
+                missing.append(name)
+        if payments:
+            if self.settings.qevorpay_demo_mode:
+                missing.append("QEVORPAY_DEMO_MODE=false")
+            for name, value in {
+                "QEVOR_SUPABASE_URL": self.settings.qevor_supabase_url,
+                "QEVOR_SUPABASE_SERVICE_ROLE_KEY": (
+                    self.settings.qevor_supabase_service_role_key
+                ),
+                "QEVOR_CREATOR_WALLET": self.settings.qevor_creator_wallet,
+            }.items():
+                if not value:
+                    missing.append(name)
+        if missing:
+            raise RuntimeError(
+                "Live NOTARY witness flow requires configuration: " + ", ".join(missing)
+            )
+
+    async def _extract_obligation_with_llm(self, request: WitnessIntakeRequest):
+        if not self.settings.groq_api_key:
+            raise RuntimeError("GROQ_API_KEY is required for LLM obligation extraction")
+        extractor = GroqObligationExtractor(
+            api_key=self.settings.groq_api_key,
+            model=self.settings.groq_model,
+            api_base_url=self.settings.groq_api_base_url,
+        )
+        return await extractor.extract(request)
+
+    async def _execute_payment_instruction(self, instruction: PaymentInstruction) -> dict[str, Any]:
+        if instruction.action == PaymentAction.HOLD:
+            receipt = {
+                "reference": instruction.instruction_id,
+                "status": "held",
+                "reason": instruction.reason,
+                "instruction": instruction.model_dump(mode="json"),
+            }
+        else:
+            if instruction.recipients:
+                receipt = await self.qevorpay.create_batch_distribution(
+                    QevorpayBatchDistributionRequest(
+                        recipients=instruction.recipients,
+                        reason=instruction.reason,
+                        metadata=instruction.metadata
+                        | {
+                            "payerIdentity": instruction.payer_identity,
+                            "attestationId": instruction.attestation_id,
+                        },
+                    )
+                )
+                self.store.put(
+                    "payments",
+                    receipt.get("reference") or instruction.instruction_id,
+                    receipt,
+                )
+                return receipt
+            trigger = PaymentTrigger(
+                action=instruction.action,
+                amount_usdc=instruction.amount_usdc,
+                recipient=instruction.payee_identity,
+                condition=instruction.reason,
+                attestation_id=instruction.attestation_id,
+                authorized=True,
+                metadata=instruction.metadata | {"payerIdentity": instruction.payer_identity},
+            )
+            receipt = await self.qevorpay.execute_trigger(trigger)
+        self.store.put("payments", receipt.get("reference") or instruction.instruction_id, receipt)
+        return receipt
 
     def _default_notary_id(self) -> str:
         notaries = self.store.list("notaries")
@@ -350,9 +715,8 @@ class NotaryAppService:
                     identity.treasury_address or "0x0000000000000000000000000000000000000000",
                     sha256_hex(identity.capabilities),
                     identity.operating_agreement_hash or sha256_hex(""),
-                    identity.policy_dna_hash or sha256_hex(""),
+                    sha256_hex(""),
                     identity.privacy_policy_hash or sha256_hex(""),
-                    identity.parent_notary_id or ZERO_BYTES32,
                 ],
             ),
             ArcTransactionPayload(
@@ -363,7 +727,7 @@ class NotaryAppService:
                     agreement.hash or sha256_hex(""),
                     sha256_hex(agreement.permitted_actions),
                     sha256_hex(agreement.privacy_rules),
-                    sha256_hex({"replicationAllowed": True}),
+                    sha256_hex({"reversalRequiredWhenWrong": True}),
                     identity.agent_wallet or "0x0000000000000000000000000000000000000000",
                 ],
             ),
@@ -375,71 +739,3 @@ class NotaryAppService:
             receipt = await self.arc.submit_payload(payload)
             key = receipt.get("txHash") or new_id("arc_receipt")
             self.store.put("arc_receipts", key, receipt | {"payload": payload.model_dump(mode="json")})
-
-    async def _execute_payment_triggers(self, state: NotaryState) -> None:
-        for trigger in state.payment_triggers:
-            if not trigger.authorized:
-                continue
-            receipt = await self.qevorpay.execute_trigger(trigger)
-            trigger.qevorpay_reference = receipt.get("reference")
-            payment_id = trigger.qevorpay_reference or trigger.trigger_id
-            self.store.put(
-                "payments",
-                payment_id,
-                receipt | {"triggerId": trigger.trigger_id, "attestationId": trigger.attestation_id},
-            )
-
-    async def _write_validation_records(self, state: NotaryState) -> None:
-        records: list[ValidationRecord] = []
-        validator_address = self.arc.sender if self.arc.sender.startswith("0x") and len(self.arc.sender) == 42 else ZERO_ADDRESS
-        if state.attestations:
-            attestation = state.attestations[-1]
-            records.append(
-                ValidationRecord(
-                    notary_id=state.notary_id,
-                    kind="attestation_signature",
-                    subject_id=attestation.attestation_id,
-                    hash=sha256_hex(attestation.model_dump(mode="json")),
-                    validator=validator_address,
-                )
-            )
-        if state.karma:
-            records.append(
-                ValidationRecord(
-                    notary_id=state.notary_id,
-                    kind="karma_checkpoint",
-                    subject_id=state.karma.checkpoint_id,
-                    hash=sha256_hex(state.karma.model_dump(mode="json")),
-                    validator=validator_address,
-                )
-            )
-
-        for record in records:
-            self.store.put("validations", record.validation_id, record.model_dump(mode="json"))
-            receipt = await self.arc.submit_payload(
-                ArcTransactionPayload(
-                    contract_name="NotaryValidationRegistry",
-                    method="recordValidation",
-                    args=[
-                        record.validation_id,
-                        record.notary_id,
-                        record.subject_id,
-                        record.hash,
-                        sha256_hex(record.kind),
-                        record.validator or ZERO_ADDRESS,
-                    ],
-                )
-            )
-            key = receipt.get("txHash") or record.validation_id
-            self.store.put(
-                "arc_receipts",
-                key,
-                receipt
-                | {
-                    "payload": {
-                        "contract_name": "NotaryValidationRegistry",
-                        "method": "recordValidation",
-                        "subject_id": record.subject_id,
-                    }
-                },
-            )
