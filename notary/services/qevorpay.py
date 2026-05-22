@@ -230,27 +230,49 @@ class QevorpayClient:
         if not recipients:
             raise RuntimeError("Batch distribution requires at least one recipient")
         total = round(sum(item["amount"] for item in recipients), 6)
-        batch_rows = await self._supabase_insert(
-            "batch_requests",
-            {
-                "creator_wallet": creator_wallet,
-                "title": request.metadata.get("title", "NOTARY verdict release"),
-                "description": request.reason,
-                "recipients": recipients,
-                "total_amount": total,
-                "status": "pending",
-                "executor_agent_wallet_id": (
-                    request.metadata.get("executor_agent_wallet_id")
-                    or self.executor_agent_wallet_id
-                ),
-                "executor_state": (
-                    "pending_evaluation"
-                    if request.metadata.get("executor_agent_wallet_id")
-                    or self.executor_agent_wallet_id
-                    else "manual"
-                ),
-            },
-        )
+        batch_row: dict[str, Any] = {
+            "creator_wallet": creator_wallet,
+            "title": request.metadata.get("title", "NOTARY verdict release"),
+            "description": request.reason,
+            "recipients": recipients,
+            "total_amount": total,
+            "status": "pending",
+            "executor_agent_wallet_id": (
+                request.metadata.get("executor_agent_wallet_id")
+                or self.executor_agent_wallet_id
+            ),
+            "executor_state": (
+                "pending_evaluation"
+                if request.metadata.get("executor_agent_wallet_id")
+                or self.executor_agent_wallet_id
+                else "manual"
+            ),
+        }
+        envelope = request.metadata.get("attestation") or {}
+        # 14 columns from supabase/migrations/03_notary_attestation.sql. Qevor's
+        # batch executor (notary-attestation.ts) reads these to recover the
+        # EIP-712 signer, look up the on-chain AttestationRegistry record, and
+        # gate the payment fail-closed before any USDC moves.
+        for column in (
+            "attestation_id",
+            "notary_id",
+            "obligation_id",
+            "verdict_hash",
+            "evidence_hash",
+            "reasoning_trace_hash",
+            "confidence_bps",
+            "verdict_signature",
+            "attestation_contract",
+            "attestation_chain_id",
+            "notary_identity_registry",
+            "attestation_domain_name",
+            "attestation_domain_version",
+            "attestation_created_at",
+        ):
+            value = envelope.get(column)
+            if value is not None:
+                batch_row[column] = value
+        batch_rows = await self._supabase_insert("batch_requests", batch_row)
         batch = batch_rows[0]
         payment_rows = [
             {

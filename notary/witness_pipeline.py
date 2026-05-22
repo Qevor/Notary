@@ -263,18 +263,29 @@ class WitnessPipeline:
             supersedes_ref=supersedes_ref,
             revises_ref=revises_ref,
         )
+        # The on-chain AttestationRegistry stores attestationId and notaryId as
+        # bytes32. NOTARY's local identifiers are free-form strings ("watt_..." /
+        # "notary_..."), so we precompute their canonical bytes32 form (sha256 hex)
+        # and use the same hex string both in the EIP-712 message and in the Arc
+        # transaction arguments. Qevor's verifier reads these from Supabase as
+        # hex32 and uses them identically — recovery and contract-lookup match
+        # only because both sides agree on this single canonical form.
+        attestation_id_b32 = sha256_hex(attestation.attestation_id)
+        notary_id_b32 = sha256_hex(self.notary_id)
+        confidence_bps = _bps(verdict.confidence)
+        created_at_unix = int(attestation.timestamp.timestamp())
         attestation.signature = self.signer.sign_typed_data(
             primary_type="WitnessAttestation",
             verifying_contract=self.attestation_registry,
             message={
-                "attestationId": attestation.attestation_id,
-                "notaryId": self.notary_id,
+                "attestationId": attestation_id_b32,
+                "notaryId": notary_id_b32,
                 "obligationId": obligation.obligation_id,
                 "verdictHash": verdict_hash,
                 "evidenceHash": evidence_hash,
                 "reasoningTraceHash": reasoning_hash,
-                "confidenceBps": _bps(verdict.confidence),
-                "createdAt": int(attestation.timestamp.timestamp()),
+                "confidenceBps": confidence_bps,
+                "createdAt": created_at_unix,
             },
             message_types={
                 "WitnessAttestation": [
@@ -293,8 +304,8 @@ class WitnessPipeline:
             contract_name="AttestationRegistry",
             method="recordAttestation",
             args=[
-                attestation.attestation_id,
-                self.notary_id,
+                attestation_id_b32,
+                notary_id_b32,
                 evidence_hash,
                 reasoning_hash,
                 sha256_hex(
@@ -304,7 +315,7 @@ class WitnessPipeline:
                         "revises": revises_ref,
                     }
                 ),
-                _bps(verdict.confidence),
+                confidence_bps,
                 PRIVACY_MODE_TO_INT[privacy_mode.value],
                 (
                     self.signer.address
@@ -316,15 +327,54 @@ class WitnessPipeline:
                 "verdictHash": verdict_hash,
                 "supersedesRef": supersedes_ref,
                 "revisesRef": revises_ref,
+                "attestationIdBytes32": attestation_id_b32,
+                "notaryIdBytes32": notary_id_b32,
+                "confidenceBps": confidence_bps,
+                "createdAtUnix": created_at_unix,
             },
         )
         return attestation, payload
+
+    def build_attestation_envelope(
+        self,
+        *,
+        attestation: WitnessAttestation,
+        obligation: Obligation,
+        verdict: WitnessVerdict,
+        identity_registry: str | None,
+    ) -> dict[str, Any]:
+        """Returns the data plane Qevor's executor needs to independently verify
+        the verdict on Arc. Mirrors the columns in
+        ``supabase/migrations/03_notary_attestation.sql`` and the row shape read
+        by ``server/src/lib/notary-attestation.ts``.
+
+        The caller is expected to forward this through Qevorpay metadata so
+        ``QevorpayClient._create_supabase_batch`` can populate batch_requests.
+        """
+        return {
+            "attestation_id": sha256_hex(attestation.attestation_id),
+            "notary_id": sha256_hex(self.notary_id),
+            "obligation_id": obligation.obligation_id,
+            "verdict_hash": attestation.verdict_hash,
+            "evidence_hash": attestation.evidence_commitment_hash,
+            "reasoning_trace_hash": attestation.reasoning_trace_hash,
+            "confidence_bps": _bps(verdict.confidence),
+            "verdict_signature": attestation.signature,
+            "attestation_contract": self.attestation_registry,
+            "attestation_chain_id": self.signer.chain_id,
+            "notary_identity_registry": identity_registry,
+            "attestation_domain_name": self.signer.domain_name,
+            "attestation_domain_version": self.signer.domain_version,
+            "attestation_created_at": int(attestation.timestamp.timestamp()),
+        }
 
     def payment_instruction(
         self,
         obligation: Obligation,
         verdict: WitnessVerdict,
         attestation_id: str,
+        *,
+        attestation_envelope: dict[str, Any] | None = None,
     ) -> PaymentInstruction:
         amount = obligation.amount_usdc
         if amount is not None and verdict.release_pct:
@@ -366,6 +416,7 @@ class WitnessPipeline:
                 "qevorPaymentUrl": obligation.metadata.get("qevorPaymentUrl"),
                 "confidenceGate": verdict.confidence_gate,
                 "disputeWindowOpen": verdict.dispute_window_open,
+                **({"attestation": attestation_envelope} if attestation_envelope else {}),
             },
         )
 

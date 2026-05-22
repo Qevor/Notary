@@ -629,6 +629,62 @@ async def ui_create_payment_link(
     return RedirectResponse("/app", status_code=303)
 
 
+@app.post("/webhooks/qevorpay/settlement")
+async def qevorpay_settlement_webhook(request: Request) -> dict:
+    """Receives signed settlement notifications from Qevor's batch executor.
+
+    Qevor posts here once it has independently verified NOTARY's EIP-712
+    attestation, looked up the on-chain AttestationRegistry record, and either
+    executed or rejected the batch. We HMAC-verify the body against
+    QEVORPAY_WEBHOOK_SECRET (matching Qevor's outbound signer), then persist
+    the event so the ledger reflects real settlement state instead of the
+    optimistic 'queued' we wrote when we kicked off the batch.
+    """
+    service = get_app_service()
+    body = await request.body()
+    headers = {key.lower(): value for key, value in request.headers.items()}
+    if not service.qevorpay.verify_webhook(headers=headers, body=body):
+        raise HTTPException(status_code=401, detail="invalid_webhook_signature")
+    try:
+        payload = json.loads(body or b"{}")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="invalid_json")
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="payload_must_be_object")
+
+    settlement_id = (
+        payload.get("batch_payment_id")
+        or payload.get("batchPaymentId")
+        or payload.get("batch_request_id")
+        or payload.get("batchRequestId")
+        or payload.get("reference")
+        or f"qevor_settlement_{int(time.time() * 1000)}"
+    )
+    record = {
+        "id": settlement_id,
+        "receivedAt": int(time.time()),
+        "event": payload,
+    }
+    service.store.put("qevor_settlements", str(settlement_id), record)
+
+    # Reconcile the local payment record. Qevor's executor identifies the batch
+    # via batch_request_id which we stored as the payment reference when
+    # _create_supabase_batch returned. If we find a matching payment row,
+    # update its status so the dashboard shows the final outcome.
+    payment_ref = (
+        payload.get("batch_request_id")
+        or payload.get("batchRequestId")
+        or payload.get("reference")
+    )
+    if payment_ref:
+        existing = service.store.get("payments", str(payment_ref))
+        if existing:
+            existing["status"] = payload.get("status") or existing.get("status")
+            existing["settlement"] = payload
+            service.store.put("payments", str(payment_ref), existing)
+    return {"ok": True, "settlementId": settlement_id}
+
+
 @app.get("/state")
 async def state(request: Request) -> dict:
     _require_ui_user(request)

@@ -507,10 +507,17 @@ class NotaryAppService:
         receipt = await self.arc.submit_payload(payload)
         attestation.arc_tx_hash = receipt.get("txHash")
 
+        envelope = pipeline.build_attestation_envelope(
+            attestation=attestation,
+            obligation=obligation,
+            verdict=verdict,
+            identity_registry=self.settings.arc_notary_identity_registry,
+        )
         payment_instruction = pipeline.payment_instruction(
             obligation,
             verdict,
             attestation.attestation_id,
+            attestation_envelope=envelope,
         )
         payment_receipt = await self._execute_payment_instruction(payment_instruction)
         ruling = Ruling(
@@ -795,10 +802,17 @@ class NotaryAppService:
         )
         receipt = await self.arc.submit_payload(payload)
         new_attestation.arc_tx_hash = receipt.get("txHash")
+        envelope = pipeline.build_attestation_envelope(
+            attestation=new_attestation,
+            obligation=original.obligation,
+            verdict=revised_verdict,
+            identity_registry=self.settings.arc_notary_identity_registry,
+        )
         payment_instruction = pipeline.payment_instruction(
             original.obligation,
             revised_verdict,
             new_attestation.attestation_id,
+            attestation_envelope=envelope,
         )
         payment_receipt = await self._execute_payment_instruction(payment_instruction)
         new_ruling = Ruling(
