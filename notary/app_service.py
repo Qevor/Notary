@@ -1697,3 +1697,133 @@ class NotaryAppService:
         removed_terms = ("pred" + "_", "pre" + "diction", "kar" + "ma")
         return any(term in text for term in removed_terms)
 
+    async def get_or_create_user_profile(self, email_or_id: str) -> dict[str, Any]:
+        raw_identity = email_or_id.strip()
+        if raw_identity.startswith("@"):
+            username = raw_identity[1:].lower()
+        elif "@" in raw_identity:
+            username = raw_identity.split("@")[0].lower()
+        else:
+            username = raw_identity.lower()
+        
+        rows = []
+        if self.settings.notary_supabase_url and self.settings.notary_supabase_service_role_key:
+            try:
+                rows = await self.escrow._supabase_select(
+                    "profiles",
+                    select="wallet,username",
+                    filters={"username": f"eq.{username}"},
+                    limit=1
+                )
+            except Exception as e:
+                print(f"[Onboarding] Error checking profile: {e}")
+        
+        if rows:
+            profile = rows[0]
+            wallet_address = profile.get("wallet")
+            balance = "0.00"
+            try:
+                balance_info = await self.circle.get_unified_balance(wallet_address)
+                if isinstance(balance_info, dict):
+                    balance = balance_info.get("amount") or balance_info.get("walletBalance", {}).get("amount") or "0.00"
+            except Exception as e:
+                balance = "0.00"
+            
+            return {
+                "username": username,
+                "wallet": wallet_address,
+                "balance": balance,
+            }
+        
+        # Create user profile and agent wallet
+        try:
+            wallet_info = await self.circle.create_agent_wallet(username)
+        except Exception as e:
+            wallet_id = new_id("local_circle_wallet")
+            wallet_info = {
+                "walletId": wallet_id,
+                "address": "0x" + sha256_hex(wallet_id)[-40:],
+                "ownerHint": username,
+                "demo": True,
+            }
+            
+        wallet_address = wallet_info.get("address")
+        
+        if self.settings.notary_supabase_url and self.settings.notary_supabase_service_role_key:
+            try:
+                await self.escrow._supabase_insert(
+                    "profiles",
+                    {
+                        "wallet": wallet_address,
+                        "username": username,
+                    }
+                )
+                agent_wallet_id = wallet_info.get("walletId") or new_id("agent_wallet")
+                await self.escrow._supabase_insert(
+                    "agent_wallets",
+                    {
+                        "id": agent_wallet_id,
+                        "profile_wallet": wallet_address,
+                        "wallet_address": wallet_address,
+                        "chain": self.settings.circle_chain,
+                        "label": f"Agent Wallet for @{username}",
+                        "status": "active",
+                        "executor_mode": "escrow",
+                        "escrow_address": wallet_address,
+                        "attestation_mode": "attest",
+                    }
+                )
+            except Exception as e:
+                print(f"[Onboarding] Error inserting profile: {e}")
+                
+        local_user = {
+            "username": username,
+            "wallet": wallet_address,
+            "circle_wallet_id": wallet_info.get("walletId"),
+        }
+        self.store.put("profiles", username, local_user)
+        
+        return {
+            "username": username,
+            "wallet": wallet_address,
+            "balance": "1000.00" if self.settings.notary_demo_mode else "0.00",
+        }
+
+    async def send_user_funds(
+        self,
+        *,
+        sender_email_or_id: str,
+        to_identity: str,
+        amount_usdc: float,
+    ) -> dict[str, Any]:
+        sender_profile = await self.get_or_create_user_profile(sender_email_or_id)
+        sender_wallet = sender_profile.get("wallet")
+        
+        agent_wallet_id = None
+        rows = []
+        if self.settings.notary_supabase_url and self.settings.notary_supabase_service_role_key:
+            try:
+                rows = await self.escrow._supabase_select(
+                    "agent_wallets",
+                    select="id",
+                    filters={"profile_wallet": f"eq.{sender_wallet}"},
+                    limit=1
+                )
+            except Exception as e:
+                print(f"[Send Funds] Error querying agent wallet: {e}")
+        
+        if rows:
+            agent_wallet_id = rows[0].get("id")
+            
+        target = await self.escrow.resolve_identity_to_wallet(to_identity)
+        target_wallet = target.get("wallet")
+        if not target_wallet:
+            raise RuntimeError(f"Could not resolve recipient identity: {to_identity}")
+            
+        result = await self.circle.transfer_usdc(
+            from_wallet_id=agent_wallet_id or sender_wallet,
+            to_address=target_wallet,
+            amount=amount_usdc,
+        )
+        return result
+

@@ -186,13 +186,51 @@ async def public_ledger_page(request: Request) -> HTMLResponse:
 async def workspace(
     request: Request,
     error: str | None = None,
+    message: str | None = None,
     circle_request_id: str | None = None,
 ) -> HTMLResponse:
     user = _read_session(request)
     if not user:
         return RedirectResponse("/login", status_code=303)
-    state = _user_state(get_app_service().dashboard_state(), user)
-    return HTMLResponse(render_workspace(state, user, error=error, circle_request_id=circle_request_id))
+    service = get_app_service()
+    try:
+        profile = await service.get_or_create_user_profile(user.get("email") or user.get("id") or "")
+    except Exception:
+        profile = {
+            "username": "unknown",
+            "wallet": "0x0000000000000000000000000000000000000000",
+            "balance": "0.00"
+        }
+    state = _user_state(service.dashboard_state(), user)
+    return HTMLResponse(
+        render_workspace(
+            state,
+            user,
+            profile,
+            error=error,
+            message=message,
+            circle_request_id=circle_request_id,
+        )
+    )
+
+
+@app.post("/ui/wallet/send")
+async def ui_wallet_send(
+    request: Request,
+    recipient: str = Form(...),
+    amount: float = Form(...),
+) -> RedirectResponse:
+    user = _require_ui_user(request)
+    service = get_app_service()
+    try:
+        await service.send_user_funds(
+            sender_email_or_id=user.get("email") or user.get("id") or "",
+            to_identity=recipient,
+            amount_usdc=amount,
+        )
+    except Exception as exc:
+        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
+    return RedirectResponse("/app?message=USDC%20transfer%20successful!", status_code=303)
 
 
 @app.post("/ui/cases")

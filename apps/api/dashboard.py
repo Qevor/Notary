@@ -1228,21 +1228,48 @@ def _workspace_scripts() -> str:
 def render_workspace(
     state: dict[str, Any],
     user: dict[str, Any],
+    profile: dict[str, Any],
     error: str | None = None,
+    message: str | None = None,
     circle_request_id: str | None = None,
 ) -> str:
     user_label = escape(str(user.get("email") or user.get("id")))
-    default_payer = user_label if user_label.startswith("@") else "@me"
+    profile_username = escape(profile.get("username", "unknown"))
+    profile_wallet = escape(profile.get("wallet", "0x0000000000000000000000000000000000000000"))
+    profile_balance = escape(str(profile.get("balance", "0.00")))
+    circle_chain = escape(state.get("circle_wallet_summary", {}).get("chain", "ARC-TESTNET"))
+
+    default_payer = f"@{profile_username}"
     error_html = f'<div class="notice bad">{escape(error)}</div>' if error else ""
+    message_html = f'<div class="notice">{escape(message)}</div>' if message else ""
     body = f"""
     <main class="shell">
       <section class="workspace-intro">
-        <div>
-          <div class="eyebrow">Interactive Console</div>
-          <h2>Autonomous AI Witness Portal</h2>
-          <p class="panel-copy">Welcome back, <strong>{user_label}</strong>. NOTARY turns real-world proof — voice notes, files, videos, work logs, and approvals — into signed AI attestations that trigger programmable USDC payments on Arc.</p>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 20px;">
+          <div>
+            <div class="eyebrow">Interactive Console</div>
+            <h2>Autonomous AI Witness Portal</h2>
+            <p class="panel-copy">Welcome back, <strong>{user_label}</strong>. NOTARY turns real-world proof into signed AI attestations that trigger programmable USDC payments on Arc.</p>
+          </div>
+          <div class="sandbox-section" style="margin: 0; min-width: 320px; border: 1px solid var(--line); background: var(--surface-2); border-radius: 8px; padding: 16px; box-shadow: var(--shadow);">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+              <div>
+                <span class="eyebrow" style="color: var(--green); margin: 0;">Your Profile</span>
+                <h3 style="margin: 4px 0 2px; color: #fff; font-family: 'Outfit';">@{profile_username}</h3>
+                <p style="margin: 0; font-size: 11px; color: var(--muted); cursor: pointer;" onclick="navigator.clipboard.writeText('{profile_wallet}'); alert('Copied address!')">
+                  Wallet: <code style="color: var(--green); font-size: 11px;">{profile_wallet[:10]}...{profile_wallet[-8:]} 📋</code>
+                </p>
+              </div>
+              <div style="text-align: right;">
+                <span class="eyebrow" style="color: var(--green); margin: 0;">Balance</span>
+                <h3 style="margin: 4px 0 2px; color: #fff; font-size: 20px; font-family: 'Outfit';">{profile_balance} USDC</h3>
+                <p style="margin: 0; font-size: 10px; color: var(--muted);">{circle_chain}</p>
+              </div>
+            </div>
+          </div>
         </div>
         {error_html}
+        {message_html}
         <div class="steps">
           <div class="step">
             <strong>1. Define Secured Agreement</strong>
@@ -1261,6 +1288,20 @@ def render_workspace(
       
       <section class="workspace">
         <aside>
+          <div class="panel" style="border: 1px solid rgba(16, 185, 129, 0.25);">
+            <h2>Send USDC Funds</h2>
+            <p class="panel-copy">Transfer USDC instantly from your agent wallet to any recipient handle (e.g. <code>@jennycruzy</code>) or raw EVM address.</p>
+            <form method="post" action="/ui/wallet/send">
+              <label for="recipient">Recipient (Username or Wallet)</label>
+              <input id="recipient" name="recipient" required placeholder="e.g. @jennycruzy or 0x..." />
+              
+              <label for="amount" style="margin-top: 10px;">Amount in USDC</label>
+              <input id="amount" name="amount" type="number" min="0.01" step="0.01" value="10" required placeholder="e.g. 10" />
+              
+              <button style="margin-top: 14px; width: 100%;">Send USDC Transfer</button>
+            </form>
+          </div>
+
           <div class="panel">
             <h2>Create New Secure Escrow</h2>
             <p class="panel-copy">Draft a natural-language contract. The system automatically extracts obligations and generates secure webhook links.</p>

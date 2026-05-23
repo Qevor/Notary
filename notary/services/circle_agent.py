@@ -197,6 +197,45 @@ class CircleAgentClient:
             raise RuntimeError("No Circle agent wallet is available for the configured account and chain")
         return str(wallets[0]["address"])
 
+    async def transfer_usdc(
+        self,
+        *,
+        from_wallet_id: str | None = None,
+        to_address: str,
+        amount: float,
+    ) -> dict[str, Any]:
+        if self.demo_mode:
+            return {
+                "txHash": "0x" + sha256_hex(new_id("tx"))[-64:],
+                "from": from_wallet_id or "demo-sender",
+                "to": to_address,
+                "amount": amount,
+                "status": "success",
+                "demo": True,
+            }
+        from_address = await self._resolve_address(from_wallet_id)
+        result = await self._run(
+            "wallet",
+            "transfer",
+            "--from",
+            from_address,
+            "--to",
+            to_address,
+            "--amount",
+            str(amount),
+            "--chain",
+            self.chain,
+        )
+        return {
+            "txHash": result.get("txHash") or result.get("id") or "executed",
+            "from": from_address,
+            "to": to_address,
+            "amount": amount,
+            "status": "success",
+            "raw": result,
+            "demo": False,
+        }
+
     async def _resolve_address(self, wallet_id: str | None) -> str:
         if not wallet_id:
             return await self._default_agent_address()
@@ -245,6 +284,7 @@ class CircleAgentClient:
                 "wallet list",
                 "wallet balance",
                 "wallet fund",
+                "wallet transfer",
                 "services pay",
                 "services search",
                 "services inspect",
