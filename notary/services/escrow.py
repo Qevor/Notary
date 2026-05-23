@@ -85,10 +85,13 @@ class NotaryEscrowClient:
                 "request": request.model_dump(mode="json"),
             }
         if not self.payment_link_path and self.supabase_url:
+            recipient = request.recipient or self.creator_wallet
+            if not recipient:
+                raise ValueError("recipient wallet is required but not provided (and creator_wallet is not set)")
             rows = await self._supabase_insert(
                 "payment_links",
                 {
-                    "receiver_wallet": request.recipient,
+                    "receiver_wallet": recipient,
                     "amount": request.amount_usdc,
                     "expires_at": request.metadata.get("expires_at"),
                     "max_uses": request.metadata.get("max_uses"),

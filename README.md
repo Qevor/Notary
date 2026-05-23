@@ -198,7 +198,7 @@ When real credentials are added, set the relevant `*_DEMO_MODE` to `false` and c
 
 **Circle** — Circle CLI is only for the operator/server-side NOTARY agent wallet and executor. End users fund cases through NOTARY escrow or the app's funding UI.
 
-**NOTARY escrow paths** — `QEVORPAY_*_PATH` values are required in live mode because NOTARY escrow endpoint paths are provider-specific.
+**NOTARY escrow paths** — `NOTARY_ESCROW_*_PATH` values are required in live mode because NOTARY escrow endpoint paths are provider-specific.
 
 **NOTARY Supabase integration** — live conditional reserves use NOTARY Supabase tables directly when no HTTP endpoint is configured. Required server-side values:
 

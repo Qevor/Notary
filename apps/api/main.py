@@ -777,7 +777,10 @@ async def ui_attest_transcript(
 
 @app.post("/escrow/payment-link")
 async def create_payment_link(request: EscrowPaymentLinkRequest) -> dict:
-    return await get_app_service().create_payment_link(request)
+    try:
+        return await get_app_service().create_payment_link(request)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/evidence/grants")

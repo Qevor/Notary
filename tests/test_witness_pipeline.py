@@ -204,7 +204,7 @@ def test_dashboard_state_does_not_auto_seed_demo_records(tmp_path) -> None:
     assert state["reversals"] == []
 
 
-async def test_conditional_case_creates_qevor_reference_and_matches_agent_evidence(
+async def test_conditional_case_creates_escrow_reference_and_matches_agent_evidence(
     tmp_path,
     monkeypatch,
 ) -> None:
