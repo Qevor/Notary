@@ -149,7 +149,15 @@ class NotaryAppService:
         return await self.circle.login_complete(request_id, otp)
 
     async def circle_status(self) -> dict[str, Any]:
-        return await self.circle.wallet_status()
+        try:
+            return await self.circle.wallet_status()
+        except RuntimeError as exc:
+            return {
+                "authenticated": False,
+                "available": False,
+                "error": str(exc),
+                "demo": self.settings.notary_demo_mode,
+            }
 
     def speechmatics_status(self) -> dict[str, Any]:
         return {
@@ -237,6 +245,72 @@ class NotaryAppService:
     def get_operating_agreement(self, notary_id: str) -> dict[str, Any] | None:
         agreements = self.store.list("operating_agreements")
         return next((item for item in agreements if item.get("notary_id") == notary_id), None)
+
+    async def register_notary_onchain(self, notary_id: str) -> dict[str, Any]:
+        identity_data = self.store.get("notaries", notary_id)
+        if not identity_data:
+            raise RuntimeError(f"Notary {notary_id} was not found")
+        agreement_data = self.get_operating_agreement(notary_id)
+        if not agreement_data:
+            raise RuntimeError(f"Operating agreement for {notary_id} was not found")
+
+        before = {
+            item.get("txHash") or item.get("id")
+            for item in self.store.list("arc_receipts")
+            if self._payload_first_arg(item) == notary_id
+        }
+        identity = NotaryIdentity.model_validate(identity_data)
+        agreement = OperatingAgreement.model_validate(agreement_data)
+        await self._submit_identity_records(identity, agreement)
+        receipts = [
+            item
+            for item in self.store.list("arc_receipts")
+            if self._payload_first_arg(item) == notary_id
+            and (item.get("txHash") or item.get("id")) not in before
+        ]
+        return {
+            "notaryId": notary_id,
+            "status": "submitted" if receipts else "unchanged",
+            "receipts": receipts,
+        }
+
+    async def prepare_circle_gateway_deposit(
+        self,
+        *,
+        amount_usdc: float,
+        wallet_id: str | None = None,
+    ) -> dict[str, Any]:
+        target_wallet = wallet_id or self._default_agent_wallet()
+        if not target_wallet:
+            raise RuntimeError("Create a NOTARY agent wallet before preparing a Circle Gateway deposit")
+        route = await self.circle.prepare_gateway_route(target_wallet, amount_usdc)
+        route_id = str(route.get("routeId") or route.get("id") or new_id("gateway_route"))
+        record = {
+            "routeId": route_id,
+            "walletId": target_wallet,
+            "amountUSDC": amount_usdc,
+            "chain": self.settings.circle_chain,
+            "route": route,
+            "createdAt": utc_now().isoformat(),
+        }
+        self.store.put("circle_routes", route_id, record)
+        return record
+
+    async def circle_wallet_summary(self) -> dict[str, Any]:
+        wallet = self._default_agent_wallet()
+        status = await self.circle_status()
+        try:
+            balance = await self.circle.get_unified_balance(wallet) if wallet else None
+        except RuntimeError as exc:
+            balance = {"available": False, "error": str(exc)}
+        return {
+            "status": status,
+            "walletId": wallet,
+            "balance": balance,
+            "chain": self.settings.circle_chain,
+            "gatewayEnabled": self.settings.circle_gateway_enabled,
+            "paymasterEnabled": self.settings.circle_paymaster_enabled,
+        }
 
     async def ingest_transcript(
         self,
@@ -1111,6 +1185,8 @@ class NotaryAppService:
             "witness_attestations": self.store.list("witness_attestations"),
             "speechmatics": self.speechmatics_status(),
             "auth": self.auth_status(),
+            "circle_routes": self.store.list("circle_routes"),
+            "swarm_roles": self.swarm_roles(),
             "cases": self.store.list("cases"),
             "rulings": ledger,
             "disputes": self.store.list("disputes"),
@@ -1122,6 +1198,73 @@ class NotaryAppService:
             ],
             "outcome_confirmations": self.store.list("outcome_confirmations"),
         }
+
+    def swarm_roles(self) -> list[dict[str, Any]]:
+        cases = self.store.list("cases")
+        rulings = self.store.list("rulings")
+        latest_case = cases[-1] if cases else {}
+        latest_ruling = rulings[-1] if rulings else {}
+        obligation = latest_ruling.get("obligation", {}) or {}
+        integrity = latest_ruling.get("integrity_report", {}) or {}
+        verdict = latest_ruling.get("verdict", {}) or {}
+        attestation = latest_ruling.get("attestation", {}) or {}
+        payment = latest_ruling.get("payment_instruction", {}) or {}
+        reversal_count = len(self.store.list("reversals"))
+        return [
+            {
+                "name": "Signal Scanner",
+                "role": "Observes obligations, Speechmatics transcripts, and case evidence.",
+                "status": "active" if cases or rulings else "ready",
+                "lastOutput": obligation.get("raw_instruction")
+                or latest_case.get("instruction")
+                or "Awaiting first observation",
+            },
+            {
+                "name": "Guardian Sentinel",
+                "role": "Checks source quality, spoofing risk, and evidence integrity.",
+                "status": "approved" if integrity.get("approved") else "watching",
+                "lastOutput": ", ".join(integrity.get("safety_flags", []) or [])
+                or f"source quality {integrity.get('source_quality', 'n/a')}",
+            },
+            {
+                "name": "Risk Guardian",
+                "role": "Applies legal threshold, confidence gates, and release sizing.",
+                "status": verdict.get("confidence_gate") or "ready",
+                "lastOutput": verdict.get("outcome") or "No verdict yet",
+            },
+            {
+                "name": "Strategy Engine",
+                "role": "Turns verdicts into Qevor reserve, release, hold, refund, or batch actions.",
+                "status": payment.get("action") or latest_case.get("status") or "ready",
+                "lastOutput": payment.get("reason")
+                or latest_case.get("qevor_payment_reference")
+                or "Waiting for funded case",
+            },
+            {
+                "name": "Validator",
+                "role": "Signs EIP-712 attestations and submits hashes to Arc.",
+                "status": "signed" if attestation.get("signature") else "ready",
+                "lastOutput": attestation.get("attestation_id") or "No attestation signed yet",
+            },
+            {
+                "name": "Reflector",
+                "role": "Maintains precedent, disputes, self-correction, and reversal memory.",
+                "status": "learning" if rulings else "ready",
+                "lastOutput": f"{len(rulings)} ruling(s), {reversal_count} reversal(s)",
+            },
+        ]
+
+    def _default_agent_wallet(self) -> str | None:
+        notaries = self.store.list("notaries")
+        for item in reversed(notaries):
+            wallet = item.get("agent_wallet") or item.get("treasury_address")
+            if wallet:
+                return str(wallet)
+        return None
+
+    def _payload_first_arg(self, item: dict[str, Any]) -> Any:
+        args = item.get("payload", {}).get("args", [])
+        return args[0] if args else None
 
     def _is_debug_ruling(self, ruling: dict[str, Any]) -> bool:
         obligation = ruling.get("obligation", {})

@@ -168,12 +168,16 @@ async def public_ledger_page(request: Request) -> HTMLResponse:
 
 
 @app.get("/app", response_class=HTMLResponse)
-async def workspace(request: Request, error: str | None = None) -> HTMLResponse:
+async def workspace(
+    request: Request,
+    error: str | None = None,
+    circle_request_id: str | None = None,
+) -> HTMLResponse:
     user = _read_session(request)
     if not user:
         return RedirectResponse("/login", status_code=303)
     state = _user_state(get_app_service().dashboard_state(), user)
-    return HTMLResponse(render_workspace(state, user, error=error))
+    return HTMLResponse(render_workspace(state, user, error=error, circle_request_id=circle_request_id))
 
 
 @app.post("/ui/cases")
@@ -346,6 +350,11 @@ async def circle_status() -> dict:
     return await get_app_service().circle_status()
 
 
+@app.get("/circle/wallet")
+async def circle_wallet_summary() -> dict:
+    return await get_app_service().circle_wallet_summary()
+
+
 @app.get("/speechmatics/status")
 async def speechmatics_status() -> dict:
     return get_app_service().speechmatics_status()
@@ -361,6 +370,22 @@ async def circle_login_complete(request_id: str = Form(...), otp: str = Form(...
     return await get_app_service().circle_login_complete(request_id, otp)
 
 
+@app.post("/circle/gateway/deposit")
+async def circle_gateway_deposit(
+    amount_usdc: float = Form(...),
+    wallet_id: str | None = Form(default=None),
+) -> dict:
+    return await get_app_service().prepare_circle_gateway_deposit(
+        amount_usdc=amount_usdc,
+        wallet_id=wallet_id or None,
+    )
+
+
+@app.get("/agents")
+async def list_agents() -> list[dict]:
+    return get_app_service().swarm_roles()
+
+
 @app.get("/notaries/{notary_id}/operating-agreement")
 async def get_operating_agreement(notary_id: str) -> dict:
     agreement = get_app_service().get_operating_agreement(notary_id)
@@ -373,6 +398,63 @@ async def get_operating_agreement(notary_id: str) -> dict:
 async def ui_create_notary(request: Request, label: str = Form(default="")) -> RedirectResponse:
     _require_ui_user(request)
     await get_app_service().create_notary(label or None)
+    return RedirectResponse("/app", status_code=303)
+
+
+@app.post("/notaries/{notary_id}/register-onchain")
+async def register_notary_onchain(notary_id: str) -> dict:
+    return await get_app_service().register_notary_onchain(notary_id)
+
+
+@app.post("/ui/notaries/{notary_id}/register-onchain")
+async def ui_register_notary_onchain(request: Request, notary_id: str) -> RedirectResponse:
+    _require_ui_user(request)
+    try:
+        await get_app_service().register_notary_onchain(notary_id)
+    except Exception as exc:
+        return RedirectResponse(f"/app?error={quote(str(exc))}", status_code=303)
+    return RedirectResponse("/app", status_code=303)
+
+
+@app.post("/ui/circle/login/init")
+async def ui_circle_login_init(request: Request, email: str = Form(...)) -> RedirectResponse:
+    _require_ui_user(request)
+    try:
+        result = await get_app_service().circle_login_init(email)
+    except Exception as exc:
+        return RedirectResponse(f"/app?error={quote(str(exc))}", status_code=303)
+    request_id = quote(str(result.get("requestId") or result.get("request_id") or ""))
+    return RedirectResponse(f"/app?circle_request_id={request_id}", status_code=303)
+
+
+@app.post("/ui/circle/login/complete")
+async def ui_circle_login_complete(
+    request: Request,
+    request_id: str = Form(...),
+    otp: str = Form(...),
+) -> RedirectResponse:
+    _require_ui_user(request)
+    try:
+        await get_app_service().circle_login_complete(request_id, otp)
+    except Exception as exc:
+        return RedirectResponse(f"/app?error={quote(str(exc))}", status_code=303)
+    return RedirectResponse("/app", status_code=303)
+
+
+@app.post("/ui/circle/deposit")
+async def ui_circle_gateway_deposit(
+    request: Request,
+    amount_usdc: float = Form(...),
+    wallet_id: str | None = Form(default=None),
+) -> RedirectResponse:
+    _require_ui_user(request)
+    try:
+        await get_app_service().prepare_circle_gateway_deposit(
+            amount_usdc=amount_usdc,
+            wallet_id=wallet_id or None,
+        )
+    except Exception as exc:
+        return RedirectResponse(f"/app?error={quote(str(exc))}", status_code=303)
     return RedirectResponse("/app", status_code=303)
 
 

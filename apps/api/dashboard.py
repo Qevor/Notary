@@ -17,6 +17,11 @@ def _label(value: Any) -> str:
     return escape(str(value or "n/a").replace("_", " "))
 
 
+def _payload_first_arg(item: dict[str, Any]) -> Any:
+    args = item.get("payload", {}).get("args", [])
+    return args[0] if args else None
+
+
 def _tone(item: dict[str, Any]) -> str:
     if item.get("reversed"):
         return "warn"
@@ -176,6 +181,19 @@ def _css() -> str:
     .section-head h2 { margin-bottom: 3px; font-size: 24px; }
     .section-head p { margin-bottom: 0; color: var(--muted); }
     .grid { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 12px; }
+    .grid.two { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
+    .ops-grid { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .agent-grid { display: grid; grid-template-columns: repeat(6, minmax(160px, 1fr)); gap: 10px; }
+    .agent-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 13px;
+      min-width: 0;
+    }
+    .agent-card h3 { font-size: 15px; margin-bottom: 6px; }
+    .agent-card p { color: var(--muted); font-size: 12px; line-height: 1.35; margin-bottom: 10px; }
+    .agent-card code { display: block; overflow-wrap: anywhere; font-size: 12px; }
     .record-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; margin-bottom: 12px; }
     .record h3 { margin: 3px 0 5px; font-size: 19px; line-height: 1.15; }
     .kicker { color: var(--muted); font-size: 12px; font-weight: 950; text-transform: uppercase; }
@@ -225,6 +243,10 @@ def _css() -> str:
     button.danger { background: var(--red); }
     button:disabled { opacity: .55; cursor: not-allowed; }
     .button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .inline-form { margin-top: 12px; display: grid; gap: 8px; }
+    .inline-form.compact { grid-template-columns: 1fr auto; align-items: end; }
+    .inline-form.compact label { margin: 0; }
+    .inline-form.compact input { min-width: 0; }
     .status-line { color: var(--muted); font-size: 13px; margin-top: 10px; min-height: 18px; }
     .empty {
       border: 1px dashed var(--line);
@@ -253,12 +275,13 @@ def _css() -> str:
     @media (max-width: 1120px) {
       .hero, .workspace { grid-template-columns: 1fr; }
       .grid { grid-template-columns: 1fr 1fr; }
+      .ops-grid, .agent-grid { grid-template-columns: 1fr 1fr; }
     }
     @media (max-width: 720px) {
       header { align-items: flex-start; flex-direction: column; padding: 16px; }
       .shell { padding: 16px; }
       .hero h1 { font-size: 38px; }
-      .metrics, .grid, .facts, .split { grid-template-columns: 1fr; }
+      .metrics, .grid, .grid.two, .ops-grid, .agent-grid, .facts, .split, .inline-form.compact { grid-template-columns: 1fr; }
       .flow-step { grid-template-columns: 34px 1fr; }
       .flow-step .badge { grid-column: 2; width: max-content; }
     }
@@ -431,6 +454,117 @@ def _case_cards(items: list[dict[str, Any]]) -> str:
             """
         )
     return "".join(cards)
+
+
+def _agent_role_cards(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return '<div class="empty">The witness roles are ready, but no cycle has run yet.</div>'
+    cards: list[str] = []
+    for item in items:
+        cards.append(
+            f"""
+            <article class="agent-card">
+              <div class="kicker">{_label(item.get("status"))}</div>
+              <h3>{_text(item.get("name"))}</h3>
+              <p>{_text(item.get("role"))}</p>
+              <code>{escape(_short(item.get("lastOutput"), 64))}</code>
+            </article>
+            """
+        )
+    return "".join(cards)
+
+
+def _ops_panels(state: dict[str, Any], circle_request_id: str | None = None) -> str:
+    notaries = list(reversed(state.get("notaries", [])))
+    receipts = list(reversed(state.get("arc_receipts", [])))
+    routes = list(reversed(state.get("circle_routes", [])))
+    latest = notaries[0] if notaries else {}
+    latest_receipts = [
+        item for item in receipts
+        if _payload_first_arg(item) == latest.get("notary_id")
+    ][:4]
+    receipt_rows = "".join(
+        f"""
+        <div class="fact">
+          <span>{_text(item.get("payload", {}).get("contract_name"))}</span>
+          <code>{escape(_short(item.get("txHash") or item.get("transactionHash") or item.get("status"), 32))}</code>
+        </div>
+        """
+        for item in latest_receipts
+    ) or '<div class="empty">No Arc identity receipts yet.</div>'
+    route_rows = "".join(
+        f"""
+        <div class="fact">
+          <span>{_text(item.get("amountUSDC"))} USDC</span>
+          <code>{escape(_short(item.get("routeId"), 32))}</code>
+        </div>
+        """
+        for item in routes[:3]
+    ) or '<div class="empty">No Gateway deposit routes prepared yet.</div>'
+    notary_panel = (
+        f"""
+        <div class="facts">
+          <div class="fact"><span>Notary ID</span><code>{escape(_short(latest.get("notary_id"), 34))}</code></div>
+          <div class="fact"><span>Agent wallet</span><code>{escape(_short(latest.get("agent_wallet"), 34))}</code></div>
+          <div class="fact"><span>Agreement hash</span><code>{escape(_short(latest.get("operating_agreement_hash"), 34))}</code></div>
+        </div>
+        <form class="inline-form compact" method="post" action="/ui/notaries/{escape(str(latest.get("notary_id")) or '')}/register-onchain">
+          <label>Arc testnet identity</label>
+          <button {'disabled' if not latest else ''}>Register / refresh on Arc</button>
+        </form>
+        <div class="facts">{receipt_rows}</div>
+        """
+        if latest
+        else """
+        <p class="panel-copy">Create a NOTARY first. This mints the local legal identity, Circle agent wallet, operating agreement hash, and Arc registration payload.</p>
+        <form class="inline-form" method="post" action="/ui/notaries">
+          <label for="notary_label">Label</label>
+          <input id="notary_label" name="label" placeholder="Qevor witness agent" />
+          <button>Create NOTARY identity</button>
+        </form>
+        """
+    )
+    otp_form = (
+        f"""
+        <form class="inline-form" method="post" action="/ui/circle/login/complete">
+          <input name="request_id" type="hidden" value="{escape(circle_request_id)}" />
+          <label for="circle_otp">Circle OTP</label>
+          <input id="circle_otp" name="otp" autocomplete="one-time-code" required />
+          <button>Complete Circle login</button>
+        </form>
+        """
+        if circle_request_id
+        else ""
+    )
+    return f"""
+    <div class="ops-grid">
+      <section class="panel">
+        <div class="eyebrow">Arc identity</div>
+        <h2>On-chain NOTARY</h2>
+        <p class="panel-copy">The agent has an Arc identity, operating agreement hash, privacy policy hash, and governance record.</p>
+        {notary_panel}
+      </section>
+      <section class="panel">
+        <div class="eyebrow">Circle Stack</div>
+        <h2>Wallet, login, deposit</h2>
+        <p class="panel-copy">Users can authenticate the Circle CLI account, use the NOTARY agent wallet, and prepare Gateway routes into Arc.</p>
+        <form class="inline-form" method="post" action="/ui/circle/login/init">
+          <label for="circle_email">Circle email</label>
+          <input id="circle_email" name="email" type="email" placeholder="builder@example.com" required />
+          <button>Start Circle email login</button>
+        </form>
+        {otp_form}
+        <form class="inline-form" method="post" action="/ui/circle/deposit">
+          <label for="wallet_id">Agent wallet or address</label>
+          <input id="wallet_id" name="wallet_id" value="{escape(str(latest.get("agent_wallet") or ""))}" placeholder="0x... or Circle wallet ID" />
+          <label for="deposit_amount">Deposit amount USDC</label>
+          <input id="deposit_amount" name="amount_usdc" type="number" min="0.01" step="0.01" value="10" required />
+          <button>Prepare Gateway deposit</button>
+        </form>
+        <div class="facts">{route_rows}</div>
+      </section>
+    </div>
+    """
 
 
 def render_landing(state: dict[str, Any], user: dict[str, Any] | None = None) -> str:
@@ -630,7 +764,12 @@ def _workspace_scripts() -> str:
     """
 
 
-def render_workspace(state: dict[str, Any], user: dict[str, Any], error: str | None = None) -> str:
+def render_workspace(
+    state: dict[str, Any],
+    user: dict[str, Any],
+    error: str | None = None,
+    circle_request_id: str | None = None,
+) -> str:
     user_label = escape(str(user.get("email") or user.get("id")))
     error_html = f'<div class="notice bad">{escape(error)}</div>' if error else ""
     body = f"""
@@ -639,9 +778,20 @@ def render_workspace(state: dict[str, Any], user: dict[str, Any], error: str | N
         <div>
           <div class="eyebrow">Signed-in workspace</div>
           <h2>{user_label}</h2>
-          <p>Only records connected to this identity are shown here.</p>
+          <p>Only records connected to this identity are shown here. Operational controls show the live NOTARY agent stack.</p>
         </div>
       </div>
+      {_ops_panels(state, circle_request_id)}
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <div class="eyebrow">6-agent witness swarm</div>
+            <h2>One runtime, six accountable roles</h2>
+            <p>The app runs one orchestrated pipeline, but every decision is surfaced as Scanner, Sentinel, Risk, Strategy, Validator, and Reflector.</p>
+          </div>
+        </div>
+        <div class="agent-grid">{_agent_role_cards(state.get("swarm_roles", []))}</div>
+      </section>
       <section class="workspace">
         <aside>
           <div class="panel">
