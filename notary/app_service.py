@@ -131,7 +131,7 @@ class NotaryAppService:
             wallet_id = new_id("local_circle_wallet")
             wallet = {
                 "walletId": wallet_id,
-                "address": "0x" + wallet_id[-40:].rjust(40, "0"),
+                "address": "0x" + sha256_hex(wallet_id)[-40:],
                 "ownerHint": label or identity.notary_id,
                 "demo": True,
                 "providerFallback": "circle_cli_unavailable",
