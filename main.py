@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from apps.api.dashboard import render_dashboard
+from apps.api.dashboard import render_landing
 from notary.app_service import NotaryAppService
 from notary.config import get_settings
 from notary.models.schemas import PrivacyMode, QevorpayPaymentLinkRequest
@@ -31,7 +31,7 @@ class NotaryHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         if parsed.path == "/":
-            self._html(HTTPStatus.OK, render_dashboard(SERVICE.dashboard_state()))
+            self._html(HTTPStatus.OK, render_landing(SERVICE.dashboard_state()))
             return
         if parsed.path == "/state":
             self._json(HTTPStatus.OK, SERVICE.dashboard_state())

@@ -160,6 +160,7 @@ async def landing(request: Request) -> HTMLResponse:
 @app.get("/login", response_class=HTMLResponse)
 async def login(
     email: str | None = None,
+    phone: str | None = None,
     message: str | None = None,
     error: str | None = None,
 ) -> HTMLResponse:
@@ -168,6 +169,7 @@ async def login(
         render_sign_in(
             auth=service.auth_status(),
             email=email,
+            phone=phone,
             message=message,
             error=error,
         )
@@ -341,18 +343,71 @@ async def auth_verify_code(email: str = Form(...), token: str = Form(...)) -> Re
     return response
 
 
+@app.post("/auth/send-phone-code")
+async def auth_send_phone_code(phone: str = Form(...)) -> RedirectResponse:
+    try:
+        await get_app_service().send_phone_otp(phone)
+    except Exception as exc:
+        return RedirectResponse(f"/login?error={quote(_ui_error(exc))}", status_code=303)
+    return RedirectResponse(
+        f"/login?phone={quote(phone)}&message=Check%20your%20phone%20for%20the%20sign-in%20code.",
+        status_code=303,
+    )
+
+
+@app.post("/auth/verify-phone-code")
+async def auth_verify_phone_code(phone: str = Form(...), token: str = Form(...)) -> RedirectResponse:
+    try:
+        session = await get_app_service().verify_phone_otp(phone, token)
+        user = session["user"]
+        # Ensure compatibility with standard user queries
+        if not user.get("email") and user.get("phone"):
+            user["email"] = user["phone"]
+        cookie = _sign_session(
+            {
+                "user": user,
+                "accessToken": session.get("accessToken"),
+                "expiresAt": int(time.time()) + int(session.get("expiresIn") or 3600),
+            }
+        )
+    except Exception as exc:
+        return RedirectResponse(f"/login?error={quote(_ui_error(exc))}", status_code=303)
+    response = RedirectResponse("/app", status_code=303)
+    response.set_cookie(
+        SESSION_COOKIE,
+        cookie,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=int(session.get("expiresIn") or 3600),
+    )
+    return response
+
+
 @app.post("/auth/dev-login")
-async def auth_dev_login(email: str = Form(...)) -> RedirectResponse:
+async def auth_dev_login(
+    email: str | None = Form(None),
+    phone: str | None = Form(None),
+) -> RedirectResponse:
     settings = get_settings()
     if settings.notary_env == "production":
         raise HTTPException(status_code=404, detail="local sandbox login is disabled")
+    
+    identity = email or phone
+    if not identity:
+        return RedirectResponse("/login?error=Email%20or%20phone%20number%20is%20required.", status_code=303)
+        
+    user_payload = {
+        "id": identity,
+        "email": identity,
+        "role": "local_sandbox",
+    }
+    if phone:
+        user_payload["phone"] = phone
+        
     cookie = _sign_session(
         {
-            "user": {
-                "id": email,
-                "email": email,
-                "role": "local_sandbox",
-            },
+            "user": user_payload,
             "expiresAt": int(time.time()) + 24 * 3600,
         }
     )

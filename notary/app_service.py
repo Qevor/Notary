@@ -280,6 +280,73 @@ class NotaryAppService:
             },
         }
 
+    async def send_phone_otp(self, phone: str) -> dict[str, Any]:
+        if not self.settings.qevor_supabase_url or not self.settings.qevor_supabase_anon_key:
+            raise RuntimeError("QEVOR_SUPABASE_URL and QEVOR_SUPABASE_ANON_KEY are required for sign-in")
+        import httpx
+
+        url = f"{self.settings.qevor_supabase_url.rstrip('/')}/auth/v1/otp"
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                url,
+                json={"phone": phone, "create_user": True},
+                headers={
+                    "apikey": self.settings.qevor_supabase_anon_key,
+                    "Authorization": f"Bearer {self.settings.qevor_supabase_anon_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                if response.status_code in {401, 403}:
+                    raise RuntimeError(
+                        "Phone sign-in is not available yet. Check the Qevor Supabase anon key "
+                        "and SMS settings, or use local sandbox sign-in while developing."
+                    ) from exc
+                raise RuntimeError("Phone sign-in is temporarily unavailable. Please try again.") from exc
+        return {"status": "otp_sent", "phone": phone}
+
+    async def verify_phone_otp(self, phone: str, token: str) -> dict[str, Any]:
+        if not self.settings.qevor_supabase_url or not self.settings.qevor_supabase_anon_key:
+            raise RuntimeError("QEVOR_SUPABASE_URL and QEVOR_SUPABASE_ANON_KEY are required for sign-in")
+        import httpx
+
+        url = f"{self.settings.qevor_supabase_url.rstrip('/')}/auth/v1/verify"
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                url,
+                json={"phone": phone, "token": token, "type": "sms"},
+                headers={
+                    "apikey": self.settings.qevor_supabase_anon_key,
+                    "Authorization": f"Bearer {self.settings.qevor_supabase_anon_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                if response.status_code in {401, 403}:
+                    raise RuntimeError(
+                        "That verification code could not be verified. Check Supabase SMS settings, "
+                        "or use local sandbox sign-in while developing."
+                    ) from exc
+                raise RuntimeError("Phone verification is temporarily unavailable. Please try again.") from exc
+            session = response.json()
+        user = session.get("user") or {}
+        return {
+            "accessToken": session.get("access_token"),
+            "refreshToken": session.get("refresh_token"),
+            "expiresIn": session.get("expires_in"),
+            "user": {
+                "id": user.get("id"),
+                "email": user.get("phone") or user.get("email") or phone,
+                "phone": user.get("phone") or phone,
+                "aud": user.get("aud"),
+                "role": user.get("role"),
+            },
+        }
+
     def get_operating_agreement(self, notary_id: str) -> dict[str, Any] | None:
         agreements = self.store.list("operating_agreements")
         return next((item for item in agreements if item.get("notary_id") == notary_id), None)

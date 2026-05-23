@@ -17,7 +17,7 @@ class ExtractedObligation(BaseModel):
     acceptance_criterion: str | None = None
     authorized_approver: str | None = None
     deadline: str | None = None
-    satisfying_evidence: list[str] = Field(default_factory=list)
+    satisfying_evidence: list[str] | str = Field(default_factory=list)
     amount_usdc: float | None = Field(default=None, ge=0)
     clarification_needed: bool = False
     clarification_questions: list[str] = Field(default_factory=list)
@@ -35,11 +35,10 @@ _OBLIGATION_SYSTEM = (
 
 def _json_object(text: str) -> dict[str, Any]:
     stripped = text.strip()
-    if stripped.startswith("```"):
-        parts = [part.strip() for part in stripped.split("```")]
-        candidates = [part for part in parts if part.startswith("{") and part.endswith("}")]
-        if candidates:
-            stripped = candidates[0]
+    first = stripped.find("{")
+    last = stripped.rfind("}")
+    if first != -1 and last != -1 and last > first:
+        stripped = stripped[first : last + 1]
     return json.loads(stripped)
 
 
@@ -113,6 +112,13 @@ def _build_obligation(request: WitnessIntakeRequest, extracted: ExtractedObligat
     }.items():
         if value in (None, "", []):
             questions.append(f"Confirm {label}.")
+            
+    evidence_list = extracted.satisfying_evidence
+    if isinstance(evidence_list, str):
+        evidence_list = [evidence_list]
+    else:
+        evidence_list = list(evidence_list)
+        
     return Obligation(
         raw_instruction=request.instruction,
         payer_identity=request.payer_identity or extracted.payer_identity,
@@ -122,7 +128,7 @@ def _build_obligation(request: WitnessIntakeRequest, extracted: ExtractedObligat
         acceptance_criterion=extracted.acceptance_criterion,
         authorized_approver=extracted.authorized_approver or extracted.approver_identity,
         deadline=extracted.deadline,
-        satisfying_evidence=extracted.satisfying_evidence or ["submitted evidence"],
+        satisfying_evidence=evidence_list or ["submitted evidence"],
         amount_usdc=request.amount_usdc if request.amount_usdc is not None else extracted.amount_usdc,
         payer_type=PartyType(request.payer_type),
         payee_type=PartyType(request.payee_type),
