@@ -33,6 +33,7 @@ class NotaryEscrowClient:
     executor_agent_wallet_id: str | None = None
     creator_wallet: str | None = None
     store: Any = None
+    allow_local_fallback: bool = False
 
     async def resolve_identity_to_wallet(self, identity: str | None) -> dict[str, Any]:
         if not identity:
@@ -72,6 +73,19 @@ class NotaryEscrowClient:
     async def resolve_executor_agent_wallet(self, profile_wallet: str | None) -> dict[str, Any] | None:
         if not profile_wallet:
             return None
+        if self.store is not None:
+            local_rows = [
+                row
+                for row in self.store.list("agent_wallets")
+                if str(row.get("profile_wallet", "")).lower() == profile_wallet.lower()
+                and row.get("chain") == "ARC-TESTNET"
+                and row.get("status") == "active"
+            ]
+            if local_rows:
+                escrow_rows = [row for row in local_rows if row.get("executor_mode") == "escrow"]
+                with_escrow = [row for row in escrow_rows if row.get("escrow_address")]
+                return (with_escrow or escrow_rows or local_rows)[0]
+
         rows = await self._supabase_select(
             "agent_wallets",
             select="id,profile_wallet,wallet_address,chain,status,executor_mode,escrow_address,attestation_mode,label",
@@ -127,15 +141,16 @@ class NotaryEscrowClient:
 
     async def create_conditional_reserve(self, request: EscrowConditionalReserveRequest) -> dict[str, Any]:
         if self.demo_mode:
-            return {
-                "reference": new_id("notary_reserve"),
-                "url": f"/reserve/{request.notary_case_id}",
-                "status": "pending_reserve",
-                "provider": "notary_local",
-                "request": request.model_dump(mode="json"),
-            }
+            return self._local_conditional_reserve(request)
         if self.supabase_url:
-            return await self._create_supabase_reserve(request)
+            try:
+                return await self._create_supabase_reserve(request)
+            except Exception as exc:
+                if self.allow_local_fallback:
+                    return self._local_conditional_reserve(request, fallback_reason=str(exc))
+                raise
+        if not self.batch_distribution_path and self.allow_local_fallback:
+            return self._local_conditional_reserve(request)
         return await self._post(
             self._required_path(self.batch_distribution_path, "NOTARY_ESCROW_BATCH_PATH"),
             request.model_dump(mode="json"),
@@ -143,13 +158,16 @@ class NotaryEscrowClient:
 
     async def create_batch_distribution(self, request: EscrowBatchDistributionRequest) -> dict[str, Any]:
         if self.demo_mode:
-            return {
-                "reference": new_id("notary_batch"),
-                "status": "queued",
-                "request": request.model_dump(mode="json"),
-            }
+            return self._local_batch_distribution(request)
         if not self.batch_distribution_path and self.supabase_url:
-            return await self._create_supabase_batch(request)
+            try:
+                return await self._create_supabase_batch(request)
+            except Exception as exc:
+                if self.allow_local_fallback:
+                    return self._local_batch_distribution(request, fallback_reason=str(exc))
+                raise
+        if not self.batch_distribution_path and self.allow_local_fallback:
+            return self._local_batch_distribution(request)
         return await self._post(
             self._required_path(self.batch_distribution_path, "NOTARY_ESCROW_BATCH_PATH"),
             request.model_dump(mode="json"),
@@ -223,6 +241,13 @@ class NotaryEscrowClient:
                 "status": "held",
                 "trigger": trigger.model_dump(mode="json"),
             }
+        if not self.release_escrow_path and self.allow_local_fallback:
+            return {
+                "reference": new_id("notary_hold"),
+                "status": "held",
+                "provider": "notary_local_fallback",
+                "trigger": trigger.model_dump(mode="json"),
+            }
         return await self._post(
             self._required_path(self.release_escrow_path, "NOTARY_ESCROW_RELEASE_PATH"),
             trigger.model_dump(mode="json"),
@@ -262,6 +287,40 @@ class NotaryEscrowClient:
                 )
             )
         raise RuntimeError(f"Unsupported NOTARY escrow action in live mode: {trigger.action}")
+
+    def _local_conditional_reserve(
+        self,
+        request: EscrowConditionalReserveRequest,
+        *,
+        fallback_reason: str | None = None,
+    ) -> dict[str, Any]:
+        ref = new_id("notary_reserve")
+        result = {
+            "reference": ref,
+            "url": f"/request/{ref}",
+            "status": "pending_reserve",
+            "provider": "notary_local_fallback" if fallback_reason else "notary_local",
+            "request": request.model_dump(mode="json"),
+        }
+        if fallback_reason:
+            result["fallbackReason"] = "remote escrow provider unavailable; using local development checkout"
+        return result
+
+    def _local_batch_distribution(
+        self,
+        request: EscrowBatchDistributionRequest,
+        *,
+        fallback_reason: str | None = None,
+    ) -> dict[str, Any]:
+        result = {
+            "reference": new_id("notary_batch"),
+            "status": "queued",
+            "provider": "notary_local_fallback" if fallback_reason else "notary_local",
+            "request": request.model_dump(mode="json"),
+        }
+        if fallback_reason:
+            result["fallbackReason"] = "remote escrow provider unavailable; using local development receipt"
+        return result
 
     async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         import httpx

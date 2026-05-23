@@ -83,6 +83,7 @@ class NotaryAppService:
             executor_agent_wallet_id=settings.notary_executor_agent_wallet_id,
             creator_wallet=settings.notary_creator_wallet,
             store=self.store,
+            allow_local_fallback=settings.notary_env != "production",
         )
         self.arc = ArcClient(
             rpc_url=settings.arc_rpc_url,
@@ -1568,6 +1569,32 @@ class NotaryAppService:
         removed_terms = ("pred" + "_", "pre" + "diction", "kar" + "ma")
         return any(term in text for term in removed_terms)
 
+    def _remember_local_agent_wallet(
+        self,
+        *,
+        username: str,
+        wallet_address: str | None,
+        wallet_id: str | None = None,
+    ) -> None:
+        if not wallet_address:
+            return
+        agent_wallet_id = wallet_id or f"local_{wallet_address}"
+        self.store.put(
+            "agent_wallets",
+            agent_wallet_id,
+            {
+                "id": agent_wallet_id,
+                "profile_wallet": wallet_address,
+                "wallet_address": wallet_address,
+                "chain": self.settings.circle_chain,
+                "label": f"Agent Wallet for @{username}",
+                "status": "active",
+                "executor_mode": "escrow",
+                "escrow_address": wallet_address,
+                "attestation_mode": "attest",
+            },
+        )
+
     async def get_or_create_user_profile(self, email_or_id: str) -> dict[str, Any]:
         raw_identity = email_or_id.strip()
         if raw_identity.startswith("@"):
@@ -1582,6 +1609,11 @@ class NotaryAppService:
         if local_profile:
             # Fetch live balance from Circle; fall back to 0.00 (never fake)
             wallet_address = local_profile.get("wallet", "")
+            self._remember_local_agent_wallet(
+                username=username,
+                wallet_address=wallet_address,
+                wallet_id=local_profile.get("circle_wallet_id"),
+            )
             balance = "0.00"
             try:
                 balance_info = await self.circle.get_unified_balance(wallet_address)
@@ -1675,6 +1707,11 @@ class NotaryAppService:
             "circle_wallet_id": wallet_info.get("walletId"),
         }
         self.store.put("profiles", username, local_user)
+        self._remember_local_agent_wallet(
+            username=username,
+            wallet_address=wallet_address,
+            wallet_id=wallet_info.get("walletId"),
+        )
 
         result = dict(local_user)
         result["balance"] = "1000.00" if self.settings.notary_demo_mode else "0.00"
@@ -1819,6 +1856,11 @@ class NotaryAppService:
             local_user["email"] = raw_identity.lower()
 
         self.store.put("profiles", username, local_user)
+        self._remember_local_agent_wallet(
+            username=username,
+            wallet_address=wallet_address,
+            wallet_id=circle_wallet_id,
+        )
         return local_user
 
     async def authenticate_user(self, email_or_id: str, password: str) -> dict[str, Any]:
@@ -2002,6 +2044,4 @@ class NotaryAppService:
 
         txs.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
         return txs
-
-
 

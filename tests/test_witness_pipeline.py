@@ -302,3 +302,41 @@ async def test_conditional_case_creates_escrow_reference_and_matches_agent_evide
 
     assert result["case"]["status"] == "released"
     assert result["case"]["latest_ruling_id"] == "ruling_case_123"
+
+
+async def test_registered_users_can_create_local_checkout_case_without_supabase(
+    tmp_path,
+) -> None:
+    settings = Settings(
+        notary_db_path=tmp_path / "notary.sqlite3",
+        notary_env="development",
+        notary_escrow_demo_mode=False,
+    )
+    service = NotaryAppService(settings)
+
+    payer = await service.register_user("localpayer", "password123")
+    payee = await service.register_user("localpayee", "password123")
+
+    executor_wallet = await service.escrow.resolve_executor_agent_wallet(payer["wallet"])
+    assert executor_wallet is not None
+    assert executor_wallet["escrow_address"] == payer["wallet"]
+
+    case = await service.create_conditional_case(
+        created_by_identity="localpayer",
+        created_by_type="human",
+        payer_identity="localpayer",
+        payee_identity="localpayee",
+        approver_identity="localpayer",
+        payer_type="human",
+        payee_type="human",
+        approver_type="human",
+        instruction="Pay localpayee 7 USDC after the copy package is approved.",
+        amount_usdc=7,
+    )
+
+    assert case["case_id"].startswith("case_")
+    assert case["escrow_payment_reference"].startswith("notary_reserve_")
+    assert case["escrow_payment_url"].startswith("/request/notary_reserve_")
+    assert case["escrow_provider"] == "notary_local"
+    assert case["metadata"]["payerWallet"] == payer["wallet"]
+    assert case["metadata"]["payeeWallet"] == payee["wallet"]
