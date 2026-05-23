@@ -12,7 +12,7 @@ def generate_operating_agreement(notary_id: str) -> OperatingAgreement:
             "verify_evidence_heuristically",
             "render_graded_verdicts",
             "sign_attestations",
-            "trigger_qevorpay_payments",
+            "trigger_notary_escrow_payments",
             "adjudicate_disputes",
             "issue_linked_reversals",
             "maintain_party_operating_history",

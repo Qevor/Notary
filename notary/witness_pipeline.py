@@ -267,7 +267,7 @@ class WitnessPipeline:
         # bytes32. NOTARY's local identifiers are free-form strings ("watt_..." /
         # "notary_..."), so we precompute their canonical bytes32 form (sha256 hex)
         # and use the same hex string both in the EIP-712 message and in the Arc
-        # transaction arguments. Qevor's verifier reads these from Supabase as
+        # transaction arguments. NOTARY's verifier reads these from Supabase as
         # hex32 and uses them identically — recovery and contract-lookup match
         # only because both sides agree on this single canonical form.
         attestation_id_b32 = sha256_hex(attestation.attestation_id)
@@ -343,13 +343,13 @@ class WitnessPipeline:
         verdict: WitnessVerdict,
         identity_registry: str | None,
     ) -> dict[str, Any]:
-        """Returns the data plane Qevor's executor needs to independently verify
+        """Returns the data plane NOTARY's executor needs to independently verify
         the verdict on Arc. Mirrors the columns in
         ``supabase/migrations/03_notary_attestation.sql`` and the row shape read
         by ``server/src/lib/notary-attestation.ts``.
 
-        The caller is expected to forward this through Qevorpay metadata so
-        ``QevorpayClient._create_supabase_batch`` can populate batch_requests.
+        The caller is expected to forward this through escrow metadata so
+        ``NotaryEscrowClient._create_supabase_batch`` can populate batch_requests.
         """
         return {
             "attestation_id": sha256_hex(attestation.attestation_id),
@@ -412,8 +412,8 @@ class WitnessPipeline:
                 "verdictId": verdict.verdict_id,
                 "obligationId": obligation.obligation_id,
                 "notaryCaseId": obligation.metadata.get("notaryCaseId"),
-                "qevorPaymentReference": obligation.metadata.get("qevorPaymentReference"),
-                "qevorPaymentUrl": obligation.metadata.get("qevorPaymentUrl"),
+                "escrowReference": obligation.metadata.get("escrowReference"),
+                "escrowPaymentUrl": obligation.metadata.get("escrowPaymentUrl"),
                 "confidenceGate": verdict.confidence_gate,
                 "disputeWindowOpen": verdict.dispute_window_open,
                 **({"attestation": attestation_envelope} if attestation_envelope else {}),

@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from apps.api.dashboard import render_landing
 from notary.app_service import NotaryAppService
 from notary.config import get_settings
-from notary.models.schemas import PrivacyMode, QevorpayPaymentLinkRequest
+from notary.models.schemas import PrivacyMode, EscrowPaymentLinkRequest
 
 
 SERVICE = NotaryAppService(get_settings())
@@ -79,7 +79,7 @@ class NotaryHandler(BaseHTTPRequestHandler):
             description = form.get("description", "Verified NOTARY payment")
             run_async(
                 SERVICE.create_payment_link(
-                    QevorpayPaymentLinkRequest(amount_usdc=amount, description=description)
+                    EscrowPaymentLinkRequest(amount_usdc=amount, description=description)
                 )
             )
             self._redirect("/")
@@ -160,7 +160,7 @@ class NotaryHandler(BaseHTTPRequestHandler):
             <html lang="en">
               <head>
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
-                <title>Qevorpay Payment</title>
+                <title>NOTARY Escrow Payment</title>
                 <style>
                   body {{
                     margin: 0;
@@ -184,7 +184,7 @@ class NotaryHandler(BaseHTTPRequestHandler):
               </head>
               <body>
                 <main>
-                  <h1>Qevorpay Payment</h1>
+                  <h1>NOTARY Escrow Payment</h1>
                   <p>{description}</p>
                   <strong>{amount} USDC</strong>
                   <p>Status: {payment.get("status", "created")}</p>

@@ -210,9 +210,9 @@ async def test_conditional_case_creates_qevor_reference_and_matches_agent_eviden
 ) -> None:
     settings = Settings(
         notary_db_path=tmp_path / "notary.sqlite3",
-        qevorpay_demo_mode=False,
-        qevor_supabase_url="https://qevor.supabase.co",
-        qevor_supabase_service_role_key="service-role",
+        notary_escrow_demo_mode=False,
+        notary_supabase_url="https://notary.supabase.co",
+        notary_supabase_service_role_key="service-role",
     )
     service = NotaryAppService(settings)
 
@@ -221,9 +221,9 @@ async def test_conditional_case_creates_qevor_reference_and_matches_agent_eviden
     async def fake_conditional_reserve(self, request):
         reserve_requests.append(request)
         return {
-            "reference": "qevor_ref_123",
-            "url": "/request/qevor_ref_123",
-            "provider": "qevor_supabase_reserve",
+            "reference": "escrow_ref_123",
+            "url": "/request/escrow_ref_123",
+            "provider": "notary_supabase_reserve",
             "request": request.model_dump(mode="json"),
         }
 
@@ -248,11 +248,11 @@ async def test_conditional_case_creates_qevor_reference_and_matches_agent_eviden
     async def fake_resolve_executor(self, profile_wallet):
         return {"id": "agent_wallet_123", "escrow_address": "0x0000000000000000000000000000000000000c33"}
 
-    from notary.services.qevorpay import QevorpayClient
+    from notary.services.escrow import NotaryEscrowClient
 
-    monkeypatch.setattr(QevorpayClient, "create_conditional_reserve", fake_conditional_reserve)
-    monkeypatch.setattr(QevorpayClient, "resolve_identity_to_wallet", fake_resolve_identity)
-    monkeypatch.setattr(QevorpayClient, "resolve_executor_agent_wallet", fake_resolve_executor)
+    monkeypatch.setattr(NotaryEscrowClient, "create_conditional_reserve", fake_conditional_reserve)
+    monkeypatch.setattr(NotaryEscrowClient, "resolve_identity_to_wallet", fake_resolve_identity)
+    monkeypatch.setattr(NotaryEscrowClient, "resolve_executor_agent_wallet", fake_resolve_executor)
     monkeypatch.setattr(NotaryAppService, "submit_witness_obligation", fake_submit_witness)
 
     case = await service.create_conditional_case(
@@ -269,7 +269,7 @@ async def test_conditional_case_creates_qevor_reference_and_matches_agent_eviden
     )
 
     assert case["case_id"].startswith("case_")
-    assert case["qevor_payment_reference"] == "qevor_ref_123"
+    assert case["escrow_payment_reference"] == "escrow_ref_123"
     assert case["status"] == "awaiting_funding"
     assert "evidenceUploadPath" not in case["metadata"]
     assert reserve_requests[0].reserve_wallet == "0x0000000000000000000000000000000000000c33"
@@ -287,7 +287,7 @@ async def test_conditional_case_creates_qevor_reference_and_matches_agent_eviden
     )
     assert blocked["error"] == "case_not_funded"
 
-    funded = service.mark_case_funded_from_qevor("qevor_ref_123", {"status": "paid"})
+    funded = service.mark_case_funded("escrow_ref_123", {"status": "paid"})
     assert funded is not None
     assert funded["status"] == "funded_awaiting_evidence"
     assert "/cases/" in funded["metadata"]["evidenceUploadPath"]

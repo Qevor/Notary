@@ -9,15 +9,15 @@ from typing import Any
 from notary.models.schemas import (
     PaymentAction,
     PaymentTrigger,
-    QevorpayBatchDistributionRequest,
-    QevorpayConditionalReserveRequest,
-    QevorpayPaymentLinkRequest,
+    EscrowBatchDistributionRequest,
+    EscrowConditionalReserveRequest,
+    EscrowPaymentLinkRequest,
     new_id,
 )
 
 
 @dataclass(slots=True)
-class QevorpayClient:
+class NotaryEscrowClient:
     api_base_url: str | None = None
     api_key: str | None = None
     demo_mode: bool = True
@@ -49,10 +49,10 @@ class QevorpayClient:
             limit=1,
         )
         if not rows:
-            raise RuntimeError(f"Qevor username @{username} is not registered")
+            raise RuntimeError(f"NOTARY identity @{username} is not registered")
         wallet = rows[0].get("wallet")
         if not wallet:
-            raise RuntimeError(f"Qevor username @{username} has no wallet")
+            raise RuntimeError(f"NOTARY identity @{username} has no wallet")
         return {"identity": identity, "wallet": wallet, "username": username, "resolved": True}
 
     async def resolve_executor_agent_wallet(self, profile_wallet: str | None) -> dict[str, Any] | None:
@@ -74,14 +74,14 @@ class QevorpayClient:
         with_escrow = [row for row in escrow_rows if row.get("escrow_address")]
         return (with_escrow or escrow_rows or rows)[0]
 
-    async def create_payment_link(self, request: QevorpayPaymentLinkRequest) -> dict[str, Any]:
+    async def create_payment_link(self, request: EscrowPaymentLinkRequest) -> dict[str, Any]:
         if self.demo_mode:
-            ref = new_id("qevor_link")
+            ref = new_id("notary_link")
             return {
                 "reference": ref,
                 "url": f"/pay/{ref}",
                 "status": "created",
-                "provider": "local_qevorpay",
+                "provider": "notary_local",
                 "request": request.model_dump(mode="json"),
             }
         if not self.payment_link_path and self.supabase_url:
@@ -100,60 +100,60 @@ class QevorpayClient:
                 "reference": row["id"],
                 "url": f"/pay/{row['id']}",
                 "status": "created",
-                "provider": "qevor_supabase",
+                "provider": "notary_supabase",
                 "request": request.model_dump(mode="json"),
             }
         return await self._post(
-            self._required_path(self.payment_link_path, "QEVORPAY_PAYMENT_LINK_PATH"),
+            self._required_path(self.payment_link_path, "NOTARY_ESCROW_PAYMENT_LINK_PATH"),
             request.model_dump(mode="json"),
         )
 
-    async def create_conditional_reserve(self, request: QevorpayConditionalReserveRequest) -> dict[str, Any]:
+    async def create_conditional_reserve(self, request: EscrowConditionalReserveRequest) -> dict[str, Any]:
         if self.demo_mode:
             return {
-                "reference": new_id("qevor_reserve"),
+                "reference": new_id("notary_reserve"),
                 "url": f"/reserve/{request.notary_case_id}",
                 "status": "pending_reserve",
-                "provider": "local_qevorpay",
+                "provider": "notary_local",
                 "request": request.model_dump(mode="json"),
             }
         if self.supabase_url:
             return await self._create_supabase_reserve(request)
         return await self._post(
-            self._required_path(self.batch_distribution_path, "QEVORPAY_BATCH_DISTRIBUTION_PATH"),
+            self._required_path(self.batch_distribution_path, "NOTARY_ESCROW_BATCH_PATH"),
             request.model_dump(mode="json"),
         )
 
-    async def create_batch_distribution(self, request: QevorpayBatchDistributionRequest) -> dict[str, Any]:
+    async def create_batch_distribution(self, request: EscrowBatchDistributionRequest) -> dict[str, Any]:
         if self.demo_mode:
             return {
-                "reference": new_id("qevor_batch"),
+                "reference": new_id("notary_batch"),
                 "status": "queued",
                 "request": request.model_dump(mode="json"),
             }
         if not self.batch_distribution_path and self.supabase_url:
             return await self._create_supabase_batch(request)
         return await self._post(
-            self._required_path(self.batch_distribution_path, "QEVORPAY_BATCH_DISTRIBUTION_PATH"),
+            self._required_path(self.batch_distribution_path, "NOTARY_ESCROW_BATCH_PATH"),
             request.model_dump(mode="json"),
         )
 
     async def release_escrow(self, trigger: PaymentTrigger) -> dict[str, Any]:
         if self.demo_mode:
             return {
-                "reference": new_id("qevor_release"),
+                "reference": new_id("notary_release"),
                 "status": "released",
                 "trigger": trigger.model_dump(mode="json"),
             }
         if not self.release_escrow_path and self.supabase_url:
             recipient = trigger.recipient
             if not recipient:
-                raise RuntimeError("Qevor release requires a recipient wallet/identity")
+                raise RuntimeError("NOTARY escrow release requires a recipient wallet/identity")
             amount = trigger.amount_usdc
             if not amount or amount <= 0:
-                raise RuntimeError("Qevor release requires a positive amount_usdc")
+                raise RuntimeError("NOTARY escrow release requires a positive amount_usdc")
             return await self.create_batch_distribution(
-                QevorpayBatchDistributionRequest(
+                EscrowBatchDistributionRequest(
                     recipients=[
                         {
                             "wallet": recipient,
@@ -166,23 +166,23 @@ class QevorpayClient:
                 )
             )
         return await self._post(
-            self._required_path(self.release_escrow_path, "QEVORPAY_RELEASE_ESCROW_PATH"),
+            self._required_path(self.release_escrow_path, "NOTARY_ESCROW_RELEASE_PATH"),
             trigger.model_dump(mode="json"),
         )
 
     async def refund_payment(self, trigger: PaymentTrigger) -> dict[str, Any]:
         if self.demo_mode:
             return {
-                "reference": new_id("qevor_refund"),
+                "reference": new_id("notary_refund"),
                 "status": "refunded",
                 "trigger": trigger.model_dump(mode="json"),
             }
         if not self.refund_path and self.supabase_url:
             refund_recipient = trigger.metadata.get("payerIdentity")
             if not refund_recipient:
-                raise RuntimeError("Qevor refund requires payerIdentity metadata")
+                raise RuntimeError("NOTARY escrow refund requires payerIdentity metadata")
             return await self.create_batch_distribution(
-                QevorpayBatchDistributionRequest(
+                EscrowBatchDistributionRequest(
                     recipients=[
                         {
                             "wallet": refund_recipient,
@@ -195,33 +195,33 @@ class QevorpayClient:
                 )
             )
         return await self._post(
-            self._required_path(self.refund_path, "QEVORPAY_REFUND_PATH"),
+            self._required_path(self.refund_path, "NOTARY_ESCROW_REFUND_PATH"),
             trigger.model_dump(mode="json"),
         )
 
     async def hold_payment(self, trigger: PaymentTrigger) -> dict[str, Any]:
         if self.demo_mode:
             return {
-                "reference": new_id("qevor_hold"),
+                "reference": new_id("notary_hold"),
                 "status": "held",
                 "trigger": trigger.model_dump(mode="json"),
             }
         return await self._post(
-            self._required_path(self.release_escrow_path, "QEVORPAY_RELEASE_ESCROW_PATH"),
+            self._required_path(self.release_escrow_path, "NOTARY_ESCROW_RELEASE_PATH"),
             trigger.model_dump(mode="json"),
         )
 
     async def get_payment_status(self, reference: str) -> dict[str, Any]:
         if self.demo_mode:
             return {"reference": reference, "status": "created", "demo": True}
-        template = self._required_path(self.payment_status_path_template, "QEVORPAY_PAYMENT_STATUS_PATH_TEMPLATE")
+        template = self._required_path(self.payment_status_path_template, "NOTARY_ESCROW_STATUS_PATH_TEMPLATE")
         return await self._get(template.format(reference=reference))
 
     def verify_webhook(self, *, headers: dict[str, str], body: bytes) -> bool:
         if self.demo_mode:
             return True
         if not self.webhook_secret:
-            raise RuntimeError("QEVORPAY_WEBHOOK_SECRET is required to verify live Qevorpay webhooks")
+            raise RuntimeError("NOTARY_ESCROW_WEBHOOK_SECRET is required to verify live NOTARY escrow webhooks")
         signature = headers.get(self.webhook_signature_header) or headers.get(self.webhook_signature_header.title())
         if not signature:
             return False
@@ -237,14 +237,14 @@ class QevorpayClient:
             return await self.hold_payment(trigger)
         if trigger.action == PaymentAction.CREATE_LINK:
             return await self.create_payment_link(
-                QevorpayPaymentLinkRequest(
+                EscrowPaymentLinkRequest(
                     amount_usdc=trigger.amount_usdc or 1,
                     description=trigger.condition,
                     recipient=trigger.recipient,
                     metadata=trigger.metadata,
                 )
             )
-        raise RuntimeError(f"Unsupported Qevorpay action in live mode: {trigger.action}")
+        raise RuntimeError(f"Unsupported NOTARY escrow action in live mode: {trigger.action}")
 
     async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         import httpx
@@ -266,7 +266,7 @@ class QevorpayClient:
             response.raise_for_status()
             return response.json()
 
-    async def _create_supabase_batch(self, request: QevorpayBatchDistributionRequest) -> dict[str, Any]:
+    async def _create_supabase_batch(self, request: EscrowBatchDistributionRequest) -> dict[str, Any]:
         creator_identity = (
             request.metadata.get("creator_wallet")
             or request.metadata.get("payerIdentity")
@@ -276,8 +276,8 @@ class QevorpayClient:
         creator_wallet = creator.get("wallet")
         if not creator_wallet:
             raise RuntimeError(
-                "Qevor Supabase batch execution requires a creator wallet. "
-                "Pass payer_identity as a wallet address or set QEVOR_CREATOR_WALLET."
+                "NOTARY escrow batch execution requires a creator wallet. "
+                "Pass payer_identity as a wallet address or set NOTARY_CREATOR_WALLET."
             )
         resolved_recipients = []
         for item in request.recipients:
@@ -317,7 +317,7 @@ class QevorpayClient:
             ),
         }
         envelope = request.metadata.get("attestation") or {}
-        # 14 columns from supabase/migrations/03_notary_attestation.sql. Qevor's
+        # 14 columns from supabase/migrations/03_notary_attestation.sql. NOTARY's
         # batch executor (notary-attestation.ts) reads these to recover the
         # EIP-712 signer, look up the on-chain AttestationRegistry record, and
         # gate the payment fail-closed before any USDC moves.
@@ -357,12 +357,12 @@ class QevorpayClient:
         return {
             "reference": batch["id"],
             "status": "queued",
-            "provider": "qevor_supabase",
+            "provider": "notary_supabase",
             "request": request.model_dump(mode="json"),
             "batchRequest": batch,
         }
 
-    async def _create_supabase_reserve(self, request: QevorpayConditionalReserveRequest) -> dict[str, Any]:
+    async def _create_supabase_reserve(self, request: EscrowConditionalReserveRequest) -> dict[str, Any]:
         batch_row: dict[str, Any] = {
             "creator_wallet": request.payer_wallet,
             "title": "NOTARY conditional reserve",
@@ -402,7 +402,7 @@ class QevorpayClient:
             "reference": batch["id"],
             "url": f"/request/{batch['id']}",
             "status": "pending_reserve",
-            "provider": "qevor_supabase_reserve",
+            "provider": "notary_supabase_reserve",
             "request": request.model_dump(mode="json"),
             "batchRequest": batch,
             "batchPayment": payment_rows[0],
@@ -413,8 +413,8 @@ class QevorpayClient:
 
         if not self.supabase_url or not self.supabase_service_role_key:
             raise RuntimeError(
-                "QEVOR_SUPABASE_URL and QEVOR_SUPABASE_SERVICE_ROLE_KEY are required "
-                "for Qevor Supabase integration"
+                "NOTARY_SUPABASE_URL and NOTARY_SUPABASE_SERVICE_ROLE_KEY are required "
+                "for NOTARY Supabase integration"
             )
         url = f"{self.supabase_url.rstrip('/')}/rest/v1/{table}"
         async with httpx.AsyncClient(timeout=30) as client:
@@ -444,8 +444,8 @@ class QevorpayClient:
 
         if not self.supabase_url or not self.supabase_service_role_key:
             raise RuntimeError(
-                "QEVOR_SUPABASE_URL and QEVOR_SUPABASE_SERVICE_ROLE_KEY are required "
-                "to resolve Qevor usernames"
+                "NOTARY_SUPABASE_URL and NOTARY_SUPABASE_SERVICE_ROLE_KEY are required "
+                "to resolve NOTARY identities"
             )
         params: dict[str, str | int] = {"select": select}
         if filters:
@@ -471,15 +471,15 @@ class QevorpayClient:
 
     def _headers(self) -> dict[str, str]:
         if not self.api_key:
-            raise RuntimeError("QEVORPAY_API_KEY is required in live mode")
+            raise RuntimeError("NOTARY_ESCROW_API_KEY is required in live mode")
         return {"Authorization": f"Bearer {self.api_key}"}
 
     def _base_url(self) -> str:
         if not self.api_base_url:
-            raise RuntimeError("QEVORPAY_API_BASE_URL is required in live mode")
+            raise RuntimeError("NOTARY_ESCROW_API_BASE_URL is required in live mode")
         return self.api_base_url
 
     def _required_path(self, value: str | None, env_name: str) -> str:
         if not value:
-            raise RuntimeError(f"{env_name} is required in live mode because Qevorpay endpoint contracts are provider-specific")
+            raise RuntimeError(f"{env_name} is required in live mode because NOTARY escrow endpoint paths are provider-specific")
         return value

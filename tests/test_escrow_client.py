@@ -1,25 +1,25 @@
 import pytest
 
-from notary.models.schemas import QevorpayBatchDistributionRequest, QevorpayPaymentLinkRequest
-from notary.services.qevorpay import QevorpayClient
+from notary.models.schemas import EscrowBatchDistributionRequest, EscrowPaymentLinkRequest
+from notary.services.escrow import NotaryEscrowClient
 
 
 @pytest.mark.asyncio
-async def test_qevorpay_demo_payment_link() -> None:
-    client = QevorpayClient(demo_mode=True)
+async def test_escrow_demo_payment_link() -> None:
+    client = NotaryEscrowClient(demo_mode=True)
     response = await client.create_payment_link(
-        QevorpayPaymentLinkRequest(amount_usdc=25, description="Verified invoice")
+        EscrowPaymentLinkRequest(amount_usdc=25, description="Verified invoice")
     )
     assert response["status"] == "created"
     assert response["url"].startswith("/pay/")
 
 
 @pytest.mark.asyncio
-async def test_qevorpay_supabase_batch_contract(monkeypatch) -> None:
+async def test_escrow_supabase_batch_contract(monkeypatch) -> None:
     inserts = []
-    client = QevorpayClient(
+    client = NotaryEscrowClient(
         demo_mode=False,
-        supabase_url="https://qevor.supabase.co",
+        supabase_url="https://notary.supabase.co",
         supabase_service_role_key="service-role",
         executor_agent_wallet_id="agent_wallet_id",
         creator_wallet="0x0000000000000000000000000000000000000001",
@@ -31,9 +31,9 @@ async def test_qevorpay_supabase_batch_contract(monkeypatch) -> None:
             return [{"id": "batch_1", **payload}]
         return [{"id": "row_1"}]
 
-    monkeypatch.setattr(QevorpayClient, "_supabase_insert", fake_insert)
+    monkeypatch.setattr(NotaryEscrowClient, "_supabase_insert", fake_insert)
     response = await client.create_batch_distribution(
-        QevorpayBatchDistributionRequest(
+        EscrowBatchDistributionRequest(
             recipients=[
                 {"wallet": "0x0000000000000000000000000000000000000002", "amount": 10}
             ],
@@ -49,14 +49,14 @@ async def test_qevorpay_supabase_batch_contract(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_qevorpay_batch_persists_attestation_envelope(monkeypatch) -> None:
-    """The attestation envelope must reach batch_requests so Qevor's executor
+async def test_escrow_batch_persists_attestation_envelope(monkeypatch) -> None:
+    """The attestation envelope must reach batch_requests so NOTARY's executor
     can independently verify NOTARY's verdict before paying.
     """
     inserts = []
-    client = QevorpayClient(
+    client = NotaryEscrowClient(
         demo_mode=False,
-        supabase_url="https://qevor.supabase.co",
+        supabase_url="https://notary.supabase.co",
         supabase_service_role_key="service-role",
         executor_agent_wallet_id="agent_wallet_id",
         creator_wallet="0x0000000000000000000000000000000000000001",
@@ -68,7 +68,7 @@ async def test_qevorpay_batch_persists_attestation_envelope(monkeypatch) -> None
             return [{"id": "batch_2", **payload}]
         return [{"id": "row_1"}]
 
-    monkeypatch.setattr(QevorpayClient, "_supabase_insert", fake_insert)
+    monkeypatch.setattr(NotaryEscrowClient, "_supabase_insert", fake_insert)
     envelope = {
         "attestation_id": "0x" + "a" * 64,
         "notary_id": "0x" + "b" * 64,
@@ -86,7 +86,7 @@ async def test_qevorpay_batch_persists_attestation_envelope(monkeypatch) -> None
         "attestation_created_at": 1716354000,
     }
     await client.create_batch_distribution(
-        QevorpayBatchDistributionRequest(
+        EscrowBatchDistributionRequest(
             recipients=[
                 {"wallet": "0x0000000000000000000000000000000000000002", "amount": 10}
             ],
@@ -101,15 +101,15 @@ async def test_qevorpay_batch_persists_attestation_envelope(monkeypatch) -> None
 
 
 @pytest.mark.asyncio
-async def test_qevorpay_batch_skips_attestation_when_absent(monkeypatch) -> None:
+async def test_escrow_batch_skips_attestation_when_absent(monkeypatch) -> None:
     """Without an envelope (e.g. payment-link flows), no attestation columns
     are written — preserves backwards compatibility with attestation_mode=off
     agent wallets.
     """
     inserts = []
-    client = QevorpayClient(
+    client = NotaryEscrowClient(
         demo_mode=False,
-        supabase_url="https://qevor.supabase.co",
+        supabase_url="https://notary.supabase.co",
         supabase_service_role_key="service-role",
         executor_agent_wallet_id="agent_wallet_id",
         creator_wallet="0x0000000000000000000000000000000000000001",
@@ -121,9 +121,9 @@ async def test_qevorpay_batch_skips_attestation_when_absent(monkeypatch) -> None
             return [{"id": "batch_3", **payload}]
         return [{"id": "row_1"}]
 
-    monkeypatch.setattr(QevorpayClient, "_supabase_insert", fake_insert)
+    monkeypatch.setattr(NotaryEscrowClient, "_supabase_insert", fake_insert)
     await client.create_batch_distribution(
-        QevorpayBatchDistributionRequest(
+        EscrowBatchDistributionRequest(
             recipients=[
                 {"wallet": "0x0000000000000000000000000000000000000002", "amount": 10}
             ],
@@ -140,12 +140,12 @@ async def test_qevorpay_batch_skips_attestation_when_absent(monkeypatch) -> None
         assert column not in row
 
 
-def test_qevorpay_webhook_signature_verification() -> None:
+def test_escrow_webhook_signature_verification() -> None:
     import hashlib
     import hmac as hmac_mod
 
     secret = "test-webhook-secret"
-    client = QevorpayClient(demo_mode=False, webhook_secret=secret)
+    client = NotaryEscrowClient(demo_mode=False, webhook_secret=secret)
     body = b'{"batch_payment_id":"bp_1","status":"delivered"}'
     good_sig = hmac_mod.new(secret.encode(), body, hashlib.sha256).hexdigest()
     assert client.verify_webhook(headers={"x-signature": good_sig}, body=body) is True

@@ -684,7 +684,7 @@ def _page(title: str, body: str, user: dict[str, Any] | None = None) -> str:
         <header>
           <a class="brand" href="/">
             <strong>NOTARY</strong>
-            <span>NOTARY decides. Qevor pays. Arc remembers.</span>
+            <span>NOTARY decides. NOTARY pays. Arc remembers.</span>
           </a>
           <nav>
             <a class="nav-link" href="/ledger">Public ledger</a>
@@ -702,7 +702,7 @@ def _public_flow_items(rulings: list[dict[str, Any]]) -> str:
     hold = next((item for item in reversed(rulings) if item.get("confidenceGate") == "request_more_evidence"), None)
     reversal = next((item for item in reversed(rulings) if item.get("reversed")), None)
     cases = [
-        ("Settled", release, "Evidence satisfied the obligation, so Qevor receives a release instruction."),
+        ("Settled", release, "Evidence satisfied the obligation, so NOTARY releases the escrowed USDC."),
         ("Held", hold, "Ambiguity or weak evidence stops payment and asks for clarification."),
         ("Revised", reversal, "Counter-evidence can force NOTARY to correct itself publicly."),
     ]
@@ -789,7 +789,7 @@ def _case_cards(items: list[dict[str, Any]]) -> str:
     cards: list[str] = []
     for item in reversed(items):
         upload = item.get("metadata", {}).get("evidenceUploadPath")
-        funding_url = item.get("qevor_payment_url")
+        funding_url = item.get("escrow_payment_url")
         funding_link = (
             f'<a class="button secondary" href="{escape(str(funding_url))}">Fund conditional payment</a>'
             if funding_url and item.get("status") == "awaiting_funding"
@@ -801,7 +801,7 @@ def _case_cards(items: list[dict[str, Any]]) -> str:
             else ""
         )
         guarded_note = (
-            '<p class="panel-copy">Evidence is locked until the Qevor conditional payment is funded.</p>'
+            '<p class="panel-copy">Evidence is locked until the NOTARY escrow is funded.</p>'
             if item.get("status") == "awaiting_funding"
             else ""
         )
@@ -818,7 +818,7 @@ def _case_cards(items: list[dict[str, Any]]) -> str:
               </div>
               <div class="facts">
                 <div class="fact"><span>Amount</span><strong>{_text(item.get("amount_usdc"))} USDC</strong></div>
-                <div class="fact"><span>Qevor ref</span><code>{escape(_short(item.get("qevor_payment_reference"), 28))}</code></div>
+                <div class="fact"><span>Escrow ref</span><code>{escape(_short(item.get("escrow_payment_reference"), 28))}</code></div>
                 <div class="fact"><span>Latest ruling</span><code>{escape(_short(item.get("latest_ruling_id"), 28))}</code></div>
               </div>
               {guarded_note}
@@ -892,7 +892,7 @@ def _ops_panels(state: dict[str, Any], circle_request_id: str | None = None) -> 
         <p class="panel-copy">Create a NOTARY first. This mints the local legal identity, Circle agent wallet, operating agreement hash, and Arc registration payload.</p>
         <form class="inline-form" method="post" action="/ui/notaries">
           <label for="notary_label">Label</label>
-          <input id="notary_label" name="label" placeholder="Qevor witness agent" />
+          <input id="notary_label" name="label" placeholder="NOTARY witness agent" />
           <button>Create NOTARY identity</button>
         </form>
         """
@@ -919,11 +919,11 @@ def _ops_panels(state: dict[str, Any], circle_request_id: str | None = None) -> 
       </section>
       <section class="panel">
         <div class="eyebrow">User funding</div>
-        <h2>Qevor pays, NOTARY witnesses</h2>
-        <p class="panel-copy">Normal users sign in with email, create a case, and fund the Qevor conditional payment link. Circle CLI stays server-side for the NOTARY agent wallet and executor.</p>
+        <h2>NOTARY holds escrow, NOTARY witnesses</h2>
+        <p class="panel-copy">Users sign in with email, create a case, and fund the NOTARY conditional escrow. Circle CLI stays server-side for the NOTARY agent wallet and executor.</p>
         <div class="facts">
           <div class="fact"><span>User step</span><strong>Email login</strong></div>
-          <div class="fact"><span>Payment step</span><strong>Fund Qevor case</strong></div>
+          <div class="fact"><span>Payment step</span><strong>Fund NOTARY escrow</strong></div>
           <div class="fact"><span>Agent step</span><strong>Witness then release</strong></div>
         </div>
         <details>
@@ -964,7 +964,7 @@ def render_landing(state: dict[str, Any], user: dict[str, Any] | None = None) ->
           <div>
             <div class="eyebrow">Witness-to-pay on Arc</div>
             <h1>Public proof that payment was earned or refused.</h1>
-            <p>NOTARY reads the obligation, checks the evidence, renders a confidence-gated verdict, signs an attestation, and sends Qevor the release, hold, refund, or corrective payment action.</p>
+            <p>NOTARY reads the obligation, checks the evidence, renders a confidence-gated verdict, signs an attestation, and executes the release, hold, refund, or corrective payment action directly.</p>
             <div class="actions">
               <a class="button" href="/app">Open workspace</a>
               <a class="button secondary" href="/ledger">View all public records</a>
@@ -1232,7 +1232,7 @@ def render_workspace(
     circle_request_id: str | None = None,
 ) -> str:
     user_label = escape(str(user.get("email") or user.get("id")))
-    default_payer = user_label if user_label.startswith("@") else "@qevor"
+    default_payer = user_label if user_label.startswith("@") else "@me"
     error_html = f'<div class="notice bad">{escape(error)}</div>' if error else ""
     body = f"""
     <main class="shell">
@@ -1267,13 +1267,13 @@ def render_workspace(
             
             <form method="post" action="/ui/cases">
               <label for="instruction">Agreement Details (Obligation)</label>
-              <p class="panel-copy" style="margin-top: -4px; margin-bottom: 8px; font-size: 12px; color: var(--green);">Include the payee username and exact deliverables (e.g., "Pay @jennycruzy $50 when delivery manifest is complete and payer @qevor approves").</p>
+              <p class="panel-copy" style="margin-top: -4px; margin-bottom: 8px; font-size: 12px; color: var(--green);">Include the payee username and exact deliverables (e.g., "Pay @jennycruzy $50 when delivery manifest is complete and payer approves").</p>
               <textarea id="instruction" name="instruction" required placeholder="Type your natural language payment agreement here..."></textarea>
               
               <div class="split" style="margin-top: 8px;">
                 <div>
                   <label for="payer_identity">Payer Username</label>
-                  <input id="payer_identity" name="payer_identity" value="{default_payer}" required placeholder="e.g. @qevor" />
+                  <input id="payer_identity" name="payer_identity" value="{default_payer}" required placeholder="e.g. @yourhandle" />
                 </div>
                 <div>
                   <label for="payer_type">Payer Type</label>
@@ -1343,7 +1343,7 @@ def render_workspace(
                 <option value="public">Public (Unrestricted)</option>
               </select>
               <label for="transcript_text">Written Evidence</label>
-              <textarea id="transcript_text" name="transcript_text" placeholder="Include clear confirmation markers (e.g. 'I, @qevor, approve release of $50 because the pull request #5 is complete and merged')."></textarea>
+              <textarea id="transcript_text" name="transcript_text" placeholder="Include clear confirmation markers (e.g. 'I, @yourhandle, approve release of $50 because the pull request #5 is complete and merged')."></textarea>
               <button>Submit Evidence</button>
             </form>
           </div>
@@ -1408,7 +1408,7 @@ def render_case_evidence(case: dict[str, Any], token: str | None, user: dict[str
         <div class="facts" style="margin-bottom: 20px;">
           <div class="fact"><span>Contract Payer</span><strong>{_text(case.get("payer_identity"))}</strong></div>
           <div class="fact"><span>Contract Payee</span><strong>{_text(case.get("payee_identity"))}</strong></div>
-          <div class="fact"><span>Secure Escrow Ref</span><code>{escape(_short(case.get("qevor_payment_reference"), 24))}</code></div>
+          <div class="fact"><span>Secure Escrow Ref</span><code>{escape(_short(case.get("escrow_payment_reference"), 24))}</code></div>
         </div>
         
         {funding_notice}
@@ -1416,7 +1416,7 @@ def render_case_evidence(case: dict[str, Any], token: str | None, user: dict[str
         <form method="post" action="/cases/{escape(case.get("case_id"))}/evidence" style="border-top: 1px dashed var(--line); padding-top: 20px;">
           {hidden_token}
           <label for="submitter_identity">Your Username</label>
-          <p class="panel-copy" style="margin-top: -4px; margin-bottom: 8px; font-size: 12px;">Confirm your Qevor identity (e.g. <i>@jennycruzy</i> or <i>@qevor</i>).</p>
+          <p class="panel-copy" style="margin-top: -4px; margin-bottom: 8px; font-size: 12px;">Confirm your NOTARY identity (e.g. <i>@jennycruzy</i> or <i>@yourhandle</i>).</p>
           <input id="submitter_identity" name="submitter_identity" value="{escape(str((user or {}).get("email") or case.get("payee_identity") or ""))}" required {disabled} />
           
           <label for="submitter_type" style="margin-top: 14px;">Identity Classification</label>

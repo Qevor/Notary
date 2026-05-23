@@ -68,21 +68,21 @@ class Settings(BaseModel):
     circle_gateway_enabled: bool = True
     circle_paymaster_enabled: bool = True
 
-    qevorpay_demo_mode: bool = False
-    qevorpay_api_base_url: str | None = None
-    qevorpay_api_key: str | None = None
-    qevorpay_webhook_secret: str | None = None
-    qevorpay_payment_link_path: str | None = None
-    qevorpay_batch_distribution_path: str | None = None
-    qevorpay_release_escrow_path: str | None = None
-    qevorpay_refund_path: str | None = None
-    qevorpay_payment_status_path_template: str | None = None
-    qevorpay_webhook_signature_header: str = "x-signature"
-    qevor_supabase_url: str | None = None
-    qevor_supabase_anon_key: str | None = None
-    qevor_supabase_service_role_key: str | None = None
-    qevor_executor_agent_wallet_id: str | None = None
-    qevor_creator_wallet: str | None = None
+    notary_escrow_demo_mode: bool = False
+    notary_escrow_api_base_url: str | None = None
+    notary_escrow_api_key: str | None = None
+    notary_escrow_webhook_secret: str | None = None
+    notary_escrow_payment_link_path: str | None = None
+    notary_escrow_batch_path: str | None = None
+    notary_escrow_release_path: str | None = None
+    notary_escrow_refund_path: str | None = None
+    notary_escrow_status_path_template: str | None = None
+    notary_escrow_webhook_header: str = "x-signature"
+    notary_supabase_url: str | None = None
+    notary_supabase_anon_key: str | None = None
+    notary_supabase_service_role_key: str | None = None
+    notary_executor_agent_wallet_id: str | None = None
+    notary_creator_wallet: str | None = None
 
     speechmatics_demo_mode: bool = False
     speechmatics_api_base_url: str | None = "https://asr.api.speechmatics.com/v2"
@@ -134,27 +134,27 @@ class Settings(BaseModel):
             circle_testnet=_bool_env("CIRCLE_TESTNET", True),
             circle_gateway_enabled=_bool_env("CIRCLE_GATEWAY_ENABLED", True),
             circle_paymaster_enabled=_bool_env("CIRCLE_PAYMASTER_ENABLED", True),
-            qevorpay_demo_mode=_bool_env("QEVORPAY_DEMO_MODE", False),
-            qevorpay_api_base_url=_optional_str("QEVORPAY_API_BASE_URL"),
-            qevorpay_api_key=_optional_str("QEVORPAY_API_KEY"),
-            qevorpay_webhook_secret=_optional_str("QEVORPAY_WEBHOOK_SECRET"),
-            qevorpay_payment_link_path=_optional_str("QEVORPAY_PAYMENT_LINK_PATH"),
-            qevorpay_batch_distribution_path=_optional_str("QEVORPAY_BATCH_DISTRIBUTION_PATH"),
-            qevorpay_release_escrow_path=_optional_str("QEVORPAY_RELEASE_ESCROW_PATH"),
-            qevorpay_refund_path=_optional_str("QEVORPAY_REFUND_PATH"),
-            qevorpay_payment_status_path_template=_optional_str("QEVORPAY_PAYMENT_STATUS_PATH_TEMPLATE"),
-            qevorpay_webhook_signature_header=os.getenv("QEVORPAY_WEBHOOK_SIGNATURE_HEADER", "x-signature"),
-            qevor_supabase_url=_optional_str("QEVOR_SUPABASE_URL") or _optional_str("SUPABASE_URL"),
-            qevor_supabase_anon_key=(
-                _optional_str("QEVOR_SUPABASE_ANON_KEY")
+            notary_escrow_demo_mode=_bool_env("NOTARY_ESCROW_DEMO_MODE", False),
+            notary_escrow_api_base_url=_optional_str("NOTARY_ESCROW_API_BASE_URL"),
+            notary_escrow_api_key=_optional_str("NOTARY_ESCROW_API_KEY"),
+            notary_escrow_webhook_secret=_optional_str("NOTARY_ESCROW_WEBHOOK_SECRET"),
+            notary_escrow_payment_link_path=_optional_str("NOTARY_ESCROW_PAYMENT_LINK_PATH"),
+            notary_escrow_batch_path=_optional_str("NOTARY_ESCROW_BATCH_PATH"),
+            notary_escrow_release_path=_optional_str("NOTARY_ESCROW_RELEASE_PATH"),
+            notary_escrow_refund_path=_optional_str("NOTARY_ESCROW_REFUND_PATH"),
+            notary_escrow_status_path_template=_optional_str("NOTARY_ESCROW_STATUS_PATH_TEMPLATE"),
+            notary_escrow_webhook_header=os.getenv("NOTARY_ESCROW_WEBHOOK_HEADER", "x-signature"),
+            notary_supabase_url=_optional_str("NOTARY_SUPABASE_URL") or _optional_str("SUPABASE_URL"),
+            notary_supabase_anon_key=(
+                _optional_str("NOTARY_SUPABASE_ANON_KEY")
                 or _optional_str("SUPABASE_ANON_KEY")
             ),
-            qevor_supabase_service_role_key=(
-                _optional_str("QEVOR_SUPABASE_SERVICE_ROLE_KEY")
+            notary_supabase_service_role_key=(
+                _optional_str("NOTARY_SUPABASE_SERVICE_ROLE_KEY")
                 or _optional_str("SUPABASE_SERVICE_ROLE_KEY")
             ),
-            qevor_executor_agent_wallet_id=_optional_str("QEVOR_EXECUTOR_AGENT_WALLET_ID"),
-            qevor_creator_wallet=_optional_str("QEVOR_CREATOR_WALLET"),
+            notary_executor_agent_wallet_id=_optional_str("NOTARY_EXECUTOR_AGENT_WALLET_ID"),
+            notary_creator_wallet=_optional_str("NOTARY_CREATOR_WALLET"),
             speechmatics_demo_mode=_bool_env(
                 "SPEECHMATICS_DEMO_MODE",
                 _bool_env("SPEEDMATIC_DEMO_MODE", False),

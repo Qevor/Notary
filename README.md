@@ -2,9 +2,9 @@
 
 **Accountable AI witness and conditional payment release on Arc.**
 
-NOTARY judges whether a real-world obligation was genuinely fulfilled and releases USDC based on that judgment. It is not an escrow app — escrow executes a decision a human or trivial oracle already made. NOTARY itself renders the verdict: graded, confidence-weighted, defensible, and correctable. It signs the verdict, records it on Arc, releases payment through Qevor, adjudicates disputes, and — the centerpiece — **reverses itself on the public record when shown to be wrong**.
+NOTARY judges whether a real-world obligation was genuinely fulfilled and releases USDC based on that judgment. It is not an escrow app — escrow executes a decision a human or trivial oracle already made. NOTARY itself renders the verdict: graded, confidence-weighted, defensible, and correctable. It signs the verdict, records it on Arc, releases payment through its own escrow engine, adjudicates disputes, and — the centerpiece — **reverses itself on the public record when shown to be wrong**.
 
-> NOTARY decides. Qevor pays. Arc remembers.
+> NOTARY decides. NOTARY pays. Arc remembers.
 
 ## The bigger thesis
 
@@ -30,26 +30,26 @@ Intake → Verify → Judge → Attest → Pay → Learn
 
 **4. Attest** — Signs the verdict EIP-712 and hashes the attestation and reasoning trace to Arc. Stores: attestation hash, reasoning trace hash, evidence commitment hash, confidence, verdict, timestamp, signer, dispute state, party identities and types, and a link to the prior attestation when this is a revision. This on-chain record is what becomes precedent and what serves as the parties' verifiable operating history.
 
-**5. Pay** — Executes the release per the verdict through Qevor's payment rails. NOTARY never calls payment primitives directly from judgment logic — it calls clean Qevor wrappers (release full, release partial amount, hold, refund, batch release). Settlement in USDC on Arc; fees via Paymaster.
+**5. Pay** — Executes the release per the verdict through its own escrow engine. NOTARY never calls payment primitives directly from judgment logic — it calls clean NOTARY escrow wrappers (release full, release partial amount, hold, refund, batch release). Settlement in USDC on Arc; fees via Paymaster.
 
 **6. Learn** — Improves judgment from outcomes. Maintains and organizes the precedent base used by stage 3, and the per-party operating history. Not gamified scoring — a queryable record of prior verdicts, disputes, reversals, and how each held up. Each ruling feeds the next.
 
 ## Funded Conditional Cases
 
-NOTARY now protects the payee before work starts by requiring a funded Qevor reserve before evidence becomes actionable.
+NOTARY now protects the payee before work starts by requiring a funded NOTARY escrow reserve before evidence becomes actionable.
 
 Flow:
 
-1. The payer creates a NOTARY case using Qevor usernames for payer and payee.
-2. NOTARY resolves those usernames through Qevor's `profiles` table to wallet addresses.
-3. NOTARY requires the payer to have an enrolled Qevor `ARC-TESTNET` agent wallet with an escrow address.
-4. NOTARY creates a Qevor **conditional reserve** request, not a direct payee payment link.
-5. Qevor's executor runs the `pending_reserve` state and, if payer policy allows it, moves USDC from the payer's agent wallet into the payer's escrow wallet.
-6. Qevor sends NOTARY a signed settlement webhook with `state: funded`.
+1. The payer creates a NOTARY case using NOTARY usernames for payer and payee.
+2. NOTARY resolves those usernames through the `profiles` table to wallet addresses.
+3. NOTARY requires the payer to have an enrolled `ARC-TESTNET` agent wallet with an escrow address.
+4. NOTARY creates a NOTARY **conditional reserve** request, not a direct payee payment link.
+5. NOTARY's executor runs the `pending_reserve` state and, if payer policy allows it, moves USDC from the payer's agent wallet into the payer's escrow wallet.
+6. NOTARY receives a signed settlement webhook with `state: funded`.
 7. Only then does NOTARY expose the evidence invite link and move the case to `funded_awaiting_evidence`.
-8. After the payee submits evidence, NOTARY judges and sends a signed post-verdict release/refund instruction to Qevor.
+8. After the payee submits evidence, NOTARY judges and executes a signed post-verdict release/refund instruction directly.
 
-This separates **pre-work reserve funding** from **post-verdict release**. The payee is not asked to work against an unfunded promise, and Qevor still owns the actual USDC movement.
+This separates **pre-work reserve funding** from **post-verdict release**. The payee is not asked to work against an unfunded promise, and NOTARY owns the actual USDC movement.
 
 ## The Reversal (centerpiece)
 
@@ -60,7 +60,7 @@ A basic escrow app cannot be wrong because it never judged. NOTARY's trustworthi
 - A reversal is triggered when dispute adjudication results in `revised`, or when new evidence after settlement materially changes the verdict.
 - The reversal produces a **second attestation that explicitly references the original** (`supersedes` / `revises` link). Both are retained on Arc — the original is never deleted or overwritten. The chain is permanent and inspectable.
 - The second attestation's reasoning trace states what the original verdict got wrong, what new evidence changed it, and why the new verdict is correct.
-- If money already moved, the reversal computes the corrective payment action (top-up, partial clawback request, or refund) and routes it through Qevor wrappers. Where a clawback is not enforceable, the corrected verdict and outstanding delta are recorded honestly.
+- If money already moved, the reversal computes the corrective payment action (top-up, partial clawback request, or refund) and routes it through NOTARY escrow wrappers. Where a clawback is not enforceable, the corrected verdict and outstanding delta are recorded honestly.
 - Reversals are **first-class in the public ledger and per-party operating history**. A NOTARY that has reversed itself, with reasoning, is presented as *more* credible — surfaced as accountability, not failure.
 
 Demo path: initial ruling → appeal with counter-evidence → NOTARY changes its mind under evidence → linked second attestation on Arc → corrective payment → reversal shown as a trust mark in the record.
@@ -97,7 +97,7 @@ Reversal(original_attestation_ref, new_attestation_ref, what_changed,
 PartyOperatingHistory(party_identity, party_type, rulings[],
                       dispute_flags, reversal_flags)
 
-PaymentInstruction  # Qevor wrapper request
+PaymentInstruction  # NOTARY escrow request
 ```
 
 ## Privacy Model
@@ -111,14 +111,14 @@ Browsable, inspectable record of verdicts, reasoning traces, dispute outcomes, a
 ## Circle + Arc Stack
 
 - **USDC** — unit of settlement.
-- **Circle Agent Wallet / App Kit** — NOTARY's wallet and execution surface (Qevor already integrates App Kit; reused here).
+- **Circle Agent Wallet / App Kit** — NOTARY's wallet and execution surface (NOTARY integrates App Kit).
 - **Paymaster** — fees in USDC; users never touch a gas token.
 - **Arc Testnet** — attestation, precedent, and reversal records; EIP-712 signatures; deterministic sub-second finality; low per-ruling USDC fees that make per-ruling and per-reversal on-chain records economical.
 - **Gateway / CCTP** — path to bring user USDC from another chain to Arc when NOTARY needs to act.
 
 ## Architecture
 
-NOTARY is a separate service that consumes Qevor's API. It owns: obligation extraction, the pipeline, verdicts, reasoning traces, precedent base, dispute logic, reversal logic, and per-party operating history. Qevor owns: identity, payment execution, settlement. The seam — NOTARY decides → calls Qevor to execute — is the load-bearing integration.
+NOTARY is a separate service that runs its own escrow engine. It owns: obligation extraction, the pipeline, verdicts, reasoning traces, precedent base, dispute logic, reversal logic, and per-party operating history. NOTARY owns: identity, payment execution, settlement. The seam — NOTARY decides → executes payment directly — is the load-bearing integration.
 
 ```
 flowchart LR
@@ -131,7 +131,7 @@ flowchart LR
 
   Intake --> Speechmatics[Speechmatics / mock]
   Attest --> Arc[Arc Testnet Contracts]
-  Pay --> Qevor[Qevor Payment Rails]
+  Pay --> Escrow[NOTARY Escrow Engine]
   Judge --> Precedent[(Precedent Base)]
   Learn --> Precedent
   Attest --> Vault[Encrypted Evidence Vault]
@@ -156,7 +156,7 @@ Five Solidity contracts deployed to Arc Testnet via Foundry:
 - Foundry (`forge`) for contract deployment
 - Circle CLI (`npm install -g @circle-fin/cli`) for operator-side live Circle Agent Wallet operations
 - ARC CLI (`uv tool install git+https://github.com/the-canteen-dev/ARC-cli`) for Arc Testnet RPC access
-- Qevor credentials (existing deployed app on Arc Testnet)
+- NOTARY Supabase credentials
 - Speechmatics credentials (or use the local mock fallback)
 
 ### Install
@@ -179,11 +179,11 @@ ARC_RPC_URL=
 ARC_CHAIN_ID=
 ARC_OPERATOR_PRIVATE_KEY=
 ARC_ATTESTATION_REGISTRY=
-QEVORPAY_DEMO_MODE=false
-QEVORPAY_API_BASE_URL=
-QEVORPAY_API_KEY=
-QEVORPAY_RELEASE_ESCROW_PATH=
-QEVORPAY_REFUND_PATH=
+NOTARY_ESCROW_DEMO_MODE=false
+NOTARY_ESCROW_API_BASE_URL=
+NOTARY_ESCROW_API_KEY=
+NOTARY_ESCROW_RELEASE_PATH=
+NOTARY_ESCROW_REFUND_PATH=
 ```
 
 When real credentials are added, set the relevant `*_DEMO_MODE` to `false` and configure the matching API keys, base URLs, and paths.
@@ -196,19 +196,19 @@ When real credentials are added, set the relevant `*_DEMO_MODE` to `false` and c
 
 **User login** — normal users sign in with email through Supabase OTP. They do not need Circle CLI.
 
-**Circle** — Circle CLI is only for the operator/server-side NOTARY agent wallet and executor. End users fund cases through Qevor payment links or the app's funding UI.
+**Circle** — Circle CLI is only for the operator/server-side NOTARY agent wallet and executor. End users fund cases through NOTARY escrow or the app's funding UI.
 
-**Qevor paths** — `QEVORPAY_*_PATH` values are required in live mode because Qevor's endpoint contracts are project-specific.
+**NOTARY escrow paths** — `QEVORPAY_*_PATH` values are required in live mode because NOTARY escrow endpoint paths are provider-specific.
 
-**Qevor Supabase integration** — live conditional reserves use Qevor Supabase tables directly when no HTTP endpoint is configured. Required server-side values:
+**NOTARY Supabase integration** — live conditional reserves use NOTARY Supabase tables directly when no HTTP endpoint is configured. Required server-side values:
 
 ```env
-QEVOR_SUPABASE_URL=
-QEVOR_SUPABASE_SERVICE_ROLE_KEY=
-QEVORPAY_WEBHOOK_SECRET=
+NOTARY_SUPABASE_URL=
+NOTARY_SUPABASE_SERVICE_ROLE_KEY=
+NOTARY_ESCROW_WEBHOOK_SECRET=
 ```
 
-Qevor must have migrations `03_notary_attestation.sql` and `04_conditional_reserves.sql` applied before live funded cases work.
+NOTARY must have migrations `03_notary_attestation.sql` and `04_conditional_reserves.sql` applied before live funded cases work.
 
 **Speechmatics** — uses the documented Batch API defaults (`https://asr.api.speechmatics.com/v2`). Set `SPEECHMATICS_API_KEY` to enable real transcription; without it the pipeline accepts a pasted transcript or runs with a mock.
 
@@ -263,7 +263,7 @@ All endpoints callable programmatically so an agent counterparty can submit obli
 | `POST` | `/observations/cycle` | Submit evidence + run the full pipeline |
 | `POST` | `/media/transcribe` | Upload audio/video; transcribe and run pipeline |
 | `POST` | `/media/attest` | Paste transcript; run pipeline |
-| `POST` | `/qevorpay/payment-link` | Create a conditional Qevor payment link |
+| `POST` | `/escrow/payment-link` | Create a NOTARY conditional escrow payment link |
 | `POST` | `/evidence/grants` | Grant evidence access to a counterparty or arbitrator |
 | `GET` | `/attestations` | Public ledger of signed verdicts |
 | `GET` | `/karma` | Signed performance checkpoints |
@@ -285,7 +285,7 @@ All endpoints callable programmatically so an agent counterparty can submit obli
 - Sequential witness pipeline (Intake → Verify → Judge → Attest → Pay → Learn), demo + live paths
 - EIP-712 signing on verdicts, attestations, and karma checkpoints via `eth-account`
 - Arc RPC submission for all five contracts; direct JSON-RPC encoding without CLI dependency
-- Qevor wrappers: create payment link, release escrow, batch distribution, refund
+- NOTARY escrow wrappers: create payment link, release escrow, batch distribution, refund
 - Circle Agent Wallet CLI adapter: login, wallet creation/discovery, Gateway balance/deposit, x402 service payments
 - Speechmatics Batch API adapter with local mock fallback
 - Encrypted local evidence vault (openssl-backed)

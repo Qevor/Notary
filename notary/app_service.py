@@ -24,9 +24,9 @@ from notary.models.schemas import (
     PaymentInstruction,
     PaymentTrigger,
     PrivacyMode,
-    QevorpayBatchDistributionRequest,
-    QevorpayConditionalReserveRequest,
-    QevorpayPaymentLinkRequest,
+    EscrowBatchDistributionRequest,
+    EscrowConditionalReserveRequest,
+    EscrowPaymentLinkRequest,
     Ruling,
     TranscriptionJob,
     VerdictOutcome,
@@ -38,7 +38,7 @@ from notary.services.arc import ArcClient
 from notary.services.circle_agent import CircleAgentClient
 from notary.services.evidence_vault import EvidenceVault
 from notary.services.obligation_extractor import GroqObligationExtractor
-from notary.services.qevorpay import QevorpayClient
+from notary.services.escrow import NotaryEscrowClient
 from notary.services.speechmatics import SpeechmaticsClient
 from notary.storage.sqlite import SQLiteStore
 from notary.witness_pipeline import WitnessPipeline
@@ -65,21 +65,21 @@ class NotaryAppService:
             chain=settings.circle_chain,
             testnet=settings.circle_testnet,
         )
-        self.qevorpay = QevorpayClient(
-            api_base_url=settings.qevorpay_api_base_url,
-            api_key=settings.qevorpay_api_key,
-            demo_mode=settings.qevorpay_demo_mode,
-            payment_link_path=settings.qevorpay_payment_link_path,
-            batch_distribution_path=settings.qevorpay_batch_distribution_path,
-            release_escrow_path=settings.qevorpay_release_escrow_path,
-            refund_path=settings.qevorpay_refund_path,
-            payment_status_path_template=settings.qevorpay_payment_status_path_template,
-            webhook_secret=settings.qevorpay_webhook_secret,
-            webhook_signature_header=settings.qevorpay_webhook_signature_header,
-            supabase_url=settings.qevor_supabase_url,
-            supabase_service_role_key=settings.qevor_supabase_service_role_key,
-            executor_agent_wallet_id=settings.qevor_executor_agent_wallet_id,
-            creator_wallet=settings.qevor_creator_wallet,
+        self.escrow = NotaryEscrowClient(
+            api_base_url=settings.notary_escrow_api_base_url,
+            api_key=settings.notary_escrow_api_key,
+            demo_mode=settings.notary_escrow_demo_mode,
+            payment_link_path=settings.notary_escrow_payment_link_path,
+            batch_distribution_path=settings.notary_escrow_batch_path,
+            release_escrow_path=settings.notary_escrow_release_path,
+            refund_path=settings.notary_escrow_refund_path,
+            payment_status_path_template=settings.notary_escrow_status_path_template,
+            webhook_secret=settings.notary_escrow_webhook_secret,
+            webhook_signature_header=settings.notary_escrow_webhook_header,
+            supabase_url=settings.notary_supabase_url,
+            supabase_service_role_key=settings.notary_supabase_service_role_key,
+            executor_agent_wallet_id=settings.notary_executor_agent_wallet_id,
+            creator_wallet=settings.notary_creator_wallet,
         )
         self.arc = ArcClient(
             rpc_url=settings.arc_rpc_url,
@@ -114,7 +114,7 @@ class NotaryAppService:
             capabilities=[
                 "witness_to_pay",
                 "speechmatics_transcription",
-                "qevor_payment_execution",
+                "notary_escrow_execution",
                 "arc_attestation_hashing",
                 "graded_verdicts",
                 "dispute_adjudication",
@@ -192,8 +192,8 @@ class NotaryAppService:
 
     def auth_status(self) -> dict[str, Any]:
         configured = bool(
-            self.settings.qevor_supabase_url
-            and self.settings.qevor_supabase_anon_key
+            self.settings.notary_supabase_url
+            and self.settings.notary_supabase_anon_key
             and self.settings.notary_session_secret
         )
         return {
@@ -206,8 +206,8 @@ class NotaryAppService:
             "needs": [
                 name
                 for name, value in {
-                    "QEVOR_SUPABASE_URL": self.settings.qevor_supabase_url,
-                    "QEVOR_SUPABASE_ANON_KEY": self.settings.qevor_supabase_anon_key,
+                    "NOTARY_SUPABASE_URL": self.settings.notary_supabase_url,
+                    "NOTARY_SUPABASE_ANON_KEY": self.settings.notary_supabase_anon_key,
                     "NOTARY_SESSION_SECRET": self.settings.notary_session_secret,
                 }.items()
                 if not value
@@ -215,18 +215,18 @@ class NotaryAppService:
         }
 
     async def send_login_otp(self, email: str) -> dict[str, Any]:
-        if not self.settings.qevor_supabase_url or not self.settings.qevor_supabase_anon_key:
-            raise RuntimeError("QEVOR_SUPABASE_URL and QEVOR_SUPABASE_ANON_KEY are required for sign-in")
+        if not self.settings.notary_supabase_url or not self.settings.notary_supabase_anon_key:
+            raise RuntimeError("NOTARY_SUPABASE_URL and NOTARY_SUPABASE_ANON_KEY are required for sign-in")
         import httpx
 
-        url = f"{self.settings.qevor_supabase_url.rstrip('/')}/auth/v1/otp"
+        url = f"{self.settings.notary_supabase_url.rstrip('/')}/auth/v1/otp"
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 url,
                 json={"email": email, "create_user": True},
                 headers={
-                    "apikey": self.settings.qevor_supabase_anon_key,
-                    "Authorization": f"Bearer {self.settings.qevor_supabase_anon_key}",
+                    "apikey": self.settings.notary_supabase_anon_key,
+                    "Authorization": f"Bearer {self.settings.notary_supabase_anon_key}",
                     "Content-Type": "application/json",
                 },
             )
@@ -235,25 +235,25 @@ class NotaryAppService:
             except httpx.HTTPStatusError as exc:
                 if response.status_code in {401, 403}:
                     raise RuntimeError(
-                        "Email sign-in is not available yet. Check the Qevor Supabase anon key "
+                        "Email sign-in is not available yet. Check the NOTARY Supabase anon key "
                         "and Auth settings, or use local sandbox sign-in while developing."
                     ) from exc
                 raise RuntimeError("Email sign-in is temporarily unavailable. Please try again.") from exc
         return {"status": "otp_sent", "email": email}
 
     async def verify_login_otp(self, email: str, token: str) -> dict[str, Any]:
-        if not self.settings.qevor_supabase_url or not self.settings.qevor_supabase_anon_key:
-            raise RuntimeError("QEVOR_SUPABASE_URL and QEVOR_SUPABASE_ANON_KEY are required for sign-in")
+        if not self.settings.notary_supabase_url or not self.settings.notary_supabase_anon_key:
+            raise RuntimeError("NOTARY_SUPABASE_URL and NOTARY_SUPABASE_ANON_KEY are required for sign-in")
         import httpx
 
-        url = f"{self.settings.qevor_supabase_url.rstrip('/')}/auth/v1/verify"
+        url = f"{self.settings.notary_supabase_url.rstrip('/')}/auth/v1/verify"
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 url,
                 json={"email": email, "token": token, "type": "email"},
                 headers={
-                    "apikey": self.settings.qevor_supabase_anon_key,
-                    "Authorization": f"Bearer {self.settings.qevor_supabase_anon_key}",
+                    "apikey": self.settings.notary_supabase_anon_key,
+                    "Authorization": f"Bearer {self.settings.notary_supabase_anon_key}",
                     "Content-Type": "application/json",
                 },
             )
@@ -281,18 +281,18 @@ class NotaryAppService:
         }
 
     async def send_phone_otp(self, phone: str) -> dict[str, Any]:
-        if not self.settings.qevor_supabase_url or not self.settings.qevor_supabase_anon_key:
-            raise RuntimeError("QEVOR_SUPABASE_URL and QEVOR_SUPABASE_ANON_KEY are required for sign-in")
+        if not self.settings.notary_supabase_url or not self.settings.notary_supabase_anon_key:
+            raise RuntimeError("NOTARY_SUPABASE_URL and NOTARY_SUPABASE_ANON_KEY are required for sign-in")
         import httpx
 
-        url = f"{self.settings.qevor_supabase_url.rstrip('/')}/auth/v1/otp"
+        url = f"{self.settings.notary_supabase_url.rstrip('/')}/auth/v1/otp"
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 url,
                 json={"phone": phone, "create_user": True},
                 headers={
-                    "apikey": self.settings.qevor_supabase_anon_key,
-                    "Authorization": f"Bearer {self.settings.qevor_supabase_anon_key}",
+                    "apikey": self.settings.notary_supabase_anon_key,
+                    "Authorization": f"Bearer {self.settings.notary_supabase_anon_key}",
                     "Content-Type": "application/json",
                 },
             )
@@ -301,25 +301,25 @@ class NotaryAppService:
             except httpx.HTTPStatusError as exc:
                 if response.status_code in {401, 403}:
                     raise RuntimeError(
-                        "Phone sign-in is not available yet. Check the Qevor Supabase anon key "
+                        "Phone sign-in is not available yet. Check the NOTARY Supabase anon key "
                         "and SMS settings, or use local sandbox sign-in while developing."
                     ) from exc
                 raise RuntimeError("Phone sign-in is temporarily unavailable. Please try again.") from exc
         return {"status": "otp_sent", "phone": phone}
 
     async def verify_phone_otp(self, phone: str, token: str) -> dict[str, Any]:
-        if not self.settings.qevor_supabase_url or not self.settings.qevor_supabase_anon_key:
-            raise RuntimeError("QEVOR_SUPABASE_URL and QEVOR_SUPABASE_ANON_KEY are required for sign-in")
+        if not self.settings.notary_supabase_url or not self.settings.notary_supabase_anon_key:
+            raise RuntimeError("NOTARY_SUPABASE_URL and NOTARY_SUPABASE_ANON_KEY are required for sign-in")
         import httpx
 
-        url = f"{self.settings.qevor_supabase_url.rstrip('/')}/auth/v1/verify"
+        url = f"{self.settings.notary_supabase_url.rstrip('/')}/auth/v1/verify"
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 url,
                 json={"phone": phone, "token": token, "type": "sms"},
                 headers={
-                    "apikey": self.settings.qevor_supabase_anon_key,
-                    "Authorization": f"Bearer {self.settings.qevor_supabase_anon_key}",
+                    "apikey": self.settings.notary_supabase_anon_key,
+                    "Authorization": f"Bearer {self.settings.notary_supabase_anon_key}",
                     "Content-Type": "application/json",
                 },
             )
@@ -553,8 +553,8 @@ class NotaryAppService:
         )
         return await self.submit_witness_obligation(request)
 
-    async def create_payment_link(self, request: QevorpayPaymentLinkRequest) -> dict[str, Any]:
-        result = await self.qevorpay.create_payment_link(request)
+    async def create_payment_link(self, request: EscrowPaymentLinkRequest) -> dict[str, Any]:
+        result = await self.escrow.create_payment_link(request)
         payment_id = result.get("reference") or new_id("payment")
         self.store.put("payments", payment_id, result)
         return result
@@ -573,21 +573,21 @@ class NotaryAppService:
         instruction: str,
         amount_usdc: float,
     ) -> dict[str, Any]:
-        if self.settings.qevorpay_demo_mode:
-            raise RuntimeError("QEVORPAY_DEMO_MODE=false is required to create real Qevor payment cases")
-        payer_resolution = await self.qevorpay.resolve_identity_to_wallet(payer_identity)
-        payee_resolution = await self.qevorpay.resolve_identity_to_wallet(payee_identity)
+        if self.settings.notary_escrow_demo_mode:
+            raise RuntimeError("NOTARY_ESCROW_DEMO_MODE=false is required to create real NOTARY escrow cases")
+        payer_resolution = await self.escrow.resolve_identity_to_wallet(payer_identity)
+        payee_resolution = await self.escrow.resolve_identity_to_wallet(payee_identity)
         approver_resolution = (
-            await self.qevorpay.resolve_identity_to_wallet(approver_identity)
+            await self.escrow.resolve_identity_to_wallet(approver_identity)
             if approver_identity
             else None
         )
-        executor_wallet = await self.qevorpay.resolve_executor_agent_wallet(
+        executor_wallet = await self.escrow.resolve_executor_agent_wallet(
             payer_resolution.get("wallet")
         )
         if not executor_wallet or not executor_wallet.get("escrow_address"):
             raise RuntimeError(
-                "Payer must have an enrolled Qevor Arc Testnet agent wallet with an escrow address "
+                "Payer must have an enrolled NOTARY Arc Testnet agent wallet with an escrow address "
                 "before creating a protected NOTARY conditional payment"
             )
         token = new_id("invite")
@@ -620,8 +620,8 @@ class NotaryAppService:
                 "pendingEvidenceInviteToken": token,
             }
         )
-        payment = await self.qevorpay.create_conditional_reserve(
-            QevorpayConditionalReserveRequest(
+        payment = await self.escrow.create_conditional_reserve(
+            EscrowConditionalReserveRequest(
                 amount_usdc=amount_usdc,
                 payer_identity=payer_identity,
                 payee_identity=payee_identity,
@@ -638,13 +638,13 @@ class NotaryAppService:
                 },
             )
         )
-        case.qevor_payment_reference = payment.get("reference")
-        case.qevor_payment_url = payment.get("url")
-        case.qevor_provider = payment.get("provider")
+        case.escrow_payment_reference = payment.get("reference")
+        case.escrow_payment_url = payment.get("url")
+        case.escrow_provider = payment.get("provider")
         self.store.put("cases", case.case_id, case.model_dump(mode="json"))
         return case.model_dump(mode="json") | {"evidenceInviteToken": token}
 
-    def mark_case_funded_from_qevor(self, payment_reference: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    def mark_case_funded(self, payment_reference: str, payload: dict[str, Any]) -> dict[str, Any] | None:
         funded_statuses = {
             "paid",
             "funded",
@@ -661,7 +661,7 @@ class NotaryAppService:
         if status and status not in funded_statuses:
             return None
         for item in self.store.list("cases"):
-            if str(item.get("qevor_payment_reference")) != str(payment_reference):
+            if str(item.get("escrow_payment_reference")) != str(payment_reference):
                 continue
             case = NotaryCase.model_validate(item)
             if case.status == "awaiting_funding":
@@ -697,7 +697,7 @@ class NotaryAppService:
             return {
                 "error": "case_not_funded",
                 "caseId": case_id,
-                "message": "Evidence is not actionable until the Qevor conditional payment is funded.",
+                "message": "Evidence is not actionable until the NOTARY escrow conditional payment is funded.",
             }
         if token and sha256_hex(token) != case.evidence_invite_token_hash:
             return {"error": "invalid_invite_token", "caseId": case_id}
@@ -726,8 +726,8 @@ class NotaryAppService:
             amount_usdc=case.amount_usdc,
             metadata={
                 "notaryCaseId": case.case_id,
-                "qevorPaymentReference": case.qevor_payment_reference,
-                "qevorPaymentUrl": case.qevor_payment_url,
+                "escrowReference": case.escrow_payment_reference,
+                "escrowPaymentUrl": case.escrow_payment_url,
                 "payer_identity": case.payer_identity,
                 "payee_identity": case.payee_identity,
                 "approver_identity": case.approver_identity,
@@ -1354,10 +1354,10 @@ class NotaryAppService:
             },
             {
                 "name": "Strategy Engine",
-                "role": "Turns verdicts into Qevor reserve, release, hold, refund, or batch actions.",
+                "role": "Turns verdicts into escrow reserve, release, hold, refund, or batch actions.",
                 "status": payment.get("action") or latest_case.get("status") or "ready",
                 "lastOutput": payment.get("reason")
-                or latest_case.get("qevor_payment_reference")
+                or latest_case.get("escrow_payment_reference")
                 or "Waiting for funded case",
             },
             {
@@ -1385,224 +1385,6 @@ class NotaryAppService:
     def _payload_first_arg(self, item: dict[str, Any]) -> Any:
         args = item.get("payload", {}).get("args", [])
         return args[0] if args else None
-
-    def _is_debug_ruling(self, ruling: dict[str, Any]) -> bool:
-        obligation = ruling.get("obligation", {})
-        raw = str(obligation.get("raw_instruction") or "").strip().lower()
-        summary = str(obligation.get("deliverable") or "").strip().lower()
-        return (
-            ruling.get("notary_id") == "notary_demo"
-            or raw in {"test", "debug", "notary observed and verified: test"}
-            or summary == "test"
-        )
-
-    def _scrub_public_bucket(self, bucket: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        if bucket == "payments":
-            return [
-                item
-                for item in items
-                if (
-                    (item.get("instruction", {}).get("metadata", {}) or {}).get("obligationId")
-                    or (item.get("request", {}).get("metadata", {}) or {}).get("obligationId")
-                )
-            ]
-        if bucket == "payment_instructions":
-            return [
-                item
-                for item in items
-                if (item.get("metadata", {}) or {}).get("obligationId")
-            ]
-        if bucket == "arc_receipts":
-            return [
-                item
-                for item in items
-                if not self._contains_removed_padding_record(item)
-            ]
-        if bucket == "validations":
-            return [
-                item
-                for item in items
-                if not self._contains_removed_padding_record(item)
-            ]
-        if bucket == "notaries":
-            allowed = {
-                "witness_to_pay",
-                "speechmatics_transcription",
-                "qevor_payment_execution",
-                "arc_attestation_hashing",
-                "graded_verdicts",
-                "dispute_adjudication",
-                "self_reversal",
-                "party_operating_history",
-            }
-            cleaned = []
-            for item in items:
-                record = dict(item)
-                record["capabilities"] = [
-                    capability
-                    for capability in record.get("capabilities", [])
-                    if capability in allowed
-                ]
-                for stale_key in ("parent_notary_id", "policy_dna_hash"):
-                    record.pop(stale_key, None)
-                cleaned.append(record)
-            return cleaned
-        return items
-
-    def _contains_removed_padding_record(self, item: dict[str, Any]) -> bool:
-        text = str(item).lower()
-        removed_terms = ("pred" + "_", "pre" + "diction", "kar" + "ma")
-        return any(term in text for term in removed_terms)
-
-    def grant_evidence_access(
-        self,
-        *,
-        evidence_id: str,
-        grantee: str,
-        purpose: str,
-        disclosure_level: DisclosureLevel,
-    ) -> dict[str, Any]:
-        grant = self.vault.create_access_grant(evidence_id, grantee, purpose, disclosure_level)
-        self.store.put("access_grants", grant.grant_id, grant.model_dump(mode="json"))
-        return grant.model_dump(mode="json")
-
-    def _persist_ruling(self, ruling: Ruling) -> None:
-        self.store.put("rulings", ruling.ruling_id, ruling.model_dump(mode="json"))
-        self.store.put(
-            "witness_attestations",
-            ruling.attestation.attestation_id,
-            ruling.attestation.model_dump(mode="json"),
-        )
-        self.store.put(
-            "verdicts",
-            ruling.verdict.verdict_id,
-            ruling.verdict.model_dump(mode="json"),
-        )
-        if ruling.payment_instruction:
-            self.store.put(
-                "payment_instructions",
-                ruling.payment_instruction.instruction_id,
-                ruling.payment_instruction.model_dump(mode="json"),
-            )
-
-    def _precedent(self, exclude_ruling_id: str | None = None) -> list[Ruling]:
-        return [
-            Ruling.model_validate(item)
-            for item in self.store.list("rulings")
-            if item.get("ruling_id") != exclude_ruling_id
-        ]
-
-    def _witness_pipeline(self, notary_id: str | None = None) -> WitnessPipeline:
-        return WitnessPipeline(
-            notary_id=notary_id or self._default_notary_id(),
-            signer=self._witness_signer(),
-            attestation_registry=self.settings.arc_attestation_registry,
-        )
-
-    def _witness_signer(self):
-        from notary.crypto.eip712 import EIP712Signer
-
-        return EIP712Signer(
-            private_key=self.settings.validator_private_key,
-            domain_name=self.settings.validator_eip712_name,
-            domain_version=self.settings.validator_eip712_version,
-            chain_id=self.settings.arc_chain_id,
-        )
-
-    def _require_live_witness_config(self, *, payments: bool) -> None:
-        missing = []
-        if not self.settings.groq_api_key and not self.settings.claude_api_key:
-            missing.append("GROQ_API_KEY or CLAUDE_API_KEY")
-        if not self.settings.validator_private_key:
-            missing.append("VALIDATOR_PRIVATE_KEY")
-        if self.settings.arc_demo_mode:
-            missing.append("ARC_DEMO_MODE=false")
-        for name, value in {
-            "ARC_RPC_URL": self.settings.arc_rpc_url,
-            "ARC_CHAIN_ID": self.settings.arc_chain_id,
-            "ARC_OPERATOR_PRIVATE_KEY": self.settings.arc_operator_private_key,
-            "ARC_ATTESTATION_REGISTRY": self.settings.arc_attestation_registry,
-        }.items():
-            if not value:
-                missing.append(name)
-        if payments:
-            if self.settings.qevorpay_demo_mode:
-                missing.append("QEVORPAY_DEMO_MODE=false")
-            for name, value in {
-                "QEVOR_SUPABASE_URL": self.settings.qevor_supabase_url,
-                "QEVOR_SUPABASE_SERVICE_ROLE_KEY": (
-                    self.settings.qevor_supabase_service_role_key
-                ),
-            }.items():
-                if not value:
-                    missing.append(name)
-        if missing:
-            raise RuntimeError(
-                "Live NOTARY witness flow requires configuration: " + ", ".join(missing)
-            )
-
-    async def _extract_obligation_with_llm(self, request: WitnessIntakeRequest):
-        if self.settings.groq_api_key:
-            extractor = GroqObligationExtractor(
-                api_key=self.settings.groq_api_key,
-                model=self.settings.groq_model,
-                api_base_url=self.settings.groq_api_base_url,
-            )
-            return await extractor.extract(request)
-        if self.settings.claude_api_key:
-            from notary.services.obligation_extractor import ClaudeObligationExtractor
-            extractor = ClaudeObligationExtractor(
-                api_key=self.settings.claude_api_key,
-                model=self.settings.claude_model,
-                api_base_url=self.settings.claude_api_base_url,
-            )
-            return await extractor.extract(request)
-        raise RuntimeError("GROQ_API_KEY or CLAUDE_API_KEY is required for LLM obligation extraction")
-
-    async def _execute_payment_instruction(self, instruction: PaymentInstruction) -> dict[str, Any]:
-        if instruction.action == PaymentAction.HOLD:
-            receipt = {
-                "reference": instruction.instruction_id,
-                "status": "held",
-                "reason": instruction.reason,
-                "instruction": instruction.model_dump(mode="json"),
-            }
-        else:
-            if instruction.recipients:
-                receipt = await self.qevorpay.create_batch_distribution(
-                    QevorpayBatchDistributionRequest(
-                        recipients=instruction.recipients,
-                        reason=instruction.reason,
-                        metadata=instruction.metadata
-                        | {
-                            "payerIdentity": instruction.payer_identity,
-                            "attestationId": instruction.attestation_id,
-                        },
-                    )
-                )
-                self.store.put(
-                    "payments",
-                    receipt.get("reference") or instruction.instruction_id,
-                    receipt,
-                )
-                return receipt
-            trigger = PaymentTrigger(
-                action=instruction.action,
-                amount_usdc=instruction.amount_usdc,
-                recipient=instruction.payee_identity,
-                condition=instruction.reason,
-                attestation_id=instruction.attestation_id,
-                qevorpay_reference=instruction.metadata.get("qevorPaymentReference"),
-                authorized=True,
-                metadata=instruction.metadata | {"payerIdentity": instruction.payer_identity},
-            )
-            receipt = await self.qevorpay.execute_trigger(trigger)
-        self.store.put("payments", receipt.get("reference") or instruction.instruction_id, receipt)
-        return receipt
-
-    def _default_notary_id(self) -> str:
-        if self.settings.notary_id:
-            return self.settings.notary_id
         notaries = self.store.list("notaries")
         if notaries:
             return str(notaries[0]["notary_id"])
@@ -1666,3 +1448,25 @@ class NotaryAppService:
                 "payload": payload.model_dump(mode="json"),
             },
         )
+
+    def _scrub_public_bucket(self, bucket: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Strip private fields from bucket items before exposing to the dashboard or API."""
+        _PRIVATE_FIELDS = {
+            "evidence_vault_passphrase",
+            "arc_operator_private_key",
+            "notary_session_secret",
+        }
+        _PRIVATE_CAPABILITY_PREFIXES = (
+            "circle_",
+            "arc_operator",
+        )
+        result = []
+        for item in items:
+            scrubbed = {k: v for k, v in item.items() if k not in _PRIVATE_FIELDS}
+            if "capabilities" in scrubbed and isinstance(scrubbed["capabilities"], list):
+                scrubbed["capabilities"] = [
+                    cap for cap in scrubbed["capabilities"]
+                    if not any(cap.startswith(p) for p in _PRIVATE_CAPABILITY_PREFIXES)
+                ]
+            result.append(scrubbed)
+        return result

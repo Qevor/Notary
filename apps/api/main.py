@@ -25,7 +25,7 @@ from notary.models.schemas import (
     DisclosureLevel,
     Observation,
     PrivacyMode,
-    QevorpayPaymentLinkRequest,
+    EscrowPaymentLinkRequest,
     WitnessIntakeRequest,
 )
 
@@ -139,7 +139,7 @@ def _ui_error(exc: Exception) -> str:
     if "ARC RPC error" in text:
         return "Arc testnet rejected that transaction. Check the configured identity and try again."
     if "Circle CLI" in text:
-        return "Circle operator session is not ready on this machine. Users can still create Qevor-funded cases."
+        return "Circle operator session is not ready on this machine. Users can still create NOTARY escrow cases."
     if len(text) > 180:
         return f"{text[:177]}..."
     return text
@@ -662,7 +662,7 @@ async def local_payment_page(reference: str) -> HTMLResponse:
         <html>
           <head>
             <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <title>Qevorpay Local Payment</title>
+            <title>NOTARY Escrow Payment</title>
             <style>
               body {{
                 font-family: Inter, system-ui, sans-serif;
@@ -686,7 +686,7 @@ async def local_payment_page(reference: str) -> HTMLResponse:
           </head>
           <body>
             <main>
-              <h1>Qevorpay Payment</h1>
+              <h1>NOTARY Escrow Payment</h1>
               <p>{description}</p>
               <strong>{amount} USDC</strong>
               <p>Status: {payment.get("status", "created")}</p>
@@ -775,8 +775,8 @@ async def ui_attest_transcript(
     return RedirectResponse("/app", status_code=303)
 
 
-@app.post("/qevorpay/payment-link")
-async def create_payment_link(request: QevorpayPaymentLinkRequest) -> dict:
+@app.post("/escrow/payment-link")
+async def create_payment_link(request: EscrowPaymentLinkRequest) -> dict:
     return await get_app_service().create_payment_link(request)
 
 
@@ -803,26 +803,26 @@ async def ui_create_payment_link(
 ) -> RedirectResponse:
     _require_ui_user(request)
     await get_app_service().create_payment_link(
-        QevorpayPaymentLinkRequest(amount_usdc=amount_usdc, description=description)
+        EscrowPaymentLinkRequest(amount_usdc=amount_usdc, description=description)
     )
     return RedirectResponse("/app", status_code=303)
 
 
-@app.post("/webhooks/qevorpay/settlement")
-async def qevorpay_settlement_webhook(request: Request) -> dict:
-    """Receives signed settlement notifications from Qevor's batch executor.
+@app.post("/webhooks/escrow/settlement")
+async def escrow_settlement_webhook(request: Request) -> dict:
+    """Receives signed settlement notifications from NOTARY's batch executor.
 
-    Qevor posts here once it has independently verified NOTARY's EIP-712
+    The executor posts here once it has independently verified NOTARY's EIP-712
     attestation, looked up the on-chain AttestationRegistry record, and either
     executed or rejected the batch. We HMAC-verify the body against
-    QEVORPAY_WEBHOOK_SECRET (matching Qevor's outbound signer), then persist
-    the event so the ledger reflects real settlement state instead of the
-    optimistic 'queued' we wrote when we kicked off the batch.
+    NOTARY_ESCROW_WEBHOOK_SECRET, then persist the event so the ledger reflects
+    real settlement state instead of the optimistic 'queued' we wrote when we
+    kicked off the batch.
     """
     service = get_app_service()
     body = await request.body()
     headers = {key.lower(): value for key, value in request.headers.items()}
-    if not service.qevorpay.verify_webhook(headers=headers, body=body):
+    if not service.escrow.verify_webhook(headers=headers, body=body):
         raise HTTPException(status_code=401, detail="invalid_webhook_signature")
     try:
         payload = json.loads(body or b"{}")
@@ -837,16 +837,16 @@ async def qevorpay_settlement_webhook(request: Request) -> dict:
         or payload.get("batch_request_id")
         or payload.get("batchRequestId")
         or payload.get("reference")
-        or f"qevor_settlement_{int(time.time() * 1000)}"
+        or f"notary_settlement_{int(time.time() * 1000)}"
     )
     record = {
         "id": settlement_id,
         "receivedAt": int(time.time()),
         "event": payload,
     }
-    service.store.put("qevor_settlements", str(settlement_id), record)
+    service.store.put("notary_settlements", str(settlement_id), record)
 
-    # Reconcile the local payment record. Qevor's executor identifies the batch
+    # Reconcile the local payment record. The executor identifies the batch
     # via batch_request_id which we stored as the payment reference when
     # _create_supabase_batch returned. If we find a matching payment row,
     # update its status so the dashboard shows the final outcome.
@@ -861,7 +861,7 @@ async def qevorpay_settlement_webhook(request: Request) -> dict:
             existing["status"] = payload.get("status") or payload.get("state") or existing.get("status")
             existing["settlement"] = payload
             service.store.put("payments", str(payment_ref), existing)
-        service.mark_case_funded_from_qevor(str(payment_ref), payload)
+        service.mark_case_funded(str(payment_ref), payload)
     return {"ok": True, "settlementId": settlement_id}
 
 

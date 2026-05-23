@@ -246,9 +246,9 @@ class NotaryCase(BaseModel):
     approver_type: PartyType = PartyType.HUMAN
     instruction: str
     amount_usdc: float = Field(gt=0)
-    qevor_payment_reference: str | None = None
-    qevor_payment_url: str | None = None
-    qevor_provider: str | None = None
+    escrow_payment_reference: str | None = None
+    escrow_payment_url: str | None = None
+    escrow_provider: str | None = None
     evidence_invite_token_hash: str
     status: Literal[
         "awaiting_funding",
@@ -383,19 +383,19 @@ class PaymentTrigger(BaseModel):
     recipient: str | None = None
     condition: str
     attestation_id: str | None = None
-    qevorpay_reference: str | None = None
+    escrow_reference: str | None = None
     authorized: bool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class QevorpayPaymentLinkRequest(BaseModel):
+class EscrowPaymentLinkRequest(BaseModel):
     amount_usdc: float = Field(gt=0)
     description: str
     recipient: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class QevorpayConditionalReserveRequest(BaseModel):
+class EscrowConditionalReserveRequest(BaseModel):
     amount_usdc: float = Field(gt=0)
     payer_identity: str
     payee_identity: str
@@ -408,7 +408,7 @@ class QevorpayConditionalReserveRequest(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class QevorpayBatchDistributionRequest(BaseModel):
+class EscrowBatchDistributionRequest(BaseModel):
     batch_id: str = Field(default_factory=lambda: new_id("batch"))
     recipients: list[dict[str, Any]]
     reason: str
