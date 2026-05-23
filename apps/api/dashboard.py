@@ -684,7 +684,7 @@ def _page(title: str, body: str, user: dict[str, Any] | None = None) -> str:
         <header>
           <a class="brand" href="/">
             <strong>NOTARY</strong>
-            <span>NOTARY decides. NOTARY pays. Arc remembers.</span>
+            <span>The Autonomous AI Witness Layer for Programmable USDC Payments on Arc</span>
           </a>
           <nav>
             <a class="nav-link" href="/ledger">Public ledger</a>
@@ -962,9 +962,9 @@ def render_landing(state: dict[str, Any], user: dict[str, Any] | None = None) ->
       <section class="hero">
         <div class="hero-copy">
           <div>
-            <div class="eyebrow">Witness-to-pay on Arc</div>
-            <h1>Public proof that payment was earned or refused.</h1>
-            <p>NOTARY reads the obligation, checks the evidence, renders a confidence-gated verdict, signs an attestation, and executes the release, hold, refund, or corrective payment action directly.</p>
+            <div class="eyebrow">AI Witness Layer</div>
+            <h1>Programmable USDC payments triggered by real-world proof.</h1>
+            <p>NOTARY turns real-world proof — voice notes, files, videos, work logs, and approvals — into signed AI attestations that trigger programmable USDC payments on Arc.</p>
             <div class="actions">
               <a class="button" href="/app">Open workspace</a>
               <a class="button secondary" href="/ledger">View all public records</a>
@@ -1239,8 +1239,8 @@ def render_workspace(
       <section class="workspace-intro">
         <div>
           <div class="eyebrow">Interactive Console</div>
-          <h2>Witness-to-Pay Portal</h2>
-          <p class="panel-copy">Welcome back, <strong>{user_label}</strong>. NOTARY bridges trust by evaluating evidence and automating USDC settlements on the Arc Testnet. Follow the simple three-step process below to secure a contract:</p>
+          <h2>Autonomous AI Witness Portal</h2>
+          <p class="panel-copy">Welcome back, <strong>{user_label}</strong>. NOTARY turns real-world proof — voice notes, files, videos, work logs, and approvals — into signed AI attestations that trigger programmable USDC payments on Arc.</p>
         </div>
         {error_html}
         <div class="steps">

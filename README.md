@@ -1,315 +1,156 @@
 # NOTARY
 
-**Accountable AI witness and conditional payment release on Arc.**
+### The Autonomous AI Witness Layer for Programmable USDC Payments on Arc
 
-NOTARY judges whether a real-world obligation was genuinely fulfilled and releases USDC based on that judgment. It is not an escrow app — escrow executes a decision a human or trivial oracle already made. NOTARY itself renders the verdict: graded, confidence-weighted, defensible, and correctable. It signs the verdict, records it on Arc, releases payment through its own escrow engine, adjudicates disputes, and — the centerpiece — **reverses itself on the public record when shown to be wrong**.
+> **Strongest Pitch:** NOTARY turns real-world proof — voice notes, files, videos, work logs, and approvals — into signed AI attestations that trigger programmable USDC payments on Arc.
 
-> NOTARY decides. NOTARY pays. Arc remembers.
+---
 
-## The bigger thesis
+## Core Product Positioning
 
-NOTARY is the **verification and attestation layer for the agent economy**. Before autonomous firms can be financed — underwritten, rated, lent to — their performance must be *verifiable*. Someone must be able to prove that an agent (or human) actually fulfilled a commercial obligation and that a payment was legitimately owed. NOTARY produces exactly that primitive: a signed, on-chain, dispute-tested, self-correcting record of obligation fulfillment. It is the auditable operating-history layer that agentic capital markets cannot form without.
+NOTARY is the **AI witness infrastructure layer for programmable internet payments**. It is no longer a payment side-feature, trading platform, or generic swarm economy experiment. Instead, it is a trust-native witness engine designed to verify real-world proof and trigger instant stablecoin settlement.
 
-Two concrete consequences for this build:
-- Records are **financial-grade** — clean, machine-readable obligation-and-fulfillment records an underwriter could read.
-- NOTARY witnesses **agent-to-agent obligations** on equal footing with human ones. Parties are addressed by identity; `*_type` fields distinguish human from agent everywhere.
-
-## The Witness Pipeline
-
-One orchestrator, six sequential stages. Each stage takes typed input, produces typed output. The orchestrator runs them in order and persists every intermediate artifact.
-
-```
-Intake → Verify → Judge → Attest → Pay → Learn
+Everything revolves around one core primitive:
+```text
+Proof ──> Verification ──> Attestation ──> Settlement
 ```
 
-**1. Intake** — Reads submitted evidence (text, file, transcript, voice note, programmatic API call) and extracts a structured `Obligation` from the original payment instruction. Turns fuzzy language ("pay Daniel $250 when the design is done") into typed fields: `deliverable`, `acceptance_criterion`, `authorized_approver`, `deadline`, `satisfying_evidence`, plus `payer_type` / `payee_type` / `approver_type` (human or agent). When any element is ambiguous, surfaces it for confirmation rather than guessing. Uses an LLM for extraction; stores both raw instruction and parsed obligation.
+---
 
-**2. Verify** — Heuristic (not forensic) integrity check. Weighs verifiable artifacts (commits, timestamped files, signed messages) above unverifiable assertions. Outputs `evidence_quality_score` and `integrity_flags`. Labeled as heuristic throughout.
+## The 3-Layer Product Structure
 
-**3. Judge** — The core. Renders a **graded verdict**: full release, partial release (with percentage and named deficiency), hold-pending-clarification, or refuse/refund. Attaches a `confidence` score that gates behavior — high confidence releases; medium confidence releases with a dispute window open; low confidence escalates or requests more evidence. Consults the precedent base for consistency and produces a reasoning trace written as testimony: what was asked, what each evidence element established, where confidence was high or low, and the precise basis for the ruling.
+NOTARY organizes its processing pipeline into three clear layers:
 
-**4. Attest** — Signs the verdict EIP-712 and hashes the attestation and reasoning trace to Arc. Stores: attestation hash, reasoning trace hash, evidence commitment hash, confidence, verdict, timestamp, signer, dispute state, party identities and types, and a link to the prior attestation when this is a revision. This on-chain record is what becomes precedent and what serves as the parties' verifiable operating history.
+| Layer | Purpose | Technical Components |
+|---|---|---|
+| **Observation Layer** | Collect evidence from users and the world | Speechmatics batch voice transcription, local encrypted vault, media upload API, Telegram/WhatsApp inputs. |
+| **Intelligence Layer** | Verify, reason, score confidence, authorize | LLM obligation extraction, heuristic verification, graded verdict judgment, precedent checks, self-correction/reversals. |
+| **Settlement Layer** | Trigger programmable USDC actions | `NotaryEscrowClient` integration, Circle Agent wallets, Gateway routing, Paymaster gas abstraction, Arc Testnet blockchain commitments. |
 
-**5. Pay** — Executes the release per the verdict through its own escrow engine. NOTARY never calls payment primitives directly from judgment logic — it calls clean NOTARY escrow wrappers (release full, release partial amount, hold, refund, batch release). Settlement in USDC on Arc; fees via Paymaster.
+---
 
-**6. Learn** — Improves judgment from outcomes. Maintains and organizes the precedent base used by stage 3, and the per-party operating history. Not gamified scoring — a queryable record of prior verdicts, disputes, reversals, and how each held up. Each ruling feeds the next.
+## Core User Roles
 
-## Funded Conditional Cases
+1. **Payer (Funder of conditional payments):**
+   * *Examples:* Employers, freelancer clients, DAOs, business owners, buyers, team leads, or event organizers.
+2. **Payee (Recipient after witness verification):**
+   * *Examples:* Freelancers, contractors, contributors, vendors, delivery agents, creators, or consultants.
 
-NOTARY now protects the payee before work starts by requiring a funded NOTARY escrow reserve before evidence becomes actionable.
+---
 
-Flow:
+## Main Product Flows
 
-1. The payer creates a NOTARY case using NOTARY usernames for payer and payee.
-2. NOTARY resolves those usernames through the `profiles` table to wallet addresses.
-3. NOTARY requires the payer to have an enrolled `ARC-TESTNET` agent wallet with an escrow address.
-4. NOTARY creates a NOTARY **conditional reserve** request, not a direct payee payment link.
-5. NOTARY's executor runs the `pending_reserve` state and, if payer policy allows it, moves USDC from the payer's agent wallet into the payer's escrow wallet.
-6. NOTARY receives a signed settlement webhook with `state: funded`.
-7. Only then does NOTARY expose the evidence invite link and move the case to `funded_awaiting_evidence`.
-8. After the payee submits evidence, NOTARY judges and executes a signed post-verdict release/refund instruction directly.
+### FLOW 1 — Verified Freelancer Payment
+1. **Payer Creates Payment Intent:** A client drafts a natural language contract (e.g. *"Pay Sarah $500 when the final Figma file is uploaded and approved"*).
+2. **Circle Embedded Wallet Creation:** NOTARY instantly resolves identities, creating Circle embedded wallets, EIP-712 signing profiles, and Arc identity records.
+3. **Escrow Funding:** The payer deposits USDC into a secure conditional vault on Arc (facilitated by Circle USDC, Gateway, and Paymaster).
+4. **Evidence Submission:** The payee uploads the final Figma file link, GitHub commit hash, or video walk-through.
+5. **AI Witness Analysis:** The scanner scans the signals, the sentinel checks for integrity/anti-spoofing, and the risk guardian computes the confidence verdict.
+6. **Attestation Generation:** Validator signs EIP-712 attestation hashes and submits them to the Arc chain registries.
+7. **Instant Settlement:** NOTARY strategy engine executes a Circle-backed USDC transfer from the escrow vault to the payee's wallet.
 
-This separates **pre-work reserve funding** from **post-verdict release**. The payee is not asked to work against an unfunded promise, and NOTARY owns the actual USDC movement.
+### FLOW 2 — Voice Note to Payment (The Killer Demo)
+1. **Voice Note Intake:** User sends a WhatsApp voice note: *"Pay Daniel $250 when he uploads the final animation and I approve it."*
+2. **Speedmatic Transcription:** Converts speech to a structured transcript.
+3. **Signal Scanner Extraction:** Pulls payment amount ($250), recipient (@daniel), deliverables (animation), and approval triggers.
+4. **Automated Escrow Setup:** NOTARY automatically creates the escrow vault, registers the payment condition, and logs the Arc proof record.
 
-## The Reversal (centerpiece)
+### FLOW 3 — Dispute Resolution
+1. **Dispute Ingestion:** Payer claims work is incomplete, or Payee disputes a holding. Both parties upload screenshots, work logs, or transcripts.
+2. **Timeline Analysis:** Signal Scanner maps obligations; Reflector analyzes agreement vs outcome.
+3. **Resolution Verdict:** Risk Guardian recommends a release, refund, or split settlement. Validator signs the dispute recommendation and Settlement executes.
 
-This is the single distinguishing capability. **NOTARY can reverse its own prior verdict, on the public record, when shown it was wrong — and must defend the reversal.**
+### FLOW 4 — Verified Invoice ("Trust-Native Invoice")
+1. **Invoice Package:** Seller creates an invoice and binds it to a verifiable proof package (e.g., GitHub commit, delivery manifest, or video walk-through).
+2. **Trust Evaluation:** Buyer receives the invoice along with the AI witness confidence score, transcript summary, and Arc verification link.
 
-A basic escrow app cannot be wrong because it never judged. NOTARY's trustworthiness comes precisely from being *correctable*: its mistakes and corrections are both permanent, both public, both signed.
+### FLOW 5 — DAO / Team Payouts
+1. **Deliverable Tracking:** Signal Scanner monitors contributor activities (GitHub commits, attendance, or work logs).
+2. **USDC Batch Distribution:** Strategy Engine triggers batch-payments to all qualified contributors using Circle embedded wallets.
 
-- A reversal is triggered when dispute adjudication results in `revised`, or when new evidence after settlement materially changes the verdict.
-- The reversal produces a **second attestation that explicitly references the original** (`supersedes` / `revises` link). Both are retained on Arc — the original is never deleted or overwritten. The chain is permanent and inspectable.
-- The second attestation's reasoning trace states what the original verdict got wrong, what new evidence changed it, and why the new verdict is correct.
-- If money already moved, the reversal computes the corrective payment action (top-up, partial clawback request, or refund) and routes it through NOTARY escrow wrappers. Where a clawback is not enforceable, the corrected verdict and outstanding delta are recorded honestly.
-- Reversals are **first-class in the public ledger and per-party operating history**. A NOTARY that has reversed itself, with reasoning, is presented as *more* credible — surfaced as accountability, not failure.
+---
 
-Demo path: initial ruling → appeal with counter-evidence → NOTARY changes its mind under evidence → linked second attestation on Arc → corrective payment → reversal shown as a trust mark in the record.
+## Swarm Agent Architecture
 
-## Dispute Adjudication
+The NOTARY swarm is a **6-agent LangGraph network** focused entirely on machine verification and settlement:
 
-When a verdict is contested, NOTARY re-opens the evidence, weighs the disputing party's counter-evidence, and either upholds or revises the original ruling — defending the change or the consistency in its reasoning trace. The original on-chain attestation is the record it is held to. NOTARY is the arbiter, not a punt to a human or DAO.
-
-Flow: dispute intake → counter-evidence ingestion → re-judgment against the same obligation → `upheld | revised` outcome with written justification → new signed attestation linked to the original.
-
-## Data Models
-
-```python
-Obligation(deliverable, acceptance_criterion, authorized_approver, deadline,
-           satisfying_evidence, payer_type, payee_type, approver_type,
-           clarification_needed)
-
-Evidence(type, ref, commitment_hash, encrypted_blob_ref,
-         submitter_identity, submitter_type)
-
-IntegrityReport(source_quality, integrity_flags, approved, notes)
-
-Verdict(outcome, release_pct, confidence, deficiency, reasoning_trace,
-        precedent_refs)
-
-Attestation(hashes, signer, timestamp, dispute_state, privacy_mode,
-            party_identities, supersedes_ref, revises_ref)
-
-Dispute(counter_evidence, outcome, justification, linked_attestation)
-
-Reversal(original_attestation_ref, new_attestation_ref, what_changed,
-         corrective_payment_action, outstanding_delta)
-
-PartyOperatingHistory(party_identity, party_type, rulings[],
-                      dispute_flags, reversal_flags)
-
-PaymentInstruction  # NOTARY escrow request
+```text
+       ┌──────────────┐     ┌───────────┐     ┌─────────────┐
+ Entry │    Signal    │ ──> │ Guardian  │ ──> │    Risk     │
+ ─────>│   Scanner    │     │ Sentinel  │     │   Guardian  │
+       └──────────────┘     └───────────┘     └─────────────┘
+              ▲                                      │
+              │                                      ▼
+       ┌──────────────┐     ┌───────────┐     ┌─────────────┐
+       │  Reflector   │ <── │ Validator │ <── │  Strategy   │
+       │ (KarmaForge) │     │ (EIP-712) │     │   Engine    │
+       └──────────────┘     └───────────┘     └─────────────┘
 ```
 
-## Privacy Model
+1. **Signal Scanner:** Observes evidence (voice notes, PDFs, commits, sentiment signals) and extracts structured facts and conditions.
+2. **Guardian Sentinel:** Protects the system against fake evidence, prompt injection, spoofed approvals, and malicious code/drains.
+3. **Risk Guardian:** Calculates confidence scores, release thresholds, safety risk, and dispute windows.
+4. **Strategy Engine:** Executes conditional escrow creation, USDC releases, refunds, milestone payouts, and batch distributions via Circle & Arc.
+5. **Validator:** Cryptographically signs EIP-712 attestations, verdicts, and proof commitments for Arc chain storage.
+6. **Reflector:** A self-critique engine that evaluates disputes and outcomes, updating on-chain karma and refining judgment rules.
 
-Public proof, private evidence. Arc stores commitments only — hashes, timestamps, signatures, verdict, confidence, party identities, attestation links. Raw evidence (audio, transcripts, files, full reasoning) is stored off-chain and encrypted, never on-chain. Default disclosure: public sees hash and verdict summary; counterparties see relevant excerpts; a dispute-unlock process grants arbitrator access to the full bundle.
+---
 
-## Public Ledger
+## Arc + Circle Integration Stack
 
-Browsable, inspectable record of verdicts, reasoning traces, dispute outcomes, and reversals. Privacy-respecting: only hashes and summaries public by default. This is where precedent lives, where reversals are surfaced as credibility, and where the witness earns trust — the civic notary's public book of judgments.
+### Circle Stack Usage
+- **Circle Wallets:** Embedded agent wallets for payer, payee, and executor.
+- **USDC:** Core stablecoin for escrow funding and payment settlement.
+- **Gateway & CCTP:** Cross-chain routing to fetch USDC from outside chains.
+- **Paymaster:** Abstracting gas fees so users settle without holding native gas tokens.
+- **App Kit:** User onboarding and secure wallet login UX.
+- **USYC:** Generating yield on idle escrow reserves.
 
-## Circle + Arc Stack
+### Arc Chain Usage
+- **Identity Layer:** Mapping usernames to EVM addresses via `NotaryIdentityRegistry`.
+- **Attestation Layer:** Committing verdict hashes, evidence signatures, and reasoning traces to `AttestationRegistry`.
+- **Settlement Layer:** On-chain validation rules and trigger logic.
+- **Reputation Layer:** Recording validator performance and karma checks via `HelixAIKarma`.
+- **Governance:** Operating agreements and permissions via `NotaryGovernance`.
 
-- **USDC** — unit of settlement.
-- **Circle Agent Wallet / App Kit** — NOTARY's wallet and execution surface (NOTARY integrates App Kit).
-- **Paymaster** — fees in USDC; users never touch a gas token.
-- **Arc Testnet** — attestation, precedent, and reversal records; EIP-712 signatures; deterministic sub-second finality; low per-ruling USDC fees that make per-ruling and per-reversal on-chain records economical.
-- **Gateway / CCTP** — path to bring user USDC from another chain to Arc when NOTARY needs to act.
+---
 
-## Architecture
-
-NOTARY is a separate service that runs its own escrow engine. It owns: obligation extraction, the pipeline, verdicts, reasoning traces, precedent base, dispute logic, reversal logic, and per-party operating history. NOTARY owns: identity, payment execution, settlement. The seam — NOTARY decides → executes payment directly — is the load-bearing integration.
-
-```
-flowchart LR
-  API[FastAPI + Telegram] --> Intake
-  Intake --> Verify
-  Verify --> Judge
-  Judge --> Attest
-  Attest --> Pay
-  Pay --> Learn
-
-  Intake --> Speechmatics[Speechmatics / mock]
-  Attest --> Arc[Arc Testnet Contracts]
-  Pay --> Escrow[NOTARY Escrow Engine]
-  Judge --> Precedent[(Precedent Base)]
-  Learn --> Precedent
-  Attest --> Vault[Encrypted Evidence Vault]
-  Judge --> OperatingHistory[(Party Operating History)]
-```
-
-## Contracts
-
-Five Solidity contracts deployed to Arc Testnet via Foundry:
-
-- `NotaryIdentityRegistry.sol` — ERC-8004-style identity records for machine witnesses (human or agent parties).
-- `AttestationRegistry.sol` — verdict hashes, reasoning trace hashes, evidence commitments, and revision links.
-- `NotaryValidationRegistry.sol` — transcript, payment, dispute, and external validation records.
-- `HelixAIKarma.sol` — signed performance checkpoints; queryable operating history.
-- `NotaryGovernance.sol` — operating agreement, permitted actions, and upgrade records.
-
-## Setup
+## Project Setup & Running
 
 ### Requirements
+* Python 3.11+
+* Foundry (`forge`) for smart contract compilation
+* ARC CLI for Arc Testnet RPC access
+* Supabase Account & Database tables
 
-- Python 3.12+
-- Foundry (`forge`) for contract deployment
-- Circle CLI (`npm install -g @circle-fin/cli`) for operator-side live Circle Agent Wallet operations
-- ARC CLI (`uv tool install git+https://github.com/the-canteen-dev/ARC-cli`) for Arc Testnet RPC access
-- NOTARY Supabase credentials
-- Speechmatics credentials (or use the local mock fallback)
-
-### Install
-
+### Setup Instructions
 ```bash
+# Clone the repository
+git clone <repo-url> && cd NOTARY
+
+# Set up virtual environment
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\Activate.ps1
+.venv\Scripts\activate  # Windows
+
+# Install package dependencies
 pip install -e ".[dev]"
+
+# Configure environment variables
 cp .env.example .env
 ```
 
-### Environment
-
-See `.env.example` for all settings. The full pipeline runs locally with SQLite and local demo stubs before any external credentials are connected:
-
-```env
-VALIDATOR_PRIVATE_KEY=
-ARC_DEMO_MODE=false
-ARC_RPC_URL=
-ARC_CHAIN_ID=
-ARC_OPERATOR_PRIVATE_KEY=
-ARC_ATTESTATION_REGISTRY=
-NOTARY_ESCROW_DEMO_MODE=false
-NOTARY_ESCROW_API_BASE_URL=
-NOTARY_ESCROW_API_KEY=
-NOTARY_ESCROW_RELEASE_PATH=
-NOTARY_ESCROW_REFUND_PATH=
-```
-
-When real credentials are added, set the relevant `*_DEMO_MODE` to `false` and configure the matching API keys, base URLs, and paths.
-
-**LLM reasoning** — set `GROQ_API_KEY` or `CLAUDE_API_KEY` (either alone is sufficient) to enable live LLM-powered judgment. When both are set, Groq handles obligation extraction and Claude handles the reflector stage.
-
-**Arc signing** — set `VALIDATOR_PRIVATE_KEY` for real EIP-712 signatures on attestations, verdicts, and reversals.
-
-**Arc submission** — set `ARC_RPC_URL`, `ARC_CHAIN_ID`, `ARC_OPERATOR_PRIVATE_KEY`, and the five contract addresses to submit attestation and validation records to the testnet.
-
-**User login** — normal users sign in with email through Supabase OTP. They do not need Circle CLI.
-
-**Circle** — Circle CLI is only for the operator/server-side NOTARY agent wallet and executor. End users fund cases through NOTARY escrow or the app's funding UI.
-
-**NOTARY escrow paths** — `NOTARY_ESCROW_*_PATH` values are required in live mode because NOTARY escrow endpoint paths are provider-specific.
-
-**NOTARY Supabase integration** — live conditional reserves use NOTARY Supabase tables directly when no HTTP endpoint is configured. Required server-side values:
-
-```env
-NOTARY_SUPABASE_URL=
-NOTARY_SUPABASE_SERVICE_ROLE_KEY=
-NOTARY_ESCROW_WEBHOOK_SECRET=
-```
-
-NOTARY must have migrations `03_notary_attestation.sql` and `04_conditional_reserves.sql` applied before live funded cases work.
-
-**Speechmatics** — uses the documented Batch API defaults (`https://asr.api.speechmatics.com/v2`). Set `SPEECHMATICS_API_KEY` to enable real transcription; without it the pipeline accepts a pasted transcript or runs with a mock.
-
-**Evidence vault** — set `EVIDENCE_VAULT_PASSPHRASE` for deterministic encryption. If omitted, a local vault key file is generated on first run.
-
-### Circle CLI
-
+### Running the Server
 ```bash
-npm install -g @circle-fin/cli
+# Start the FastAPI dashboard & API server
+uvicorn apps.api.main:app --host 127.0.0.1 --port 8000
 ```
+Open `http://127.0.0.1:8000` to interact with the console.
 
-Circle CLI is not a user onboarding step. It is only needed on the machine running the NOTARY agent/executor when you want live Circle Agent Wallet operations.
-
-Authenticate the operator agent wallet session:
-
-1. `POST /circle/login/init`
-2. Check the configured Circle wallet email for the OTP.
-3. `POST /circle/login/complete`
-4. Verify with `GET /circle/status`.
-
-### Run
-
+### Deploying Arc Contracts
 ```bash
-# Fastest path — stdlib server, no dependencies beyond the package
-python main.py
-
-# FastAPI with hot-reload
-uvicorn apps.api.main:app --reload
-
-# Open
-open http://127.0.0.1:8000
-```
-
-The dashboard shows the NOTARY pipeline state: active obligations, attestations, verdicts, disputes, reversals, payment status, and the public ledger.
-
-### Deploy Arc Contracts
-
-```bash
+# Build contracts
 forge build
-python scripts/deploy_arc.py
+
+# Run deployment script
+.venv\Scripts\python scripts/deploy_arc.py
 ```
-
-Requires: `ARC_RPC_URL`, `ARC_OPERATOR_PRIVATE_KEY`.
-
-## API Surfaces
-
-All endpoints callable programmatically so an agent counterparty can submit obligations and evidence without a human UI.
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| `POST` | `/notaries` | Register a new NOTARY identity on Arc |
-| `POST` | `/observations/cycle` | Submit evidence + run the full pipeline |
-| `POST` | `/media/transcribe` | Upload audio/video; transcribe and run pipeline |
-| `POST` | `/media/attest` | Paste transcript; run pipeline |
-| `POST` | `/escrow/payment-link` | Create a NOTARY conditional escrow payment link |
-| `POST` | `/evidence/grants` | Grant evidence access to a counterparty or arbitrator |
-| `GET` | `/attestations` | Public ledger of signed verdicts |
-| `GET` | `/karma` | Signed performance checkpoints |
-| `GET` | `/payments` | Payment links and trigger history |
-| `GET` | `/state` | Full dashboard state |
-| `GET` | `/circle/status` | Circle wallet session state |
-| `GET` | `/speechmatics/status` | Speechmatics provider config |
-
-## Intake Surfaces
-
-- **Web dashboard** — paste a transcript, upload a voice note or work-call recording, choose privacy mode, run Witness-to-Pay.
-- **Telegram bot** — send a voice note or message; NOTARY transcribes, extracts the obligation, judges, and returns the verdict.
-- **Programmatic API** — any endpoint above is callable by an agent counterparty with no human UI required.
-
-## Implementation Status
-
-### Implemented
-
-- Sequential witness pipeline (Intake → Verify → Judge → Attest → Pay → Learn), demo + live paths
-- EIP-712 signing on verdicts, attestations, and karma checkpoints via `eth-account`
-- Arc RPC submission for all five contracts; direct JSON-RPC encoding without CLI dependency
-- NOTARY escrow wrappers: create payment link, release escrow, batch distribution, refund
-- Circle Agent Wallet CLI adapter: login, wallet creation/discovery, Gateway balance/deposit, x402 service payments
-- Speechmatics Batch API adapter with local mock fallback
-- Encrypted local evidence vault (openssl-backed)
-- SQLite persistence for all pipeline artifacts
-- FastAPI with live dashboard, media upload, transcript attestation, and payment link UI
-- Telegram bot surface
-- Contract deployment helper via Foundry (`scripts/deploy_arc.py`)
-- Privacy modes (public / protected / private) with evidence access grants
-- Claude API as drop-in LLM fallback when no Groq key is set
-
-### In Progress / Next
-
-- Structured `Obligation` extraction with typed fields (`deliverable`, `acceptance_criterion`, `deadline`, `payer_type`, `payee_type`) and ambiguity-surfacing
-- Graded verdict: partial release with percentage and named deficiency; confidence-gated hold/escalate path
-- Dispute adjudication: counter-evidence intake, re-judgment, `upheld | revised` outcome, linked second attestation
-- **The Reversal**: superseding attestation chain on Arc, self-correction reasoning trace, corrective payment routing, reversal surfaced as credibility in operating history
-- `PartyOperatingHistory` view: queryable per-party record of obligations, verdicts, disputes, and reversals
-- `supersedes_ref` / `revises_ref` links in `Attestation` model
-- Precedent base: similarity-match over stored rulings exposed in reasoning trace
-- Public ledger UI: browsable verdicts, disputes, reversals with privacy-respecting summaries
-- Agent-to-agent party type fields wired end-to-end
-
-## Legal Notice
-
-NOTARY produces evidence-grade signed attestations modeled on structured obligation-fulfillment records. This is experimental and not legal advice. Records are auditable in structure; they are not legally certified documents, guaranteed-admissible evidence, or regulated financial instruments.
-
-The Wyoming DAO LLC / Bayern mechanism operating agreement module is an experimental legal-operational framework and is not legal advice.
