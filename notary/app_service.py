@@ -225,7 +225,15 @@ class NotaryAppService:
                     "Content-Type": "application/json",
                 },
             )
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                if response.status_code in {401, 403}:
+                    raise RuntimeError(
+                        "Email sign-in is not available yet. Check the Qevor Supabase anon key "
+                        "and Auth settings, or use local sandbox sign-in while developing."
+                    ) from exc
+                raise RuntimeError("Email sign-in is temporarily unavailable. Please try again.") from exc
         return {"status": "otp_sent", "email": email}
 
     async def verify_login_otp(self, email: str, token: str) -> dict[str, Any]:
@@ -244,7 +252,15 @@ class NotaryAppService:
                     "Content-Type": "application/json",
                 },
             )
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                if response.status_code in {401, 403}:
+                    raise RuntimeError(
+                        "That sign-in code could not be verified. Check Supabase Auth settings, "
+                        "or use local sandbox sign-in while developing."
+                    ) from exc
+                raise RuntimeError("Email verification is temporarily unavailable. Please try again.") from exc
             session = response.json()
         user = session.get("user") or {}
         return {

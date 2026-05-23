@@ -40,17 +40,20 @@ def _css() -> str:
     return """
     :root {
       color-scheme: light;
-      --bg: #f6f2ea;
-      --ink: #111512;
-      --muted: #667069;
-      --surface: #fffdf8;
-      --surface-2: #f1ece2;
-      --line: #ddd6c8;
-      --green: #13654c;
-      --green-2: #0d4333;
-      --amber: #9b6818;
-      --red: #9e3b31;
-      --blue: #285e78;
+      --bg: #f7f8f4;
+      --ink: #0d1210;
+      --muted: #69746f;
+      --surface: #ffffff;
+      --surface-2: #f1f4ee;
+      --line: #dde4dc;
+      --green: #08724f;
+      --green-2: #073f31;
+      --amber: #a56b08;
+      --red: #b83b31;
+      --blue: #285c7a;
+      --black: #08110d;
+      --mint: #dff7e9;
+      --shadow: 0 18px 50px rgba(8, 17, 13, .08);
     }
     * { box-sizing: border-box; }
     body {
@@ -58,6 +61,7 @@ def _css() -> str:
       background: var(--bg);
       color: var(--ink);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 15px;
     }
     a { color: inherit; text-decoration: none; }
     header {
@@ -65,29 +69,30 @@ def _css() -> str:
       align-items: center;
       justify-content: space-between;
       gap: 20px;
-      padding: 18px 30px;
-      border-bottom: 1px solid var(--line);
-      background: rgba(255,253,248,.94);
+      padding: 16px 28px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      background: var(--black);
+      color: white;
       position: sticky;
       top: 0;
       z-index: 4;
     }
     h1, h2, h3, p { margin-top: 0; }
-    .brand strong { display: block; font-size: 25px; letter-spacing: 0; }
-    .brand span { color: var(--muted); }
+    .brand strong { display: block; font-size: 22px; letter-spacing: 0; }
+    .brand span { color: rgba(255,255,255,.62); }
     nav { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
     .nav-link, .pill, .mini-form button {
       border: 1px solid var(--line);
       border-radius: 999px;
-      background: var(--surface);
-      color: var(--green-2);
+      background: rgba(255,255,255,.08);
+      color: white;
       padding: 8px 12px;
       font-size: 13px;
       font-weight: 900;
     }
-    .nav-link.primary, .mini-form button { background: var(--green); color: white; border-color: var(--green); }
+    .nav-link.primary, .mini-form button { background: #f5fff8; color: var(--green-2); border-color: #f5fff8; }
     .mini-form { margin: 0; }
-    .shell { padding: 28px 30px; }
+    .shell { padding: 28px; max-width: 1480px; margin: 0 auto; }
     .hero {
       min-height: 520px;
       display: grid;
@@ -97,16 +102,15 @@ def _css() -> str:
     }
     .hero-copy {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 6px;
       padding: 30px;
-      background:
-        linear-gradient(135deg, rgba(19,101,76,.14), rgba(155,104,24,.12)),
-        var(--surface);
+      background: var(--surface);
+      box-shadow: var(--shadow);
       display: flex;
       flex-direction: column;
       justify-content: space-between;
     }
-    .eyebrow { color: var(--amber); font-size: 12px; font-weight: 950; text-transform: uppercase; letter-spacing: .04em; }
+    .eyebrow { color: var(--green); font-size: 12px; font-weight: 950; text-transform: uppercase; letter-spacing: .04em; }
     .hero h1 { font-size: 54px; line-height: .98; letter-spacing: 0; max-width: 820px; margin: 12px 0 16px; }
     .hero p { color: var(--muted); font-size: 17px; line-height: 1.55; max-width: 760px; }
     .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
@@ -126,17 +130,18 @@ def _css() -> str:
     .metrics { display: grid; grid-template-columns: repeat(4, minmax(110px, 1fr)); gap: 10px; margin-top: 28px; }
     .metric {
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: rgba(255,253,248,.78);
+      border-radius: 6px;
+      background: var(--surface-2);
       padding: 14px;
     }
     .metric span, .fact span { display: block; color: var(--muted); font-size: 12px; font-weight: 950; text-transform: uppercase; }
     .metric strong { display: block; margin-top: 6px; font-size: 25px; }
     .flow {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 6px;
       background: var(--surface);
       padding: 20px;
+      box-shadow: var(--shadow);
       display: flex;
       flex-direction: column;
       gap: 12px;
@@ -144,7 +149,7 @@ def _css() -> str:
     .flow h2 { margin-bottom: 2px; font-size: 20px; }
     .flow-step, .record, .panel {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 6px;
       background: var(--surface);
       padding: 16px;
     }
@@ -155,7 +160,7 @@ def _css() -> str:
       border-radius: 50%;
       display: grid;
       place-items: center;
-      background: var(--surface-2);
+      background: var(--mint);
       color: var(--green-2);
       font-weight: 950;
     }
@@ -190,6 +195,7 @@ def _css() -> str:
       background: var(--surface);
       padding: 13px;
       min-width: 0;
+      box-shadow: 0 8px 24px rgba(8, 17, 13, .04);
     }
     .agent-card h3 { font-size: 15px; margin-bottom: 6px; }
     .agent-card p { color: var(--muted); font-size: 12px; line-height: 1.35; margin-bottom: 10px; }
@@ -220,7 +226,7 @@ def _css() -> str:
       align-items: start;
     }
     .panel { margin-bottom: 14px; }
-    label { display: block; margin: 12px 0 6px; font-size: 13px; font-weight: 950; }
+    label { display: block; margin: 12px 0 6px; font-size: 13px; font-weight: 850; color: #18231f; }
     input, textarea, select {
       width: 100%;
       border: 1px solid var(--line);
@@ -229,6 +235,10 @@ def _css() -> str:
       color: var(--ink);
       padding: 11px 12px;
       font: inherit;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: 3px solid rgba(8,114,79,.14);
+      border-color: var(--green);
     }
     textarea { min-height: 118px; resize: vertical; }
     button {
@@ -250,27 +260,32 @@ def _css() -> str:
     .status-line { color: var(--muted); font-size: 13px; margin-top: 10px; min-height: 18px; }
     .empty {
       border: 1px dashed var(--line);
-      border-radius: 8px;
+      border-radius: 6px;
       padding: 24px;
       color: var(--muted);
-      background: rgba(255,253,248,.66);
+      background: #fbfcfa;
       text-align: center;
     }
     .notice {
-      border-left: 3px solid var(--green);
-      background: #eef6f1;
-      padding: 10px 12px;
+      border: 1px solid #cae9d7;
+      border-left: 4px solid var(--green);
+      border-radius: 6px;
+      background: #eef9f2;
+      padding: 12px 14px;
       margin: 12px 0;
       font-weight: 800;
     }
-    .notice.bad { border-left-color: var(--red); background: #fae6e2; }
+    .notice.bad { border-color: #f0c9c4; border-left-color: var(--red); background: #fff0ee; }
     .signin {
       min-height: calc(100vh - 82px);
       display: grid;
       place-items: center;
-      padding: 24px;
+      padding: 28px;
+      background:
+        linear-gradient(180deg, rgba(8,17,13,.05), rgba(8,17,13,0) 34%),
+        var(--bg);
     }
-    .signin-card { width: min(520px, 100%); }
+    .signin-card { width: min(560px, 100%); box-shadow: var(--shadow); }
     .split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     @media (max-width: 1120px) {
       .hero, .workspace { grid-template-columns: 1fr; }
@@ -694,7 +709,7 @@ def render_sign_in(
         </form>
         """
     sandbox_form = ""
-    if not configured and auth.get("localSandboxEnabled"):
+    if auth.get("localSandboxEnabled"):
         sandbox_form = """
         <form method="post" action="/auth/dev-login">
           <label for="dev_email">Sandbox email</label>
