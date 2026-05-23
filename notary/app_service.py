@@ -144,7 +144,12 @@ class NotaryAppService:
 
         self.store.put("notaries", identity.notary_id, identity.model_dump(mode="json"))
         self.store.put("operating_agreements", agreement.agreement_id, agreement.model_dump(mode="json"))
-        await self._submit_identity_records(identity, agreement)
+        try:
+            await self._submit_identity_records(identity, agreement)
+        except RuntimeError as exc:
+            if not self._is_notary_exists_error(exc):
+                raise
+            self._record_existing_notary(identity)
         return {
             "identity": identity.model_dump(mode="json"),
             "operatingAgreement": agreement.model_dump(mode="json"),
@@ -294,7 +299,22 @@ class NotaryAppService:
         }
         identity = NotaryIdentity.model_validate(identity_data)
         agreement = OperatingAgreement.model_validate(agreement_data)
-        await self._submit_identity_records(identity, agreement)
+        try:
+            await self._submit_identity_records(identity, agreement)
+        except RuntimeError as exc:
+            if not self._is_notary_exists_error(exc):
+                raise
+            self._record_existing_notary(identity)
+            return {
+                "notaryId": notary_id,
+                "status": "already_registered",
+                "message": "This NOTARY identity is already registered on Arc.",
+                "receipts": [
+                    item
+                    for item in self.store.list("arc_receipts")
+                    if self._payload_first_arg(item) == notary_id
+                ],
+            }
         receipts = [
             item
             for item in self.store.list("arc_receipts")
@@ -1556,3 +1576,26 @@ class NotaryAppService:
             receipt = await self.arc.submit_payload(payload)
             key = receipt.get("txHash") or new_id("arc_receipt")
             self.store.put("arc_receipts", key, receipt | {"payload": payload.model_dump(mode="json")})
+
+    def _is_notary_exists_error(self, exc: Exception) -> bool:
+        return "NOTARY_EXISTS" in str(exc)
+
+    def _record_existing_notary(self, identity: NotaryIdentity) -> None:
+        payload = ArcTransactionPayload(
+            contract_name="NotaryIdentityRegistry",
+            method="createNotary",
+            args=[identity.notary_id],
+        )
+        key = new_id("arc_receipt")
+        self.store.put(
+            "arc_receipts",
+            key,
+            {
+                "txHash": key,
+                "status": "already_registered",
+                "contract": "NotaryIdentityRegistry",
+                "method": "createNotary",
+                "notaryId": identity.notary_id,
+                "payload": payload.model_dump(mode="json"),
+            },
+        )

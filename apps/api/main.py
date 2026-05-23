@@ -132,6 +132,19 @@ def _user_state(state: dict, user: dict) -> dict:
     return scoped
 
 
+def _ui_error(exc: Exception) -> str:
+    text = str(exc)
+    if "NOTARY_EXISTS" in text:
+        return "This NOTARY is already registered on Arc. You can keep using this workspace."
+    if "ARC RPC error" in text:
+        return "Arc testnet rejected that transaction. Check the configured identity and try again."
+    if "Circle CLI" in text:
+        return "Circle operator session is not ready on this machine. Users can still create Qevor-funded cases."
+    if len(text) > 180:
+        return f"{text[:177]}..."
+    return text
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "service": "notary"}
@@ -206,7 +219,7 @@ async def ui_create_case(
             amount_usdc=amount_usdc,
         )
     except Exception as exc:
-        return RedirectResponse(f"/app?error={quote(str(exc))}", status_code=303)
+        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
     return RedirectResponse("/app", status_code=303)
 
 
@@ -240,7 +253,7 @@ async def submit_case_evidence_ui(
         )
     except Exception as exc:
         return RedirectResponse(
-            f"/cases/{case_id}/evidence?token={quote(token or '')}&error={quote(str(exc))}",
+            f"/cases/{case_id}/evidence?token={quote(token or '')}&error={quote(_ui_error(exc))}",
             status_code=303,
         )
     if result.get("error"):
@@ -296,7 +309,7 @@ async def auth_send_code(email: str = Form(...)) -> RedirectResponse:
     try:
         await get_app_service().send_login_otp(email)
     except Exception as exc:
-        return RedirectResponse(f"/login?error={quote(str(exc))}", status_code=303)
+        return RedirectResponse(f"/login?error={quote(_ui_error(exc))}", status_code=303)
     return RedirectResponse(
         f"/login?email={quote(email)}&message=Check%20your%20email%20for%20the%20sign-in%20code.",
         status_code=303,
@@ -315,7 +328,7 @@ async def auth_verify_code(email: str = Form(...), token: str = Form(...)) -> Re
             }
         )
     except Exception as exc:
-        return RedirectResponse(f"/login?error={quote(str(exc))}", status_code=303)
+        return RedirectResponse(f"/login?error={quote(_ui_error(exc))}", status_code=303)
     response = RedirectResponse("/app", status_code=303)
     response.set_cookie(
         SESSION_COOKIE,
@@ -439,7 +452,7 @@ async def ui_register_notary_onchain(request: Request, notary_id: str) -> Redire
     try:
         await get_app_service().register_notary_onchain(notary_id)
     except Exception as exc:
-        return RedirectResponse(f"/app?error={quote(str(exc))}", status_code=303)
+        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
     return RedirectResponse("/app", status_code=303)
 
 
@@ -449,7 +462,7 @@ async def ui_circle_login_init(request: Request, email: str = Form(...)) -> Redi
     try:
         result = await get_app_service().circle_login_init(email)
     except Exception as exc:
-        return RedirectResponse(f"/app?error={quote(str(exc))}", status_code=303)
+        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
     request_id = quote(str(result.get("requestId") or result.get("request_id") or ""))
     return RedirectResponse(f"/app?circle_request_id={request_id}", status_code=303)
 
@@ -464,7 +477,7 @@ async def ui_circle_login_complete(
     try:
         await get_app_service().circle_login_complete(request_id, otp)
     except Exception as exc:
-        return RedirectResponse(f"/app?error={quote(str(exc))}", status_code=303)
+        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
     return RedirectResponse("/app", status_code=303)
 
 
@@ -481,7 +494,7 @@ async def ui_circle_gateway_deposit(
             wallet_id=wallet_id or None,
         )
     except Exception as exc:
-        return RedirectResponse(f"/app?error={quote(str(exc))}", status_code=303)
+        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
     return RedirectResponse("/app", status_code=303)
 
 

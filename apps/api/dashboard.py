@@ -188,7 +188,7 @@ def _css() -> str:
     .grid { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 12px; }
     .grid.two { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
     .ops-grid { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 12px; margin-bottom: 18px; }
-    .agent-grid { display: grid; grid-template-columns: repeat(6, minmax(160px, 1fr)); gap: 10px; }
+    .agent-grid { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 10px; }
     .agent-card {
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -221,9 +221,40 @@ def _css() -> str:
     }
     .workspace {
       display: grid;
-      grid-template-columns: minmax(340px, 430px) 1fr;
+      grid-template-columns: minmax(360px, 520px) 1fr;
       gap: 18px;
       align-items: start;
+    }
+    .workspace-intro {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .workspace-intro h2 { margin-bottom: 6px; font-size: 25px; }
+    .steps { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 10px; margin-top: 14px; }
+    .step {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfcfa;
+      padding: 12px;
+    }
+    .step strong { display: block; margin-bottom: 4px; }
+    .step span { color: var(--muted); line-height: 1.35; display: block; }
+    .advanced-stack {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      padding: 16px;
+      margin-top: 18px;
+    }
+    .advanced-stack > summary {
+      cursor: pointer;
+      color: var(--green-2);
+      font-weight: 950;
+      font-size: 18px;
     }
     .panel { margin-bottom: 14px; }
     label { display: block; margin: 12px 0 6px; font-size: 13px; font-weight: 850; color: #18231f; }
@@ -274,6 +305,7 @@ def _css() -> str:
       padding: 12px 14px;
       margin: 12px 0;
       font-weight: 800;
+      overflow-wrap: anywhere;
     }
     .notice.bad { border-color: #f0c9c4; border-left-color: var(--red); background: #fff0ee; }
     .signin {
@@ -290,13 +322,13 @@ def _css() -> str:
     @media (max-width: 1120px) {
       .hero, .workspace { grid-template-columns: 1fr; }
       .grid { grid-template-columns: 1fr 1fr; }
-      .ops-grid, .agent-grid { grid-template-columns: 1fr 1fr; }
+      .ops-grid, .agent-grid, .steps { grid-template-columns: 1fr 1fr; }
     }
     @media (max-width: 720px) {
       header { align-items: flex-start; flex-direction: column; padding: 16px; }
       .shell { padding: 16px; }
       .hero h1 { font-size: 38px; }
-      .metrics, .grid, .grid.two, .ops-grid, .agent-grid, .facts, .split, .inline-form.compact { grid-template-columns: 1fr; }
+      .metrics, .grid, .grid.two, .ops-grid, .agent-grid, .steps, .facts, .split, .inline-form.compact { grid-template-columns: 1fr; }
       .flow-step { grid-template-columns: 34px 1fr; }
       .flow-step .badge { grid-column: 2; width: max-content; }
     }
@@ -814,30 +846,24 @@ def render_workspace(
     error_html = f'<div class="notice bad">{escape(error)}</div>' if error else ""
     body = f"""
     <main class="shell">
-      <div class="section-head">
+      <section class="workspace-intro">
         <div>
-          <div class="eyebrow">Signed-in workspace</div>
-          <h2>{user_label}</h2>
-          <p>Only records connected to this identity are shown here. Operational controls show the live NOTARY agent stack.</p>
+          <div class="eyebrow">Workspace</div>
+          <h2>Witness-to-pay console</h2>
+          <p class="panel-copy">Signed in as {user_label}. Create a Qevor-funded case, wait for funding, then submit evidence for NOTARY to attest and trigger the payment action.</p>
         </div>
-      </div>
-      {_ops_panels(state, circle_request_id)}
-      <section class="section">
-        <div class="section-head">
-          <div>
-            <div class="eyebrow">6-agent witness swarm</div>
-            <h2>One runtime, six accountable roles</h2>
-            <p>The app runs one orchestrated pipeline, but every decision is surfaced as Scanner, Sentinel, Risk, Strategy, Validator, and Reflector.</p>
-          </div>
+        {error_html}
+        <div class="steps">
+          <div class="step"><strong>1. Create case</strong><span>Define payer, payee, amount, and the condition for release.</span></div>
+          <div class="step"><strong>2. Fund in Qevor</strong><span>The evidence link unlocks only after the conditional payment is funded.</span></div>
+          <div class="step"><strong>3. Submit evidence</strong><span>NOTARY signs the verdict and sends Qevor the release, hold, or refund instruction.</span></div>
         </div>
-        <div class="agent-grid">{_agent_role_cards(state.get("swarm_roles", []))}</div>
       </section>
       <section class="workspace">
         <aside>
           <div class="panel">
             <h2>Create conditional payment case</h2>
-            <p class="panel-copy">This creates the shared case ID, Qevor payment reference, and evidence invite link that Daniel or an agent uses to submit evidence against the exact obligation.</p>
-            {error_html}
+            <p class="panel-copy">This creates the shared case ID, Qevor payment reference, and evidence invite link.</p>
             <form method="post" action="/ui/cases">
               <label for="instruction">Obligation</label>
               <textarea id="instruction" name="instruction" required placeholder="Pay Daniel $250 when the design package is complete and I approve."></textarea>
@@ -916,6 +942,18 @@ def render_workspace(
           <div class="grid">{_record_cards(state.get("rulings", []))}</div>
         </section>
       </section>
+      <details class="advanced-stack">
+        <summary>Agent, Arc, and operator controls</summary>
+        {_ops_panels(state, circle_request_id)}
+        <div class="section-head" style="margin-top:18px">
+          <div>
+            <div class="eyebrow">6-agent witness swarm</div>
+            <h2>Decision roles</h2>
+            <p>The app runs one orchestrated pipeline, surfaced as six accountable roles.</p>
+          </div>
+        </div>
+        <div class="agent-grid">{_agent_role_cards(state.get("swarm_roles", []))}</div>
+      </details>
     </main>
     {_workspace_scripts()}
     """
