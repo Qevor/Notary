@@ -154,7 +154,7 @@ Five Solidity contracts deployed to Arc Testnet via Foundry:
 
 - Python 3.12+
 - Foundry (`forge`) for contract deployment
-- Circle CLI (`npm install -g @circle-fin/cli`) for live Circle Agent Wallet operations
+- Circle CLI (`npm install -g @circle-fin/cli`) for operator-side live Circle Agent Wallet operations
 - ARC CLI (`uv tool install git+https://github.com/the-canteen-dev/ARC-cli`) for Arc Testnet RPC access
 - Qevor credentials (existing deployed app on Arc Testnet)
 - Speechmatics credentials (or use the local mock fallback)
@@ -194,7 +194,9 @@ When real credentials are added, set the relevant `*_DEMO_MODE` to `false` and c
 
 **Arc submission** — set `ARC_RPC_URL`, `ARC_CHAIN_ID`, `ARC_OPERATOR_PRIVATE_KEY`, and the five contract addresses to submit attestation and validation records to the testnet.
 
-**Circle** — set `CIRCLE_WALLET_EMAIL` and authenticate the session (see Circle CLI section below).
+**User login** — normal users sign in with email through Supabase OTP. They do not need Circle CLI.
+
+**Circle** — Circle CLI is only for the operator/server-side NOTARY agent wallet and executor. End users fund cases through Qevor payment links or the app's funding UI.
 
 **Qevor paths** — `QEVORPAY_*_PATH` values are required in live mode because Qevor's endpoint contracts are project-specific.
 
@@ -218,7 +220,9 @@ Qevor must have migrations `03_notary_attestation.sql` and `04_conditional_reser
 npm install -g @circle-fin/cli
 ```
 
-Authenticate the agent wallet session:
+Circle CLI is not a user onboarding step. It is only needed on the machine running the NOTARY agent/executor when you want live Circle Agent Wallet operations.
+
+Authenticate the operator agent wallet session:
 
 1. `POST /circle/login/init`
 2. Check the configured Circle wallet email for the OTP.

@@ -329,7 +329,7 @@ async def auth_verify_code(email: str = Form(...), token: str = Form(...)) -> Re
 
 
 @app.post("/auth/dev-login")
-async def auth_dev_login(email: str = Form(default="founder@notary.local")) -> RedirectResponse:
+async def auth_dev_login(email: str = Form(...)) -> RedirectResponse:
     settings = get_settings()
     if settings.notary_env == "production":
         raise HTTPException(status_code=404, detail="local sandbox login is disabled")

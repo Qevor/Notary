@@ -500,7 +500,7 @@ def _ops_panels(state: dict[str, Any], circle_request_id: str | None = None) -> 
         </div>
         """
         for item in routes[:3]
-    ) or '<div class="empty">No Gateway deposit routes prepared yet.</div>'
+    ) or '<div class="empty">No operator Gateway routes prepared yet.</div>'
     notary_panel = (
         f"""
         <div class="facts">
@@ -545,22 +545,31 @@ def _ops_panels(state: dict[str, Any], circle_request_id: str | None = None) -> 
         {notary_panel}
       </section>
       <section class="panel">
-        <div class="eyebrow">Circle Stack</div>
-        <h2>Wallet, login, deposit</h2>
-        <p class="panel-copy">Users can authenticate the Circle CLI account, use the NOTARY agent wallet, and prepare Gateway routes into Arc.</p>
+        <div class="eyebrow">User funding</div>
+        <h2>Qevor pays, NOTARY witnesses</h2>
+        <p class="panel-copy">Normal users sign in with email, create a case, and fund the Qevor conditional payment link. Circle CLI stays server-side for the NOTARY agent wallet and executor.</p>
+        <div class="facts">
+          <div class="fact"><span>User step</span><strong>Email login</strong></div>
+          <div class="fact"><span>Payment step</span><strong>Fund Qevor case</strong></div>
+          <div class="fact"><span>Agent step</span><strong>Witness then release</strong></div>
+        </div>
+        <details>
+          <summary>Operator Circle session</summary>
+          <p class="panel-copy">Only builders/operators need this while running the agent server locally. End users do not install Circle CLI.</p>
         <form class="inline-form" method="post" action="/ui/circle/login/init">
-          <label for="circle_email">Circle email</label>
-          <input id="circle_email" name="email" type="email" placeholder="builder@example.com" required />
-          <button>Start Circle email login</button>
+          <label for="circle_email">Operator Circle email</label>
+          <input id="circle_email" name="email" type="email" placeholder="operator@example.com" required />
+          <button>Start operator Circle login</button>
         </form>
         {otp_form}
         <form class="inline-form" method="post" action="/ui/circle/deposit">
-          <label for="wallet_id">Agent wallet or address</label>
+          <label for="wallet_id">NOTARY agent wallet or address</label>
           <input id="wallet_id" name="wallet_id" value="{escape(str(latest.get("agent_wallet") or ""))}" placeholder="0x... or Circle wallet ID" />
-          <label for="deposit_amount">Deposit amount USDC</label>
+          <label for="deposit_amount">Operator deposit amount USDC</label>
           <input id="deposit_amount" name="amount_usdc" type="number" min="0.01" step="0.01" value="10" required />
-          <button>Prepare Gateway deposit</button>
+          <button>Prepare operator Gateway route</button>
         </form>
+        </details>
         <div class="facts">{route_rows}</div>
       </section>
     </div>
@@ -688,8 +697,8 @@ def render_sign_in(
     if not configured and auth.get("localSandboxEnabled"):
         sandbox_form = """
         <form method="post" action="/auth/dev-login">
-          <label for="dev_email">Sandbox identity</label>
-          <input id="dev_email" name="email" type="email" value="founder@notary.local" required />
+          <label for="dev_email">Sandbox email</label>
+          <input id="dev_email" name="email" type="email" placeholder="you@example.com" required />
           <button>Enter local sandbox</button>
         </form>
         """
