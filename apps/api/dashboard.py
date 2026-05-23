@@ -1025,117 +1025,48 @@ def render_sign_in(
     message: str | None = None,
     error: str | None = None,
 ) -> str:
-    configured = bool(auth.get("configured"))
-    missing = ", ".join(auth.get("needs", []))
-    disabled = "" if configured else "disabled"
     notice = ""
     if message:
         notice = f'<div class="notice">{escape(message)}</div>'
     if error:
         notice = f'<div class="notice bad">{escape(error)}</div>'
-    config_notice = ""
-    if not configured:
-        config_notice = (
-            '<div class="notice bad">'
-            f"Auth is not configured. Add {escape(missing)} to .env, then restart."
-            "</div>"
-        )
-        if auth.get("localSandboxEnabled"):
-            config_notice = (
-                '<div class="notice">'
-                "Live email/SMS auth is not configured, so local sandbox sign-in is available for development."
-                "</div>"
-            )
-    if email:
-        form = f"""
-        <form method="post" action="/auth/verify-code">
-          <input name="email" type="hidden" value="{escape(email)}" />
-          <div class="notice">Code sent to {escape(email)}. Check inbox and spam. If Supabase sends a magic-link email instead of a numeric code, update the Supabase Auth email template to include the OTP token.</div>
-          <label for="token">Code</label>
-          <input id="token" name="token" inputmode="numeric" autocomplete="one-time-code" required autofocus />
-          <button {disabled}>Verify and enter</button>
+        
+    form = f"""
+    <div class="login-section">
+      <div class="tabs-header login-tabs">
+        <button type="button" class="tab-btn active" onclick="switchTab('email-login-tab', event)">Email or Handle</button>
+        <button type="button" class="tab-btn" onclick="switchTab('phone-login-tab', event)">Phone Number</button>
+      </div>
+      
+      <div id="email-login-tab" class="tab-content active">
+        <form method="post" action="/auth/send-code">
+          <label for="email">Email address or @handle</label>
+          <input id="email" name="email" type="text" placeholder="mebstel@gmail.com or @yourhandle" required autofocus />
+          <button class="submit-code" style="width: 100%; margin-top: 12px;">Sign in instantly</button>
         </form>
-        <form method="get" action="/login">
-          <button class="secondary" type="submit">Use a different email</button>
+      </div>
+      
+      <div id="phone-login-tab" class="tab-content">
+        <form method="post" action="/auth/send-phone-code">
+          <label for="phone">Phone Number</label>
+          <input id="phone" name="phone" type="tel" placeholder="+15550000000" autocomplete="tel" required />
+          <button class="submit-code" style="width: 100%; margin-top: 12px;">Sign in instantly</button>
         </form>
-        """
-    elif phone:
-        form = f"""
-        <form method="post" action="/auth/verify-phone-code">
-          <input name="phone" type="hidden" value="{escape(phone)}" />
-          <div class="notice">SMS Code sent to {escape(phone)}. Check your device messages.</div>
-          <label for="token">Verification Code</label>
-          <input id="token" name="token" inputmode="numeric" autocomplete="one-time-code" required autofocus />
-          <button {disabled}>Verify and enter</button>
-        </form>
-        <form method="get" action="/login">
-          <button class="secondary" type="submit">Use a different phone</button>
-        </form>
-        """
-    else:
-        form = f"""
-        <div class="login-section">
-          <div class="tabs-header login-tabs">
-            <button type="button" class="tab-btn active" onclick="switchTab('email-login-tab', event)">Email Code</button>
-            <button type="button" class="tab-btn" onclick="switchTab('phone-login-tab', event)">Phone Number</button>
-          </div>
-          
-          <div id="email-login-tab" class="tab-content active">
-            <form method="post" action="/auth/send-code">
-              <label for="email">Email</label>
-              <input id="email" name="email" type="email" autocomplete="email" placeholder="name@domain.com" required autofocus />
-              <button class="submit-code" style="width: 100%; margin-top: 12px;" {disabled}>Send sign-in code</button>
-            </form>
-          </div>
-          
-          <div id="phone-login-tab" class="tab-content">
-            <form method="post" action="/auth/send-phone-code">
-              <label for="phone">Phone Number</label>
-              <input id="phone" name="phone" type="tel" placeholder="+15550000000" autocomplete="tel" required />
-              <button class="submit-code" style="width: 100%; margin-top: 12px;" {disabled}>Send SMS code</button>
-            </form>
-          </div>
-        </div>
-        """
-    sandbox_form = ""
-    if auth.get("localSandboxEnabled"):
-        sandbox_form = """
-        <div class="sandbox-divider">
-          <span>Local Developer Sandbox</span>
-        </div>
-        <div class="sandbox-section">
-          <div class="tabs-header sandbox-tabs">
-            <button type="button" class="tab-btn active" onclick="switchSandboxTab('sandbox-email-tab', event)">Sandbox Email</button>
-            <button type="button" class="tab-btn" onclick="switchSandboxTab('sandbox-phone-tab', event)">Sandbox Phone</button>
-          </div>
-          
-          <div id="sandbox-email-tab" class="tab-content active">
-            <form method="post" action="/auth/dev-login">
-              <label for="dev_email">Sandbox email</label>
-              <input id="dev_email" name="email" type="email" placeholder="you@example.com" required />
-              <button style="width: 100%; margin-top: 12px;">Enter local sandbox</button>
-            </form>
-          </div>
-          
-          <div id="sandbox-phone-tab" class="tab-content">
-            <form method="post" action="/auth/dev-login">
-              <label for="dev_phone">Sandbox phone</label>
-              <input id="dev_phone" name="phone" type="tel" placeholder="+1234567890" required />
-              <button style="width: 100%; margin-top: 12px;">Enter local sandbox</button>
-            </form>
-          </div>
-        </div>
-        """
+      </div>
+    </div>
+    """
+    
     body = f"""
     <main class="signin">
       <section class="panel signin-card">
         <div class="eyebrow">Private workspace</div>
         <h1>Sign in to use NOTARY</h1>
         <p class="panel-copy">Each payer, payee, approver, or agent counterparty gets its own workspace. Public records stay on the landing page; your evidence and actions stay here.</p>
-        {config_notice}
+        <div class="notice" style="border-color: rgba(16, 185, 129, 0.2); background: rgba(16, 185, 129, 0.05); color: #a7f3d0;">
+          💡 Direct Sign-in: Enter any email, handle, or phone number to instantly access your secure workspace and auto-generate your agent wallet.
+        </div>
         {notice}
         {form}
-        {sandbox_form}
       </section>
     </main>
     <script>
@@ -1145,18 +1076,12 @@ def render_sign_in(
         document.getElementById(tabId).classList.add('active');
         ev.currentTarget.classList.add('active');
       }}
-      function switchSandboxTab(tabId, ev) {{
-        document.querySelectorAll('.sandbox-section .tab-content').forEach(el => el.classList.remove('active'));
-        document.querySelectorAll('.sandbox-section .tab-btn').forEach(el => el.classList.remove('active'));
-        document.getElementById(tabId).classList.add('active');
-        ev.currentTarget.classList.add('active');
-      }}
       document.querySelectorAll("form").forEach(form => {{
         form.addEventListener("submit", () => {{
           const button = form.querySelector("button[type='submit'], button:not([type])");
           if (button && !button.disabled) {{
             button.dataset.originalText = button.textContent || "";
-            button.textContent = button.classList.contains("submit-code") ? "Sending code..." : "Submitting...";
+            button.textContent = "Entering Workspace...";
             button.disabled = true;
           }}
         }});
