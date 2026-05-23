@@ -123,7 +123,19 @@ class NotaryAppService:
             ],
             endpoint=None,
         )
-        wallet = await self.circle.create_agent_wallet(label or identity.notary_id)
+        try:
+            wallet = await self.circle.create_agent_wallet(label or identity.notary_id)
+        except RuntimeError:
+            if self.settings.notary_env == "production":
+                raise
+            wallet_id = new_id("local_circle_wallet")
+            wallet = {
+                "walletId": wallet_id,
+                "address": "0x" + wallet_id[-40:].rjust(40, "0"),
+                "ownerHint": label or identity.notary_id,
+                "demo": True,
+                "providerFallback": "circle_cli_unavailable",
+            }
         identity.agent_wallet = wallet["address"]
         identity.treasury_address = wallet["address"]
         agreement = generate_operating_agreement(identity.notary_id)
@@ -174,11 +186,16 @@ class NotaryAppService:
         }
 
     def auth_status(self) -> dict[str, Any]:
+        configured = bool(
+            self.settings.qevor_supabase_url
+            and self.settings.qevor_supabase_anon_key
+            and self.settings.notary_session_secret
+        )
         return {
             "provider": "supabase",
-            "configured": bool(
-                self.settings.qevor_supabase_url
-                and self.settings.qevor_supabase_anon_key
+            "configured": configured,
+            "localSandboxEnabled": bool(
+                self.settings.notary_env != "production"
                 and self.settings.notary_session_secret
             ),
             "needs": [

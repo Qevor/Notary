@@ -657,6 +657,12 @@ def render_sign_in(
             f"Auth is not configured. Add {escape(missing)} to .env, then restart."
             "</div>"
         )
+        if auth.get("localSandboxEnabled"):
+            config_notice = (
+                '<div class="notice">'
+                "Live email auth is not configured, so local sandbox sign-in is available for development."
+                "</div>"
+            )
     if email:
         form = f"""
         <form method="post" action="/auth/verify-code">
@@ -678,6 +684,15 @@ def render_sign_in(
           <button class="submit-code" {disabled}>Send sign-in code</button>
         </form>
         """
+    sandbox_form = ""
+    if not configured and auth.get("localSandboxEnabled"):
+        sandbox_form = """
+        <form method="post" action="/auth/dev-login">
+          <label for="dev_email">Sandbox identity</label>
+          <input id="dev_email" name="email" type="email" value="founder@notary.local" required />
+          <button>Enter local sandbox</button>
+        </form>
+        """
     body = f"""
     <main class="signin">
       <section class="panel signin-card">
@@ -687,6 +702,7 @@ def render_sign_in(
         {config_notice}
         {notice}
         {form}
+        {sandbox_form}
       </section>
     </main>
     <script>

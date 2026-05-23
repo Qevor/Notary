@@ -328,6 +328,33 @@ async def auth_verify_code(email: str = Form(...), token: str = Form(...)) -> Re
     return response
 
 
+@app.post("/auth/dev-login")
+async def auth_dev_login(email: str = Form(default="founder@notary.local")) -> RedirectResponse:
+    settings = get_settings()
+    if settings.notary_env == "production":
+        raise HTTPException(status_code=404, detail="local sandbox login is disabled")
+    cookie = _sign_session(
+        {
+            "user": {
+                "id": email,
+                "email": email,
+                "role": "local_sandbox",
+            },
+            "expiresAt": int(time.time()) + 24 * 3600,
+        }
+    )
+    response = RedirectResponse("/app", status_code=303)
+    response.set_cookie(
+        SESSION_COOKIE,
+        cookie,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=24 * 3600,
+    )
+    return response
+
+
 @app.post("/auth/logout")
 async def auth_logout() -> RedirectResponse:
     response = RedirectResponse("/", status_code=303)
