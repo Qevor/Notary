@@ -1374,6 +1374,160 @@ class NotaryAppService:
             },
         ]
 
+    def grant_evidence_access(
+        self,
+        *,
+        evidence_id: str,
+        grantee: str,
+        purpose: str,
+        disclosure_level: DisclosureLevel,
+    ) -> dict[str, Any]:
+        grant = self.vault.create_access_grant(evidence_id, grantee, purpose, disclosure_level)
+        self.store.put("access_grants", grant.grant_id, grant.model_dump(mode="json"))
+        return grant.model_dump(mode="json")
+
+    def _persist_ruling(self, ruling: Ruling) -> None:
+        self.store.put("rulings", ruling.ruling_id, ruling.model_dump(mode="json"))
+        self.store.put(
+            "witness_attestations",
+            ruling.attestation.attestation_id,
+            ruling.attestation.model_dump(mode="json"),
+        )
+        self.store.put(
+            "verdicts",
+            ruling.verdict.verdict_id,
+            ruling.verdict.model_dump(mode="json"),
+        )
+        if ruling.payment_instruction:
+            self.store.put(
+                "payment_instructions",
+                ruling.payment_instruction.instruction_id,
+                ruling.payment_instruction.model_dump(mode="json"),
+            )
+
+    def _precedent(self, exclude_ruling_id: str | None = None) -> list[Ruling]:
+        return [
+            Ruling.model_validate(item)
+            for item in self.store.list("rulings")
+            if item.get("ruling_id") != exclude_ruling_id
+        ]
+
+    def _witness_pipeline(self, notary_id: str | None = None) -> WitnessPipeline:
+        return WitnessPipeline(
+            notary_id=notary_id or self._default_notary_id(),
+            signer=self._witness_signer(),
+            attestation_registry=self.settings.arc_attestation_registry,
+        )
+
+    def _witness_signer(self):
+        from notary.crypto.eip712 import EIP712Signer
+
+        return EIP712Signer(
+            private_key=self.settings.validator_private_key,
+            domain_name=self.settings.validator_eip712_name,
+            domain_version=self.settings.validator_eip712_version,
+            chain_id=self.settings.arc_chain_id,
+        )
+
+    def _require_live_witness_config(self, *, payments: bool) -> None:
+        missing = []
+        if not self.settings.groq_api_key and not self.settings.claude_api_key:
+            missing.append("GROQ_API_KEY or CLAUDE_API_KEY")
+        if not self.settings.validator_private_key:
+            missing.append("VALIDATOR_PRIVATE_KEY")
+        if self.settings.arc_demo_mode:
+            missing.append("ARC_DEMO_MODE=false")
+        for name, value in {
+            "ARC_RPC_URL": self.settings.arc_rpc_url,
+            "ARC_CHAIN_ID": self.settings.arc_chain_id,
+            "ARC_OPERATOR_PRIVATE_KEY": self.settings.arc_operator_private_key,
+            "ARC_ATTESTATION_REGISTRY": self.settings.arc_attestation_registry,
+        }.items():
+            if not value:
+                missing.append(name)
+        if payments:
+            if self.settings.notary_escrow_demo_mode:
+                missing.append("NOTARY_ESCROW_DEMO_MODE=false")
+            for name, value in {
+                "NOTARY_SUPABASE_URL": self.settings.notary_supabase_url,
+                "NOTARY_SUPABASE_SERVICE_ROLE_KEY": (
+                    self.settings.notary_supabase_service_role_key
+                ),
+            }.items():
+                if not value:
+                    missing.append(name)
+        if missing:
+            raise RuntimeError(
+                "Live NOTARY witness flow requires configuration: " + ", ".join(missing)
+            )
+
+    async def _extract_obligation_with_llm(self, request: WitnessIntakeRequest):
+        if self.settings.groq_api_key:
+            extractor = GroqObligationExtractor(
+                api_key=self.settings.groq_api_key,
+                model=self.settings.groq_model,
+                api_base_url=self.settings.groq_api_base_url,
+            )
+            return await extractor.extract(request)
+        if self.settings.claude_api_key:
+            from notary.services.obligation_extractor import ClaudeObligationExtractor
+            extractor = ClaudeObligationExtractor(
+                api_key=self.settings.claude_api_key,
+                model=self.settings.claude_model,
+                api_base_url=self.settings.claude_api_base_url,
+            )
+            return await extractor.extract(request)
+        raise RuntimeError("GROQ_API_KEY or CLAUDE_API_KEY is required for LLM obligation extraction")
+
+    async def _execute_payment_instruction(self, instruction: PaymentInstruction) -> dict[str, Any]:
+        if instruction.action == PaymentAction.HOLD:
+            receipt = {
+                "reference": instruction.instruction_id,
+                "status": "held",
+                "reason": instruction.reason,
+                "instruction": instruction.model_dump(mode="json"),
+            }
+        else:
+            if instruction.recipients:
+                receipt = await self.escrow.create_batch_distribution(
+                    EscrowBatchDistributionRequest(
+                        recipients=instruction.recipients,
+                        reason=instruction.reason,
+                        metadata=instruction.metadata
+                        | {
+                            "payerIdentity": instruction.payer_identity,
+                            "attestationId": instruction.attestation_id,
+                        },
+                    )
+                )
+                self.store.put(
+                    "payments",
+                    receipt.get("reference") or instruction.instruction_id,
+                    receipt,
+                )
+                return receipt
+            trigger = PaymentTrigger(
+                action=instruction.action,
+                amount_usdc=instruction.amount_usdc,
+                recipient=instruction.payee_identity,
+                condition=instruction.reason,
+                attestation_id=instruction.attestation_id,
+                escrow_reference=instruction.metadata.get("escrowReference"),
+                authorized=True,
+                metadata=instruction.metadata | {"payerIdentity": instruction.payer_identity},
+            )
+            receipt = await self.escrow.execute_trigger(trigger)
+        self.store.put("payments", receipt.get("reference") or instruction.instruction_id, receipt)
+        return receipt
+
+    def _default_notary_id(self) -> str:
+        if self.settings.notary_id:
+            return self.settings.notary_id
+        notaries = self.store.list("notaries")
+        if notaries:
+            return str(notaries[0]["notary_id"])
+        return "notary_local"
+
     def _default_agent_wallet(self) -> str | None:
         notaries = self.store.list("notaries")
         for item in reversed(notaries):
