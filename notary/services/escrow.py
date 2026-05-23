@@ -32,6 +32,7 @@ class NotaryEscrowClient:
     supabase_service_role_key: str | None = None
     executor_agent_wallet_id: str | None = None
     creator_wallet: str | None = None
+    store: Any = None
 
     async def resolve_identity_to_wallet(self, identity: str | None) -> dict[str, Any]:
         if not identity:
@@ -42,6 +43,19 @@ class NotaryEscrowClient:
         username = value.removeprefix("@").strip().lower()
         if not username:
             return {"identity": identity, "wallet": identity, "username": None, "resolved": False}
+
+        # Check local SQLite store first (works without Supabase)
+        if self.store is not None:
+            local = self.store.get("profiles", username)
+            if local and local.get("wallet"):
+                return {
+                    "identity": identity,
+                    "wallet": local["wallet"],
+                    "username": username,
+                    "resolved": True,
+                }
+
+        # Fallback: check Supabase
         rows = await self._supabase_select(
             "profiles",
             select="wallet,username",
@@ -463,6 +477,38 @@ class NotaryEscrowClient:
                 headers={
                     "apikey": self.supabase_service_role_key,
                     "Authorization": f"Bearer {self.supabase_service_role_key}",
+                },
+            )
+            response.raise_for_status()
+            body = response.json()
+        return body if isinstance(body, list) else [body]
+
+    async def _supabase_update(
+        self,
+        table: str,
+        payload: dict[str, Any],
+        filters: dict[str, str],
+    ) -> list[dict[str, Any]]:
+        import httpx
+
+        if not self.supabase_url or not self.supabase_service_role_key:
+            raise RuntimeError(
+                "NOTARY_SUPABASE_URL and NOTARY_SUPABASE_SERVICE_ROLE_KEY are required "
+                "for NOTARY Supabase integration"
+            )
+        params = {}
+        params.update(filters)
+        url = f"{self.supabase_url.rstrip('/')}/rest/v1/{table}"
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.patch(
+                url,
+                json=payload,
+                params=params,
+                headers={
+                    "apikey": self.supabase_service_role_key,
+                    "Authorization": f"Bearer {self.supabase_service_role_key}",
+                    "Content-Type": "application/json",
+                    "Prefer": "return=representation",
                 },
             )
             response.raise_for_status()

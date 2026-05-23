@@ -45,3 +45,8 @@ class SQLiteStore:
             rows = conn.execute("SELECT value FROM records WHERE bucket = ?", (bucket,)).fetchall()
         return [json.loads(row[0]) for row in rows]
 
+    def delete(self, bucket: str, key: str) -> None:
+        with sqlite3.connect(self.path) as conn:
+            conn.execute("DELETE FROM records WHERE bucket = ? AND key = ?", (bucket, key))
+
+

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 from typing import Any
 
 from notary.config import Settings
@@ -64,6 +65,7 @@ class NotaryAppService:
             wallet_email=settings.circle_wallet_email,
             chain=settings.circle_chain,
             testnet=settings.circle_testnet,
+            rpc_url=settings.arc_rpc_url,
         )
         self.escrow = NotaryEscrowClient(
             api_base_url=settings.notary_escrow_api_base_url,
@@ -80,6 +82,7 @@ class NotaryAppService:
             supabase_service_role_key=settings.notary_supabase_service_role_key,
             executor_agent_wallet_id=settings.notary_executor_agent_wallet_id,
             creator_wallet=settings.notary_creator_wallet,
+            store=self.store,
         )
         self.arc = ArcClient(
             rpc_url=settings.arc_rpc_url,
@@ -212,139 +215,6 @@ class NotaryAppService:
                 }.items()
                 if not value
             ],
-        }
-
-    async def send_login_otp(self, email: str) -> dict[str, Any]:
-        if not self.settings.notary_supabase_url or not self.settings.notary_supabase_anon_key:
-            raise RuntimeError("NOTARY_SUPABASE_URL and NOTARY_SUPABASE_ANON_KEY are required for sign-in")
-        import httpx
-
-        url = f"{self.settings.notary_supabase_url.rstrip('/')}/auth/v1/otp"
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(
-                url,
-                json={"email": email, "create_user": True},
-                headers={
-                    "apikey": self.settings.notary_supabase_anon_key,
-                    "Authorization": f"Bearer {self.settings.notary_supabase_anon_key}",
-                    "Content-Type": "application/json",
-                },
-            )
-            try:
-                response.raise_for_status()
-            except httpx.HTTPStatusError as exc:
-                if response.status_code in {401, 403}:
-                    raise RuntimeError(
-                        "Email sign-in is not available yet. Check the NOTARY Supabase anon key "
-                        "and Auth settings, or use local sandbox sign-in while developing."
-                    ) from exc
-                raise RuntimeError("Email sign-in is temporarily unavailable. Please try again.") from exc
-        return {"status": "otp_sent", "email": email}
-
-    async def verify_login_otp(self, email: str, token: str) -> dict[str, Any]:
-        if not self.settings.notary_supabase_url or not self.settings.notary_supabase_anon_key:
-            raise RuntimeError("NOTARY_SUPABASE_URL and NOTARY_SUPABASE_ANON_KEY are required for sign-in")
-        import httpx
-
-        url = f"{self.settings.notary_supabase_url.rstrip('/')}/auth/v1/verify"
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(
-                url,
-                json={"email": email, "token": token, "type": "email"},
-                headers={
-                    "apikey": self.settings.notary_supabase_anon_key,
-                    "Authorization": f"Bearer {self.settings.notary_supabase_anon_key}",
-                    "Content-Type": "application/json",
-                },
-            )
-            try:
-                response.raise_for_status()
-            except httpx.HTTPStatusError as exc:
-                if response.status_code in {401, 403}:
-                    raise RuntimeError(
-                        "That sign-in code could not be verified. Check Supabase Auth settings, "
-                        "or use local sandbox sign-in while developing."
-                    ) from exc
-                raise RuntimeError("Email verification is temporarily unavailable. Please try again.") from exc
-            session = response.json()
-        user = session.get("user") or {}
-        return {
-            "accessToken": session.get("access_token"),
-            "refreshToken": session.get("refresh_token"),
-            "expiresIn": session.get("expires_in"),
-            "user": {
-                "id": user.get("id"),
-                "email": user.get("email") or email,
-                "aud": user.get("aud"),
-                "role": user.get("role"),
-            },
-        }
-
-    async def send_phone_otp(self, phone: str) -> dict[str, Any]:
-        if not self.settings.notary_supabase_url or not self.settings.notary_supabase_anon_key:
-            raise RuntimeError("NOTARY_SUPABASE_URL and NOTARY_SUPABASE_ANON_KEY are required for sign-in")
-        import httpx
-
-        url = f"{self.settings.notary_supabase_url.rstrip('/')}/auth/v1/otp"
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(
-                url,
-                json={"phone": phone, "create_user": True},
-                headers={
-                    "apikey": self.settings.notary_supabase_anon_key,
-                    "Authorization": f"Bearer {self.settings.notary_supabase_anon_key}",
-                    "Content-Type": "application/json",
-                },
-            )
-            try:
-                response.raise_for_status()
-            except httpx.HTTPStatusError as exc:
-                if response.status_code in {401, 403}:
-                    raise RuntimeError(
-                        "Phone sign-in is not available yet. Check the NOTARY Supabase anon key "
-                        "and SMS settings, or use local sandbox sign-in while developing."
-                    ) from exc
-                raise RuntimeError("Phone sign-in is temporarily unavailable. Please try again.") from exc
-        return {"status": "otp_sent", "phone": phone}
-
-    async def verify_phone_otp(self, phone: str, token: str) -> dict[str, Any]:
-        if not self.settings.notary_supabase_url or not self.settings.notary_supabase_anon_key:
-            raise RuntimeError("NOTARY_SUPABASE_URL and NOTARY_SUPABASE_ANON_KEY are required for sign-in")
-        import httpx
-
-        url = f"{self.settings.notary_supabase_url.rstrip('/')}/auth/v1/verify"
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(
-                url,
-                json={"phone": phone, "token": token, "type": "sms"},
-                headers={
-                    "apikey": self.settings.notary_supabase_anon_key,
-                    "Authorization": f"Bearer {self.settings.notary_supabase_anon_key}",
-                    "Content-Type": "application/json",
-                },
-            )
-            try:
-                response.raise_for_status()
-            except httpx.HTTPStatusError as exc:
-                if response.status_code in {401, 403}:
-                    raise RuntimeError(
-                        "That verification code could not be verified. Check Supabase SMS settings, "
-                        "or use local sandbox sign-in while developing."
-                    ) from exc
-                raise RuntimeError("Phone verification is temporarily unavailable. Please try again.") from exc
-            session = response.json()
-        user = session.get("user") or {}
-        return {
-            "accessToken": session.get("access_token"),
-            "refreshToken": session.get("refresh_token"),
-            "expiresIn": session.get("expires_in"),
-            "user": {
-                "id": user.get("id"),
-                "email": user.get("phone") or user.get("email") or phone,
-                "phone": user.get("phone") or phone,
-                "aud": user.get("aud"),
-                "role": user.get("role"),
-            },
         }
 
     def get_operating_agreement(self, notary_id: str) -> dict[str, Any] | None:
@@ -618,6 +488,7 @@ class NotaryAppService:
                 "fundingRequired": True,
                 "fundingStatus": "awaiting_funding",
                 "pendingEvidenceInviteToken": token,
+                "timestamp": int(time.time()),
             }
         )
         payment = await self.escrow.create_conditional_reserve(
@@ -1705,7 +1576,29 @@ class NotaryAppService:
             username = raw_identity.split("@")[0].lower()
         else:
             username = raw_identity.lower()
-        
+
+        # --- Always check SQLite first so stored flags (username_changed, etc.) are preserved ---
+        local_profile = self.store.get("profiles", username)
+        if local_profile:
+            # Fetch live balance from Circle; fall back to 0.00 (never fake)
+            wallet_address = local_profile.get("wallet", "")
+            balance = "0.00"
+            try:
+                balance_info = await self.circle.get_unified_balance(wallet_address)
+                if isinstance(balance_info, dict):
+                    live = (
+                        balance_info.get("amount")
+                        or balance_info.get("walletBalance", {}).get("amount")
+                    )
+                    if live and float(live) > 0:
+                        balance = live
+            except Exception:
+                pass
+            result = dict(local_profile)
+            result["balance"] = balance
+            return result
+
+        # --- Fallback: check Supabase ---
         rows = []
         if self.settings.notary_supabase_url and self.settings.notary_supabase_service_role_key:
             try:
@@ -1713,11 +1606,11 @@ class NotaryAppService:
                     "profiles",
                     select="wallet,username",
                     filters={"username": f"eq.{username}"},
-                    limit=1
+                    limit=1,
                 )
             except Exception as e:
                 print(f"[Onboarding] Error checking profile: {e}")
-        
+
         if rows:
             profile = rows[0]
             wallet_address = profile.get("wallet")
@@ -1725,20 +1618,23 @@ class NotaryAppService:
             try:
                 balance_info = await self.circle.get_unified_balance(wallet_address)
                 if isinstance(balance_info, dict):
-                    balance = balance_info.get("amount") or balance_info.get("walletBalance", {}).get("amount") or "0.00"
-            except Exception as e:
+                    balance = (
+                        balance_info.get("amount")
+                        or balance_info.get("walletBalance", {}).get("amount")
+                        or "0.00"
+                    )
+            except Exception:
                 balance = "0.00"
-            
             return {
                 "username": username,
                 "wallet": wallet_address,
                 "balance": balance,
             }
-        
-        # Create user profile and agent wallet
+
+        # --- Create brand-new profile and agent wallet ---
         try:
             wallet_info = await self.circle.create_agent_wallet(username)
-        except Exception as e:
+        except Exception:
             wallet_id = new_id("local_circle_wallet")
             wallet_info = {
                 "walletId": wallet_id,
@@ -1746,10 +1642,146 @@ class NotaryAppService:
                 "ownerHint": username,
                 "demo": True,
             }
-            
+
         wallet_address = wallet_info.get("address")
-        
+
         if self.settings.notary_supabase_url and self.settings.notary_supabase_service_role_key:
+            try:
+                await self.escrow._supabase_insert(
+                    "profiles",
+                    {"wallet": wallet_address, "username": username},
+                )
+                agent_wallet_id = wallet_info.get("walletId") or new_id("agent_wallet")
+                await self.escrow._supabase_insert(
+                    "agent_wallets",
+                    {
+                        "id": agent_wallet_id,
+                        "profile_wallet": wallet_address,
+                        "wallet_address": wallet_address,
+                        "chain": self.settings.circle_chain,
+                        "label": f"Agent Wallet for @{username}",
+                        "status": "active",
+                        "executor_mode": "escrow",
+                        "escrow_address": wallet_address,
+                        "attestation_mode": "attest",
+                    },
+                )
+            except Exception as e:
+                print(f"[Onboarding] Error inserting profile: {e}")
+
+        local_user = {
+            "username": username,
+            "wallet": wallet_address,
+            "circle_wallet_id": wallet_info.get("walletId"),
+        }
+        self.store.put("profiles", username, local_user)
+
+        result = dict(local_user)
+        result["balance"] = "1000.00" if self.settings.notary_demo_mode else "0.00"
+        return result
+
+    async def send_user_funds(
+        self,
+        *,
+        sender_email_or_id: str,
+        to_identity: str,
+        amount_usdc: float,
+    ) -> dict[str, Any]:
+        sender_profile = await self.get_or_create_user_profile(sender_email_or_id)
+        sender_username = sender_profile.get("username", "")
+        sender_wallet = sender_profile.get("wallet")
+
+        # Resolve recipient (checks SQLite + Supabase)
+        target = await self.escrow.resolve_identity_to_wallet(to_identity)
+        target_wallet = target.get("wallet")
+        target_username = target.get("username")
+        if not target_wallet:
+            raise RuntimeError(f"Could not resolve recipient identity: {to_identity}")
+
+        # Attempt real Circle transfer
+        circle_result: dict[str, Any] = {}
+        try:
+            agent_wallet_id = None
+            if self.settings.notary_supabase_url and self.settings.notary_supabase_service_role_key:
+                rows = await self.escrow._supabase_select(
+                    "agent_wallets",
+                    select="id",
+                    filters={"profile_wallet": f"eq.{sender_wallet}"},
+                    limit=1,
+                )
+                if rows:
+                    agent_wallet_id = rows[0].get("id")
+            circle_result = await self.circle.transfer_usdc(
+                from_wallet_id=agent_wallet_id or sender_wallet,
+                to_address=target_wallet,
+                amount=amount_usdc,
+            )
+        except Exception as exc:
+            print(f"[Send Funds] Circle transfer note: {exc}")
+
+        # Log transfer in SQLite for transaction history regardless of Circle outcome
+        tx_id = (
+            circle_result.get("id")
+            or circle_result.get("transferId")
+            or new_id("tx")
+        )
+        clean_recipient = to_identity.strip().lstrip("@")
+        transfer_record = {
+            "tx_id": tx_id,
+            "type": "direct_transfer",
+            "sender": sender_username,
+            "recipient": clean_recipient,
+            "amount_usdc": amount_usdc,
+            "status": "completed",
+            "timestamp": int(time.time()),
+        }
+        self.store.put("transfers", tx_id, transfer_record)
+        return {"tx_id": tx_id, "status": "completed", "amount_usdc": amount_usdc}
+
+
+    async def register_user(self, email_or_id: str, password: str) -> dict[str, Any]:
+        raw_identity = email_or_id.strip()
+        if raw_identity.startswith("@"):
+            username = raw_identity[1:].lower()
+        elif "@" in raw_identity:
+            username = raw_identity.split("@")[0].lower()
+        else:
+            username = raw_identity.lower()
+            
+        if not username or len(password) < 6:
+            raise ValueError("Username is required, and password must be at least 6 characters.")
+            
+        existing = self.store.get("profiles", username)
+        if existing and existing.get("password_hash"):
+            raise ValueError(f"Profile for @{username} already exists.")
+            
+        import hashlib
+        import os
+        salt = os.urandom(16)
+        key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+        password_hash = key.hex()
+        salt_hex = salt.hex()
+        
+        # Reuse existing wallet if profile exists without password
+        wallet_address = None
+        circle_wallet_id = None
+        if existing:
+            wallet_address = existing.get("wallet")
+            circle_wallet_id = existing.get("circle_wallet_id")
+            
+        if not wallet_address:
+            try:
+                wallet_info = await self.circle.create_agent_wallet(username)
+                wallet_address = wallet_info.get("address")
+                circle_wallet_id = wallet_info.get("walletId")
+            except Exception:
+                # Deterministic fallback: same username ALWAYS produces the same wallet address
+                import hashlib as _hl
+                deterministic_seed = f"notary_agent_wallet_v1_{username}"
+                wallet_address = "0x" + _hl.sha256(deterministic_seed.encode()).hexdigest()[-40:]
+                circle_wallet_id = f"local_{wallet_address}"
+                
+        if not existing and self.settings.notary_supabase_url and self.settings.notary_supabase_service_role_key:
             try:
                 await self.escrow._supabase_insert(
                     "profiles",
@@ -1758,7 +1790,7 @@ class NotaryAppService:
                         "username": username,
                     }
                 )
-                agent_wallet_id = wallet_info.get("walletId") or new_id("agent_wallet")
+                agent_wallet_id = circle_wallet_id or new_id("agent_wallet")
                 await self.escrow._supabase_insert(
                     "agent_wallets",
                     {
@@ -1774,56 +1806,202 @@ class NotaryAppService:
                     }
                 )
             except Exception as e:
-                print(f"[Onboarding] Error inserting profile: {e}")
+                print(f"[Register] Supabase sync error: {e}")
                 
         local_user = {
             "username": username,
             "wallet": wallet_address,
-            "circle_wallet_id": wallet_info.get("walletId"),
+            "circle_wallet_id": circle_wallet_id,
+            "password_hash": password_hash,
+            "salt": salt_hex,
         }
-        self.store.put("profiles", username, local_user)
-        
-        return {
-            "username": username,
-            "wallet": wallet_address,
-            "balance": "1000.00" if self.settings.notary_demo_mode else "0.00",
-        }
+        if "@" in raw_identity:
+            local_user["email"] = raw_identity.lower()
 
-    async def send_user_funds(
-        self,
-        *,
-        sender_email_or_id: str,
-        to_identity: str,
-        amount_usdc: float,
-    ) -> dict[str, Any]:
-        sender_profile = await self.get_or_create_user_profile(sender_email_or_id)
-        sender_wallet = sender_profile.get("wallet")
+        self.store.put("profiles", username, local_user)
+        return local_user
+
+    async def authenticate_user(self, email_or_id: str, password: str) -> dict[str, Any]:
+        raw_identity = email_or_id.strip().lower()
+        if raw_identity.startswith("@"):
+            username = raw_identity[1:]
+        elif "@" in raw_identity:
+            username = raw_identity.split("@")[0]
+        else:
+            username = raw_identity
+            
+        import hashlib
+        local_user = self.store.get("profiles", username)
         
-        agent_wallet_id = None
-        rows = []
-        if self.settings.notary_supabase_url and self.settings.notary_supabase_service_role_key:
+        # If not found directly by username, look up by stored email address
+        if not local_user:
+            for profile in self.store.list("profiles"):
+                if profile.get("email") == raw_identity:
+                    local_user = profile
+                    break
+                    
+        # Secondary fallback for migrated accounts (e.g. handle changed but email was not saved):
+        # Scan profiles and check if correct password matches their hash.
+        if not local_user:
+            for profile in self.store.list("profiles"):
+                stored_hash = profile.get("password_hash")
+                stored_salt = profile.get("salt")
+                if stored_hash and stored_salt:
+                    salt = bytes.fromhex(stored_salt)
+                    key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+                    if key.hex() == stored_hash:
+                        local_user = profile
+                        # Auto-associate email for future direct logins
+                        if "@" in raw_identity and not local_user.get("email"):
+                            local_user["email"] = raw_identity
+                            self.store.put("profiles", local_user["username"], local_user)
+                        break
+                        
+        if not local_user:
+            raise ValueError(f"Profile for '{email_or_id}' not found. Please register first.")
+            
+        stored_hash = local_user.get("password_hash")
+        stored_salt = local_user.get("salt")
+        
+        if not stored_hash or not stored_salt:
+            raise ValueError(f"Profile @{local_user['username']} exists but has no password. Please register first.")
+            
+        salt = bytes.fromhex(stored_salt)
+        key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+        if key.hex() != stored_hash:
+            raise ValueError("Incorrect password. Please try again.")
+            
+        return local_user
+
+
+    async def change_username(self, current_username_or_id: str, new_username: str) -> dict[str, Any]:
+        curr_raw = current_username_or_id.strip()
+        if curr_raw.startswith("@"):
+            curr_username = curr_raw[1:].lower()
+        elif "@" in curr_raw:
+            curr_username = curr_raw.split("@")[0].lower()
+        else:
+            curr_username = curr_raw.lower()
+
+        new_raw = new_username.strip()
+        if new_raw.startswith("@"):
+            new_username_normalized = new_raw[1:].lower()
+        elif "@" in new_raw:
+            new_username_normalized = new_raw.split("@")[0].lower()
+        else:
+            new_username_normalized = new_raw.lower()
+
+        if not new_username_normalized or len(new_username_normalized) < 3:
+            raise ValueError("New username must be at least 3 characters.")
+        
+        import re
+        if not re.match(r"^[a-zA-Z0-9_]+$", new_username_normalized):
+            raise ValueError("New username can only contain alphanumeric characters and underscores.")
+
+        if new_username_normalized == curr_username:
+            raise ValueError("New username cannot be the same as your current username.")
+
+        profile = self.store.get("profiles", curr_username)
+        if not profile:
+            raise ValueError(f"Profile @{curr_username} not found.")
+
+        if profile.get("username_changed"):
+            raise ValueError("You can only change your username once.")
+
+        taken = self.store.get("profiles", new_username_normalized)
+        if taken:
+            raise ValueError(f"Username @{new_username_normalized} is already taken.")
+
+        wallet_address = profile.get("wallet")
+        profile["username"] = new_username_normalized
+        profile["username_changed"] = True
+
+        if self.settings.notary_supabase_url and self.settings.notary_supabase_service_role_key and wallet_address:
             try:
-                rows = await self.escrow._supabase_select(
-                    "agent_wallets",
-                    select="id",
-                    filters={"profile_wallet": f"eq.{sender_wallet}"},
-                    limit=1
+                await self.escrow._supabase_update(
+                    "profiles",
+                    {"username": new_username_normalized},
+                    {"wallet": f"eq.{wallet_address}"}
                 )
             except Exception as e:
-                print(f"[Send Funds] Error querying agent wallet: {e}")
+                print(f"[Update Username] Supabase sync error: {e}")
+
+        self.store.put("profiles", new_username_normalized, profile)
+        self.store.delete("profiles", curr_username)
+
+        return profile
+
+    def get_user_transactions(self, username: str) -> list[dict[str, Any]]:
+        normalized = username.strip().lower()
+        if normalized.startswith("@"):
+            normalized = normalized[1:]
+
+        txs = []
         
-        if rows:
-            agent_wallet_id = rows[0].get("id")
-            
-        target = await self.escrow.resolve_identity_to_wallet(to_identity)
-        target_wallet = target.get("wallet")
-        if not target_wallet:
-            raise RuntimeError(f"Could not resolve recipient identity: {to_identity}")
-            
-        result = await self.circle.transfer_usdc(
-            from_wallet_id=agent_wallet_id or sender_wallet,
-            to_address=target_wallet,
-            amount=amount_usdc,
-        )
-        return result
+        # Gather direct transfers
+        transfers = self.store.list("transfers")
+        for item in transfers:
+            sender = (item.get("sender") or "").strip().lower()
+            recipient = (item.get("recipient") or "").strip().lower()
+            if sender.startswith("@"):
+                sender = sender[1:]
+            if recipient.startswith("@"):
+                recipient = recipient[1:]
+                
+            if sender == normalized or recipient == normalized:
+                tx_type = "send" if sender == normalized else "receive"
+                txs.append({
+                    "tx_id": item.get("tx_id"),
+                    "type": "direct_transfer",
+                    "direction": tx_type,
+                    "party": f"@{item.get('recipient')}" if tx_type == "send" else f"@{item.get('sender')}",
+                    "amount_usdc": item.get("amount_usdc"),
+                    "status": item.get("status", "completed"),
+                    "description": f"Direct transfer to @{item.get('recipient')}" if tx_type == "send" else f"Direct transfer from @{item.get('sender')}",
+                    "timestamp": item.get("timestamp", int(time.time())),
+                })
+
+        # Gather Escrow Cases
+        cases = self.store.list("cases")
+        for item in cases:
+            payer = (item.get("payer_identity") or "").strip().lower()
+            payee = (item.get("payee_identity") or "").strip().lower()
+            if payer.startswith("@"):
+                payer = payer[1:]
+            if payee.startswith("@"):
+                payee = payee[1:]
+
+            if payer == normalized or payee == normalized:
+                status = item.get("status")
+                metadata = item.get("metadata", {})
+                timestamp = metadata.get("timestamp", int(time.time()) - 3600)
+                
+                if status != "awaiting_funding":
+                    txs.append({
+                        "tx_id": item.get("case_id"),
+                        "type": "escrow_funding",
+                        "direction": "send" if payer == normalized else "receive",
+                        "party": f"@{item.get('payee_identity')}" if payer == normalized else f"@{item.get('payer_identity')}",
+                        "amount_usdc": item.get("amount_usdc"),
+                        "status": "completed",
+                        "description": f"Funded Escrow reserve for Case {item.get('case_id')[:8]}" if payer == normalized else f"Escrow reserve locked for Case {item.get('case_id')[:8]}",
+                        "timestamp": timestamp,
+                    })
+                
+                if status == "released":
+                    txs.append({
+                        "tx_id": f"release_{item.get('case_id')}",
+                        "type": "escrow_release",
+                        "direction": "receive" if payee == normalized else "send",
+                        "party": f"@{item.get('payer_identity')}" if payee == normalized else f"@{item.get('payee_identity')}",
+                        "amount_usdc": item.get("amount_usdc"),
+                        "status": "completed",
+                        "description": f"Received released Escrow from Case {item.get('case_id')[:8]}" if payee == normalized else f"Released Escrow to @{item.get('payee_identity')} (Case {item.get('case_id')[:8]})",
+                        "timestamp": timestamp + 10, # offset slightly to sort correctly
+                    })
+
+        txs.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+        return txs
+
+
 

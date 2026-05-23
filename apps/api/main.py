@@ -18,6 +18,7 @@ from apps.api.dashboard import (
     render_public_ledger,
     render_sign_in,
     render_workspace,
+    render_user_profile,
 )
 from notary.app_service import NotaryAppService
 from notary.config import get_settings
@@ -163,6 +164,8 @@ async def login(
     phone: str | None = None,
     message: str | None = None,
     error: str | None = None,
+    tab: str | None = None,
+    prefill: str | None = None,
 ) -> HTMLResponse:
     service = get_app_service()
     return HTMLResponse(
@@ -172,6 +175,8 @@ async def login(
             phone=phone,
             message=message,
             error=error,
+            tab=tab,
+            prefill=prefill,
         )
     )
 
@@ -180,6 +185,49 @@ async def login(
 async def public_ledger_page(request: Request) -> HTMLResponse:
     service = get_app_service()
     return HTMLResponse(render_public_ledger(service.dashboard_state(), _read_session(request)))
+
+
+@app.get("/p/{username}", response_class=HTMLResponse)
+@app.get("/profile/{username}", response_class=HTMLResponse)
+async def user_profile_page(
+    request: Request,
+    username: str,
+    error: str | None = None,
+    message: str | None = None,
+) -> HTMLResponse:
+    normalized = username.strip().lower()
+    if normalized.startswith("@"):
+        normalized = normalized[1:]
+        
+    service = get_app_service()
+    profile_data = service.store.get("profiles", normalized)
+    if not profile_data:
+        raise HTTPException(status_code=404, detail="User profile not found")
+        
+    profile = await service.get_or_create_user_profile(normalized)
+    transactions = service.get_user_transactions(normalized)
+    
+    return HTMLResponse(
+        render_user_profile(
+            profile,
+            transactions,
+            _read_session(request),
+            error=error,
+            message=message,
+        )
+    )
+
+
+@app.get("/profile", response_class=HTMLResponse)
+async def own_profile_redirect(request: Request) -> RedirectResponse:
+    user = _get_user_from_session(request)
+    if not user:
+        return RedirectResponse("/login?error=Please%20sign%20in%20to%20view%20your%20profile.", status_code=303)
+    service = get_app_service()
+    profile = await service.get_or_create_user_profile(user.get("email") or user.get("id") or "")
+    username = profile.get("username", "unknown")
+    return RedirectResponse(f"/profile/{username}", status_code=303)
+
 
 
 @app.get("/app", response_class=HTMLResponse)
@@ -219,9 +267,19 @@ async def ui_wallet_send(
     request: Request,
     recipient: str = Form(...),
     amount: float = Form(...),
+    redirect_to: str | None = Form(None),
 ) -> RedirectResponse:
     user = _require_ui_user(request)
     service = get_app_service()
+    
+    username = (user.get("email") or user.get("id") or "").split("@")[0].lower()
+    success_redirect = "/app?message=USDC%20transfer%20successful!"
+    error_redirect = "/app?error="
+    
+    if redirect_to == "profile":
+        success_redirect = f"/profile/{username}?message=USDC%20transfer%20successful!"
+        error_redirect = f"/profile/{username}?error="
+
     try:
         await service.send_user_funds(
             sender_email_or_id=user.get("email") or user.get("id") or "",
@@ -229,8 +287,8 @@ async def ui_wallet_send(
             amount_usdc=amount,
         )
     except Exception as exc:
-        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
-    return RedirectResponse("/app?message=USDC%20transfer%20successful!", status_code=303)
+        return RedirectResponse(f"{error_redirect}{quote(_ui_error(exc))}", status_code=303)
+    return RedirectResponse(success_redirect, status_code=303)
 
 
 @app.post("/ui/cases")
@@ -344,19 +402,36 @@ async def api_submit_case_evidence(case_id: str, request: WitnessIntakeRequest) 
     return result
 
 
-@app.post("/auth/send-code")
-async def auth_send_code(email: str = Form(...)) -> RedirectResponse:
-    user_payload = {
-        "id": email,
-        "email": email,
-        "role": "user",
-    }
-    cookie = _sign_session(
-        {
-            "user": user_payload,
-            "expiresAt": int(time.time()) + 24 * 3600,
+@app.post("/auth/login")
+async def auth_login(
+    username: str = Form(...),
+    password: str = Form(...),
+) -> RedirectResponse:
+    service = get_app_service()
+    try:
+        user = await service.authenticate_user(username, password)
+        user_payload = {
+            "id": user["username"],
+            "email": f"{user['username']}@notary.local",
+            "role": "user",
         }
-    )
+        cookie = _sign_session(
+            {
+                "user": user_payload,
+                "expiresAt": int(time.time()) + 24 * 3600,
+            }
+        )
+    except Exception as exc:
+        error_text = str(exc)
+        # If the profile exists but has no password, redirect to register tab
+        # so they can set a password without confusion
+        if "has no password" in error_text or "register first" in error_text.lower():
+            return RedirectResponse(
+                f"/login?tab=register&prefill={quote(username)}"
+                f"&error={quote('Your account was created without a password. Please set one using the Register tab below.')}",
+                status_code=303,
+            )
+        return RedirectResponse(f"/login?error={quote(_ui_error(exc))}", status_code=303)
     response = RedirectResponse("/app", status_code=303)
     response.set_cookie(
         SESSION_COOKIE,
@@ -369,26 +444,31 @@ async def auth_send_code(email: str = Form(...)) -> RedirectResponse:
     return response
 
 
-@app.post("/auth/verify-code")
-async def auth_verify_code(email: str = Form(...), token: str = Form(...)) -> RedirectResponse:
-    return RedirectResponse("/app", status_code=303)
-
-
-@app.post("/auth/send-phone-code")
-async def auth_send_phone_code(phone: str = Form(...)) -> RedirectResponse:
-    user_payload = {
-        "id": phone,
-        "email": phone,
-        "phone": phone,
-        "role": "user",
-    }
-    cookie = _sign_session(
-        {
-            "user": user_payload,
-            "expiresAt": int(time.time()) + 24 * 3600,
+@app.post("/auth/register")
+async def auth_register(
+    username: str = Form(...),
+    password: str = Form(...),
+    confirm_password: str = Form(...),
+) -> RedirectResponse:
+    if password != confirm_password:
+        return RedirectResponse("/login?error=Passwords%20do%20not%20match.", status_code=303)
+    service = get_app_service()
+    try:
+        user = await service.register_user(username, password)
+        user_payload = {
+            "id": user["username"],
+            "email": f"{user['username']}@notary.local",
+            "role": "user",
         }
-    )
-    response = RedirectResponse("/app", status_code=303)
+        cookie = _sign_session(
+            {
+                "user": user_payload,
+                "expiresAt": int(time.time()) + 24 * 3600,
+            }
+        )
+    except Exception as exc:
+        return RedirectResponse(f"/login?error={quote(_ui_error(exc))}", status_code=303)
+    response = RedirectResponse("/app?message=Account%20created%20successfully!", status_code=303)
     response.set_cookie(
         SESSION_COOKIE,
         cookie,
@@ -399,10 +479,6 @@ async def auth_send_phone_code(phone: str = Form(...)) -> RedirectResponse:
     )
     return response
 
-
-@app.post("/auth/verify-phone-code")
-async def auth_verify_phone_code(phone: str = Form(...), token: str = Form(...)) -> RedirectResponse:
-    return RedirectResponse("/app", status_code=303)
 
 
 @app.post("/auth/dev-login")
@@ -449,6 +525,43 @@ async def auth_logout() -> RedirectResponse:
     response = RedirectResponse("/", status_code=303)
     response.delete_cookie(SESSION_COOKIE)
     return response
+
+
+@app.post("/ui/profile/update-username")
+async def ui_update_username(
+    request: Request,
+    new_username: str = Form(...),
+) -> RedirectResponse:
+    user = _require_ui_user(request)
+    current_username = user.get("id") or ""
+    service = get_app_service()
+    try:
+        updated_profile = await service.change_username(current_username, new_username)
+        user_payload = {
+            "id": updated_profile["username"],
+            "email": f"{updated_profile['username']}@notary.local",
+            "role": "user",
+        }
+        cookie = _sign_session(
+            {
+                "user": user_payload,
+                "expiresAt": int(time.time()) + 24 * 3600,
+            }
+        )
+    except Exception as exc:
+        return RedirectResponse(f"/profile/{current_username}?error={quote(_ui_error(exc))}", status_code=303)
+        
+    response = RedirectResponse(f"/profile/{new_username}?message=Username%20changed%20successfully!", status_code=303)
+    response.set_cookie(
+        SESSION_COOKIE,
+        cookie,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=24 * 3600,
+    )
+    return response
+
 
 
 @app.post("/notaries")

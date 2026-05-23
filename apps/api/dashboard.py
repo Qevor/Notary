@@ -40,13 +40,13 @@ def _css() -> str:
     return """
     :root {
       color-scheme: dark;
-      --bg: #060a08;
-      --ink: #e2e8f0;
-      --muted: #94a3b8;
-      --surface: rgba(15, 23, 20, 0.7);
-      --surface-2: rgba(30, 41, 35, 0.45);
-      --line: rgba(255, 255, 255, 0.08);
-      --line-hover: rgba(255, 255, 255, 0.16);
+      --bg: #090d16;
+      --ink: #f3f4f6;
+      --muted: #9ca3af;
+      --surface: rgba(17, 24, 39, 0.7);
+      --surface-2: rgba(31, 41, 55, 0.45);
+      --line: rgba(255, 255, 255, 0.07);
+      --line-hover: rgba(255, 255, 255, 0.15);
       --green: #10b981;
       --green-glow: rgba(16, 185, 129, 0.2);
       --green-2: #059669;
@@ -57,13 +57,17 @@ def _css() -> str:
       --blue: #3b82f6;
       --black: #020403;
       --mint: rgba(16, 185, 129, 0.1);
-      --shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-glow: rgba(99, 102, 241, 0.2);
+      --glass: rgba(17, 24, 39, 0.6);
+      --shadow: 0 20px 40px rgba(0, 0, 0, 0.55);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       background: var(--bg);
-      background-image: radial-gradient(circle at 50% -20%, #0d281a 0%, #060a08 100%);
+      background-image: radial-gradient(circle at top center, rgba(99, 102, 241, 0.12) 0%, rgba(9, 13, 22, 0) 65%), radial-gradient(circle at 10% 20%, rgba(16, 185, 129, 0.02) 0%, rgba(9, 13, 22, 0) 40%);
       background-attachment: fixed;
       color: var(--ink);
       font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -78,7 +82,7 @@ def _css() -> str:
       gap: 20px;
       padding: 16px 36px;
       border-bottom: 1px solid var(--line);
-      background: rgba(2, 4, 3, 0.8);
+      background: rgba(9, 13, 22, 0.85);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       position: sticky;
@@ -101,7 +105,7 @@ def _css() -> str:
       font-weight: 900;
       letter-spacing: -0.02em;
       color: #fff;
-      text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+      text-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
     }
     .brand span {
       color: var(--muted);
@@ -117,7 +121,7 @@ def _css() -> str:
       padding: 8px 16px;
       font-size: 13px;
       font-weight: 600;
-      transition: all 0.2s ease;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       cursor: pointer;
     }
     .nav-link:hover, .mini-form button:hover {
@@ -126,15 +130,15 @@ def _css() -> str:
       color: #fff;
     }
     .nav-link.primary {
-      background: var(--green);
+      background: var(--primary);
       color: #fff;
-      border-color: var(--green);
+      border-color: var(--primary);
       font-weight: 700;
-      box-shadow: 0 4px 12px var(--green-glow);
+      box-shadow: 0 4px 12px var(--primary-glow);
     }
     .nav-link.primary:hover {
-      background: var(--green-2);
-      border-color: var(--green-2);
+      background: var(--primary-hover);
+      border-color: var(--primary-hover);
       transform: translateY(-1px);
     }
     .mini-form { margin: 0; }
@@ -171,7 +175,7 @@ def _css() -> str:
       justify-content: space-between;
     }
     .eyebrow {
-      color: var(--green);
+      color: var(--primary);
       font-size: 12px;
       font-weight: 800;
       text-transform: uppercase;
@@ -200,22 +204,22 @@ def _css() -> str:
       justify-content: center;
       min-height: 46px;
       border-radius: 8px;
-      border: 1px solid var(--green);
-      background: var(--green);
+      border: 1px solid var(--primary);
+      background: var(--primary);
       color: white;
       padding: 0 24px;
       font-weight: 700;
       font-size: 14px;
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       cursor: pointer;
-      box-shadow: 0 4px 12px var(--green-glow);
+      box-shadow: 0 4px 12px var(--primary-glow);
       width: 100%;
     }
     .button:hover {
-      background: var(--green-2);
-      border-color: var(--green-2);
+      background: var(--primary-hover);
+      border-color: var(--primary-hover);
       transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
+      box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35);
     }
     .button.secondary {
       background: var(--surface-2);
@@ -241,30 +245,29 @@ def _css() -> str:
       background: var(--surface-2);
       padding: 16px;
       text-align: center;
-      transition: all 0.2s ease;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .metric:hover {
-      border-color: var(--line-hover);
+      border-color: rgba(99, 102, 241, 0.3);
       background: rgba(255, 255, 255, 0.05);
       transform: translateY(-2px);
-    }
-    .metric span, .fact span {
-      display: block;
-      color: var(--muted);
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
     }
     .metric strong {
       display: block;
-      margin-top: 8px;
       font-size: 28px;
       color: #fff;
+      margin-bottom: 4px;
       font-family: 'Outfit', sans-serif;
-      font-weight: 800;
     }
-    .flow {
+    .metric span {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .panel {
       border: 1px solid var(--line);
       border-radius: 16px;
       background: var(--surface);
@@ -272,51 +275,333 @@ def _css() -> str:
       -webkit-backdrop-filter: blur(16px);
       padding: 32px;
       box-shadow: var(--shadow);
+      margin-bottom: 28px;
+      transition: all 0.25s ease;
+    }
+    .panel:hover {
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+    .panel h2 {
+      font-size: 22px;
+      color: #fff;
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
+    }
+    .panel-copy {
+      color: var(--muted);
+      font-size: 13.5px;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+    .panel form { margin: 0; }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    input, textarea, select {
+      width: 100%;
+      min-height: 42px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: rgba(0, 0, 0, 0.2);
+      color: #fff;
+      font-family: inherit;
+      font-size: 14.5px;
+      margin-bottom: 16px;
+      transition: all 0.2s ease;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+      background: rgba(0, 0, 0, 0.3);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+    }
+    textarea { min-height: 90px; resize: vertical; }
+    select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; background-size: 16px; padding-right: 40px; }
+    button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      border-radius: 8px;
+      border: 1px solid var(--primary);
+      background: var(--primary);
+      color: white;
+      padding: 0 20px;
+      font-weight: 700;
+      font-size: 14px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+      box-shadow: 0 4px 12px var(--primary-glow);
+    }
+    button:hover {
+      background: var(--primary-hover);
+      border-color: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+    button.danger {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--red);
+      border-color: rgba(239, 68, 68, 0.2);
+      box-shadow: none;
+    }
+    button.danger:hover {
+      background: var(--red);
+      color: white;
+      border-color: var(--red);
+      box-shadow: 0 4px 12px var(--red-glow);
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+      box-shadow: none !important;
+    }
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .workspace {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 36px;
+      align-items: start;
+    }
+    .workspace-intro {
+      margin-bottom: 36px;
+      padding-bottom: 28px;
+      border-bottom: 1px solid var(--line);
+    }
+    .workspace-intro h2 {
+      font-size: 32px;
+      color: #fff;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-top: 24px;
+    }
+    .step {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface-2);
+      padding: 16px 20px;
+    }
+    .step strong {
+      display: block;
+      color: #fff;
+      font-size: 14.5px;
+      margin-bottom: 6px;
+      font-family: 'Outfit', sans-serif;
+    }
+    .step span {
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.4;
+      display: block;
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 20px;
+    }
+    .section-head h2 { font-size: 24px; color: #fff; margin-bottom: 4px; }
+    .section-head p { color: var(--muted); font-size: 13.5px; margin: 0; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface);
+      padding: 24px;
+      transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      justify-content: space-between;
     }
-    .flow h2 {
-      margin-bottom: 4px;
-      font-size: 24px;
+    .card:hover {
+      border-color: rgba(99, 102, 241, 0.35);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
+    }
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-weight: 700;
       color: #fff;
+      font-size: 17px;
+      font-family: 'Outfit', sans-serif;
     }
-    .flow-step, .record, .panel {
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge.active { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+    .badge.completed { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge.held { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge.failed { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .badge.good { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .card p { color: var(--muted); font-size: 13.5px; line-height: 1.5; margin-bottom: 16px; }
+    .card-foot {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+      margin-top: auto;
+    }
+    .fact { display: flex; flex-direction: column; gap: 2px; }
+    .fact span { font-size: 10px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em; }
+    .fact strong { font-size: 14px; color: #fff; font-family: 'Outfit', sans-serif; }
+    .notice {
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      background: rgba(16, 185, 129, 0.05);
+      color: #a7f3d0;
+      padding: 14px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 24px;
+    }
+    .notice.bad {
+      border-color: rgba(239, 68, 68, 0.3);
+      background: rgba(239, 68, 68, 0.05);
+      color: #fca5a5;
+    }
+    .empty {
+      padding: 40px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14.5px;
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.01);
+    }
+    .advanced-stack {
+      margin-top: 48px;
+      border-top: 1px solid var(--line);
+      padding-top: 24px;
+    }
+    .advanced-stack summary {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      user-select: none;
+      transition: color 0.2s ease;
+      margin-bottom: 20px;
+      display: inline-block;
+    }
+    .advanced-stack summary:hover { color: #fff; }
+    .agent-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-top: 16px;
+    }
+    .agent-card {
       border: 1px solid var(--line);
       border-radius: 12px;
       background: var(--surface-2);
       padding: 20px;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
+    .agent-card h4 {
+      font-size: 15.5px;
+      color: #fff;
+      margin-bottom: 6px;
+      font-family: 'Outfit', sans-serif;
+    }
+    .agent-card p {
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.4;
+      margin: 0;
+    }
+    .button-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .button-row button { flex: 1; font-size: 13px; }
+    .status-line { font-size: 11px; color: var(--muted); margin: 0; }
     .flow-step {
       display: grid;
-      grid-template-columns: auto 1fr auto;
+      grid-template-columns: 24px 1fr;
       gap: 16px;
-      align-items: center;
-      background: rgba(255, 255, 255, 0.02);
+      margin-bottom: 16px;
     }
-    .flow-step:hover {
-      background: rgba(255, 255, 255, 0.04);
-      border-color: var(--line-hover);
-      transform: translateX(4px);
-    }
-    .number {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      display: grid;
-      place-items: center;
-      background: var(--mint);
-      color: var(--green);
-      font-weight: 800;
-      font-size: 15px;
-      border: 1px solid rgba(16, 185, 129, 0.2);
-    }
-    .flow-step strong {
-      display: block;
-      margin-bottom: 4px;
-      font-size: 16px;
+    .flow-step-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 99px;
+      border: 1.5px solid var(--primary);
       color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+      font-family: 'Outfit', sans-serif;
+    }
+    .flow-step-copy {
+      font-size: 13.5px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .flow-step-copy strong { color: #fff; display: block; margin-bottom: 2px; }
+    .tabs-header {
+      display: flex;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 20px;
+    }
+    .tab-btn {
+      background: transparent !important;
+      border: none !important;
+      border-bottom: 2px solid transparent !important;
+      color: var(--muted) !important;
+      font-weight: 600 !important;
+      font-size: 14.5px !important;
+      padding: 10px 16px !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .tab-btn:hover {
+      color: #fff !important;
+    }
+    .tab-btn.active {
+      color: var(--primary) !important;
+      border-bottom-color: var(--primary) !important;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .signin-card {
+      max-width: 440px;
+      margin: 100px auto;
     }
     .flow-step p, .record p, .panel-copy {
       color: var(--muted);
@@ -432,242 +717,21 @@ def _css() -> str:
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 12px;
-      margin-top: 16px;
     }
-    .fact {
-      border-top: 1px solid var(--line);
-      padding-top: 12px;
-      min-width: 0;
-    }
-    .fact strong {
-      display: block;
-      margin-top: 6px;
-      font-size: 14px;
-      color: #fff;
-    }
-    .fact code {
-      display: block;
-      margin-top: 6px;
-      font-size: 11px;
-      overflow-wrap: anywhere;
-      color: var(--muted);
-    }
-    details {
-      border-top: 1px dashed var(--line);
-      margin-top: 16px;
-      padding-top: 12px;
-    }
-    summary {
-      cursor: pointer;
-      color: var(--green);
-      font-weight: 600;
-      font-size: 13px;
-      user-select: none;
-    }
-    summary:hover {
-      color: #34d399;
-    }
-    pre {
-      white-space: pre-wrap;
-      background: var(--surface-2);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 12px;
-      max-height: 320px;
-      overflow: auto;
-      font-size: 12px;
-      line-height: 1.45;
-    }
-    .workspace {
-      display: grid;
-      grid-template-columns: minmax(360px, 520px) 1fr;
-      gap: 18px;
-      align-items: start;
-    }
-    .workspace-intro {
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--surface);
-      box-shadow: var(--shadow);
-      padding: 18px;
-      margin-bottom: 16px;
-    }
-    .workspace-intro h2 { margin-bottom: 6px; font-size: 25px; }
-    .steps { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 10px; margin-top: 14px; }
-    .step {
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--surface-2);
-      padding: 12px;
-      transition: all 0.2s ease;
-    }
-    .step:hover { border-color: var(--green); background: rgba(16,185,129,0.06); }
-    .step strong { display: block; margin-bottom: 4px; color: #fff; }
-    .step span { color: var(--muted); line-height: 1.35; display: block; font-size: 13px; }
-    .advanced-stack {
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--surface);
-      padding: 16px;
-      margin-top: 18px;
-    }
-    .advanced-stack > summary {
-      cursor: pointer;
-      color: var(--green-2);
-      font-weight: 950;
-      font-size: 18px;
-    }
-    .panel { margin-bottom: 14px; }
-    label { display: block; margin: 12px 0 6px; font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: 0.01em; text-transform: uppercase; font-size: 11px; }
-    input, textarea, select {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: rgba(255,255,255,0.04);
-      color: var(--ink);
-      padding: 11px 14px;
-      font: inherit;
-      font-size: 14px;
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-    input::placeholder, textarea::placeholder { color: rgba(148,163,184,0.5); }
-    input:focus, textarea:focus, select:focus {
-      outline: none;
-      border-color: var(--green);
-      box-shadow: 0 0 0 3px rgba(16,185,129,0.15);
-      background: rgba(16,185,129,0.04);
-    }
-    select option { background: #0f1714; color: var(--ink); }
-    textarea { min-height: 118px; resize: vertical; }
-    button {
-      min-height: 43px;
-      border: 0;
-      border-radius: 6px;
-      background: var(--green);
-      color: white;
-      cursor: pointer;
-      font-weight: 950;
-    }
-    button.danger { background: var(--red); }
-    button:disabled { opacity: .55; cursor: not-allowed; }
-    .button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
-    .inline-form { margin-top: 12px; display: grid; gap: 8px; }
-    .inline-form.compact { grid-template-columns: 1fr auto; align-items: end; }
-    .inline-form.compact label { margin: 0; }
-    .inline-form.compact input { min-width: 0; }
-    .status-line { color: var(--muted); font-size: 13px; margin-top: 10px; min-height: 18px; }
-    .empty {
-      border: 1px dashed var(--line);
-      border-radius: 6px;
-      padding: 24px;
-      color: var(--muted);
-      background: rgba(255,255,255,0.02);
-      text-align: center;
-      font-size: 14px;
-    }
-    .notice {
-      border: 1px solid rgba(16,185,129,0.3);
-      border-left: 4px solid var(--green);
-      border-radius: 8px;
-      background: rgba(16,185,129,0.08);
-      padding: 12px 14px;
-      margin: 12px 0;
-      font-weight: 600;
-      font-size: 14px;
-      overflow-wrap: anywhere;
-      color: #a7f3d0;
-    }
-    .notice.bad { border-color: rgba(239,68,68,0.3); border-left-color: var(--red); background: rgba(239,68,68,0.08); color: #fca5a5; }
-    .signin {
-      min-height: calc(100vh - 82px);
-      display: grid;
-      place-items: center;
-      padding: 28px;
-      background:
-        linear-gradient(180deg, rgba(8,17,13,.05), rgba(8,17,13,0) 34%),
-        var(--bg);
-    }
-    .signin-card { width: min(560px, 100%); box-shadow: var(--shadow); }
-    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    @media (max-width: 1120px) {
-      .hero, .workspace { grid-template-columns: 1fr; }
-      .grid { grid-template-columns: 1fr 1fr; }
-      .ops-grid, .agent-grid, .steps { grid-template-columns: 1fr 1fr; }
-    }
-    @media (max-width: 720px) {
-      header { align-items: flex-start; flex-direction: column; padding: 16px; }
-      .shell { padding: 16px; }
-      .hero h1 { font-size: 38px; }
-      .metrics, .grid, .grid.two, .ops-grid, .agent-grid, .steps, .facts, .split, .inline-form.compact { grid-template-columns: 1fr; }
-      .flow-step { grid-template-columns: 34px 1fr; }
-      .flow-step .badge { grid-column: 2; width: max-content; }
-    }
-    .tabs-header {
-      display: flex;
-      gap: 6px;
-      margin: 16px 0 0;
-      border-bottom: 1px solid var(--line);
-      padding-bottom: 8px;
-    }
-    .tab-btn {
-      flex: 1;
-      background: transparent;
-      border: none;
-      color: var(--muted);
-      font-weight: 700;
-      font-size: 13px;
-      padding: 9px 12px;
-      border-radius: 6px 6px 0 0;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      font-family: inherit;
-    }
-    .tab-btn:hover { color: #fff; background: rgba(255,255,255,0.04); }
-    .tab-btn.active {
-      color: var(--green);
-      background: rgba(16,185,129,0.08);
-      border-bottom: 2px solid var(--green);
-    }
-    .tab-content { display: none; padding-top: 12px; }
-    .tab-content.active { display: block; }
-    .sandbox-divider {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin: 20px 0 0;
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-    }
-    .sandbox-divider::before, .sandbox-divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--line);
-    }
-    .sandbox-section {
-      border: 1px solid rgba(245,158,11,0.2);
-      border-radius: 8px;
-      background: rgba(245,158,11,0.04);
-      padding: 14px;
-      margin-top: 10px;
-    }
-    .login-section { margin-top: 4px; }
     """
 
 
 def _page(title: str, body: str, user: dict[str, Any] | None = None) -> str:
-    auth_link = (
-        f"""
-        <span class="pill">{escape(str(user.get("email") or user.get("id")))}</span>
-        <a class="nav-link primary" href="/app">Workspace</a>
-        <form class="mini-form" method="post" action="/auth/logout"><button>Sign out</button></form>
+    if user:
+        username = escape(str(user.get("email") or user.get("id"))).split("@")[0].lower()
+        auth_link = f"""
+        <a class="nav-link" href="/app">Workspace</a>
+        <a class="nav-link" href="/profile/{username}">My Profile &amp; Wallet</a>
+        <form class="mini-form" method="post" action="/auth/logout" style="display: inline;"><button>Sign out</button></form>
         """
-        if user
-        else '<a class="nav-link primary" href="/login">Sign in</a>'
-    )
+    else:
+        auth_link = '<a class="nav-link primary" href="/login">Sign in</a>'
+
     return f"""
     <!doctype html>
     <html lang="en">
@@ -684,7 +748,7 @@ def _page(title: str, body: str, user: dict[str, Any] | None = None) -> str:
         <header>
           <a class="brand" href="/">
             <strong>NOTARY</strong>
-            <span>The Autonomous AI Witness Layer for Programmable USDC Payments on Arc</span>
+            <span>Autonomous AI Witness Layer for USDC Payments on Arc</span>
           </a>
           <nav>
             <a class="nav-link" href="/ledger">Public ledger</a>
@@ -713,11 +777,11 @@ def _public_flow_items(rulings: list[dict[str, Any]]) -> str:
         confidence = (item or {}).get("confidence", "pending")
         html.append(
             f"""
-            <div class="flow-step">
-              <div class="number">{index}</div>
+            <div class="flow-step" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; display: grid; grid-template-columns: auto 1fr auto; padding: 20px; align-items: center; margin-bottom: 12px;">
+              <div class="number" style="width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--primary-glow); color: var(--primary); font-weight: 800; border: 1px solid var(--primary); margin-right: 16px;">{index}</div>
               <div>
                 <strong>{escape(label)}</strong>
-                <p>{escape(str(summary))}</p>
+                <p style="margin: 4px 0 0; color: var(--muted); font-size: 13.5px;">{escape(str(summary))}</p>
               </div>
               {_badge(f"confidence {confidence}", tone)}
             </div>
@@ -733,47 +797,48 @@ def _record_cards(items: list[dict[str, Any]], *, limit: int | None = None, comp
     cards: list[str] = []
     for item in visible:
         obligation = item.get("obligation", {}) or {}
-        parties = item.get("partyIdentities", {}) or {}
-        precedent = ", ".join(item.get("precedentRefs", []) or []) or "none"
-        reasoning = escape(str(item.get("reasoningTrace") or "No reasoning trace recorded."))
+        parties = item.get("partyIdentities", {}) or item.get("metadata", {}) or {}
+        precedent_list = item.get("precedentRefs", []) or item.get("precedent_refs", []) or []
+        precedent = ", ".join(precedent_list) or "none"
+        reasoning = escape(str(item.get("reasoningTrace") or item.get("reasoning_trace") or "No reasoning trace recorded."))
         reversal = item.get("reversal") or {}
         reversal_note = ""
         if item.get("reversed") or item.get("supersedes"):
             reversal_note = (
-                f'<div class="notice">Reversal action: '
+                f'<div class="notice" style="border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.05); color: #fca5a5;">Reversal action: '
                 f'{_label(reversal.get("corrective_payment_action", "recorded"))}</div>'
             )
         details = ""
         if not compact:
             details = f"""
-            <details>
-              <summary>View reasoning and hashes</summary>
-              <div class="facts">
+            <details style="margin-top: 14px;">
+              <summary style="font-size: 13px; color: var(--primary); font-weight: 600; cursor: pointer; user-select: none;">View reasoning and hashes</summary>
+              <div class="facts" style="margin-top: 12px; margin-bottom: 12px;">
                 <div class="fact"><span>Deliverable</span><strong>{_text(obligation.get("deliverable"))}</strong></div>
                 <div class="fact"><span>Acceptance</span><strong>{_text(obligation.get("acceptance_criterion"))}</strong></div>
-                <div class="fact"><span>Trace hash</span><code>{escape(_short(item.get("reasoningTraceHash"), 30))}</code></div>
+                <div class="fact"><span>Trace hash</span><code>{escape(_short(item.get("reasoningTraceHash") or item.get("reasoning_trace_hash"), 30))}</code></div>
               </div>
-              <pre>{reasoning}</pre>
+              <pre style="background: rgba(0,0,0,0.25); padding: 16px; border-radius: 8px; border: 1px solid var(--line); font-size: 12.5px; overflow-x: auto; white-space: pre-wrap; font-family: monospace; color: var(--muted);">{reasoning}</pre>
             </details>
             """
         cards.append(
             f"""
-            <article class="record">
-              <div class="record-head">
+            <article class="record" style="border: 1px solid var(--line); border-radius: 16px; padding: 28px; transition: all 0.22s ease; margin-bottom: 20px;">
+              <div class="record-head" style="display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 18px;">
                 <div>
-                  <div class="kicker">Obligation</div>
-                  <h3>{_text(item.get("obligationSummary") or "Untitled obligation")}</h3>
-                  <p>payer {_text(parties.get("payer"))} · payee {_text(parties.get("payee"))}</p>
+                  <div class="kicker" style="color: var(--primary);">Obligation committed</div>
+                  <h3 style="font-size: 20px; color: #fff; margin: 4px 0 6px; font-family: 'Outfit'; font-weight: 800;">{_text(item.get("obligationSummary") or item.get("instruction") or "Untitled obligation")}</h3>
+                  <p style="color: var(--muted); font-size: 13px; margin: 0;">payer {_text(parties.get("payer") or item.get("payer_identity"))} · payee {_text(parties.get("payee") or item.get("payee_identity"))}</p>
                 </div>
-                <div>
-                  {_badge(_label(item.get("verdict")), _tone(item))}
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  {_badge(_label(item.get("verdict") or item.get("status")), _tone(item))}
                   {_badge(f"confidence {item.get('confidence', 'n/a')}", _tone(item))}
                 </div>
               </div>
               {reversal_note}
-              <div class="facts">
-                <div class="fact"><span>Release</span><strong>{_text(item.get("releasePct"))}%</strong></div>
-                <div class="fact"><span>Gate</span><strong>{_label(item.get("confidenceGate"))}</strong></div>
+              <div class="facts" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px;">
+                <div class="fact"><span>Release</span><strong>{_text(item.get("releasePct") or item.get("release_pct"))}%</strong></div>
+                <div class="fact"><span>Gate</span><strong>{_label(item.get("confidenceGate") or item.get("confidence_gate"))}</strong></div>
                 <div class="fact"><span>Precedent</span><strong>{escape(_short(precedent, 32))}</strong></div>
               </div>
               {details}
@@ -807,22 +872,22 @@ def _case_cards(items: list[dict[str, Any]]) -> str:
         )
         cards.append(
             f"""
-            <article class="record">
-              <div class="record-head">
+            <article class="record" style="border: 1px solid var(--line); border-radius: 16px; padding: 28px; transition: all 0.22s ease;">
+              <div class="record-head" style="display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 18px;">
                 <div>
-                  <div class="kicker">Case {escape(_short(item.get("case_id"), 20))}</div>
-                  <h3>{_text(item.get("instruction"))}</h3>
-                  <p>payer {_text(item.get("payer_identity"))} · payee {_text(item.get("payee_identity"))}</p>
+                  <div class="kicker" style="color: var(--primary);">Case {escape(_short(item.get("case_id"), 20))}</div>
+                  <h3 style="font-size: 20px; color: #fff; margin: 4px 0 6px; font-family: 'Outfit'; font-weight: 800;">{_text(item.get("instruction"))}</h3>
+                  <p style="color: var(--muted); font-size: 13px; margin: 0;">payer {_text(item.get("payer_identity"))} · payee {_text(item.get("payee_identity"))}</p>
                 </div>
                 {_badge(_label(item.get("status")), "good" if item.get("status") == "released" else "hold")}
               </div>
-              <div class="facts">
+              <div class="facts" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px;">
                 <div class="fact"><span>Amount</span><strong>{_text(item.get("amount_usdc"))} USDC</strong></div>
                 <div class="fact"><span>Escrow ref</span><code>{escape(_short(item.get("escrow_payment_reference"), 28))}</code></div>
                 <div class="fact"><span>Latest ruling</span><code>{escape(_short(item.get("latest_ruling_id"), 28))}</code></div>
               </div>
               {guarded_note}
-              <div class="actions" style="margin-top:12px">{funding_link}{upload_link}</div>
+              <div class="actions" style="margin-top:16px; display: flex; gap: 8px;">{funding_link}{upload_link}</div>
             </article>
             """
         )
@@ -836,11 +901,11 @@ def _agent_role_cards(items: list[dict[str, Any]]) -> str:
     for item in items:
         cards.append(
             f"""
-            <article class="agent-card">
-              <div class="kicker">{_label(item.get("status"))}</div>
-              <h3>{_text(item.get("name"))}</h3>
-              <p>{_text(item.get("role"))}</p>
-              <code>{escape(_short(item.get("lastOutput"), 64))}</code>
+            <article class="agent-card" style="border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); padding: 20px; transition: all 0.2s ease;">
+              <div class="kicker" style="color: var(--primary);">{_label(item.get("status"))}</div>
+              <h3 style="font-size: 16px; margin: 6px 0; color: #fff; font-family: 'Outfit';">{_text(item.get("name"))}</h3>
+              <p style="color: var(--muted); font-size: 13px; line-height: 1.45; margin-bottom: 12px;">{_text(item.get("role"))}</p>
+              <code style="display: block; overflow-wrap: anywhere; font-size: 11px; color: var(--green); background: rgba(16, 185, 129, 0.05); padding: 6px 8px; border-radius: 4px;">{escape(_short(item.get("lastOutput"), 64))}</code>
             </article>
             """
         )
@@ -881,69 +946,68 @@ def _ops_panels(state: dict[str, Any], circle_request_id: str | None = None) -> 
           <div class="fact"><span>Agent wallet</span><code>{escape(_short(latest.get("agent_wallet"), 34))}</code></div>
           <div class="fact"><span>Agreement hash</span><code>{escape(_short(latest.get("operating_agreement_hash"), 34))}</code></div>
         </div>
-        <form class="inline-form compact" method="post" action="/ui/notaries/{escape(str(latest.get("notary_id")) or '')}/register-onchain">
-          <label>Arc testnet identity</label>
-          <button {'disabled' if not latest else ''}>Register / refresh on Arc</button>
+        <form class="inline-form compact" method="post" action="/ui/notaries/{escape(str(latest.get("notary_id")) or '')}/register-onchain" style="margin-top: 14px;">
+          <button class="button secondary" style="width: 100%;" {'disabled' if not latest else ''}>Register / refresh on Arc</button>
         </form>
-        <div class="facts">{receipt_rows}</div>
+        <div class="facts" style="margin-top: 14px;">{receipt_rows}</div>
         """
         if latest
         else """
         <p class="panel-copy">Create a NOTARY first. This mints the local legal identity, Circle agent wallet, operating agreement hash, and Arc registration payload.</p>
         <form class="inline-form" method="post" action="/ui/notaries">
           <label for="notary_label">Label</label>
-          <input id="notary_label" name="label" placeholder="NOTARY witness agent" />
-          <button>Create NOTARY identity</button>
+          <input id="notary_label" name="label" placeholder="NOTARY witness agent" required />
+          <button style="width: 100%;">Create NOTARY identity</button>
         </form>
         """
     )
     otp_form = (
         f"""
-        <form class="inline-form" method="post" action="/ui/circle/login/complete">
+        <form class="inline-form" method="post" action="/ui/circle/login/complete" style="margin-top: 12px;">
           <input name="request_id" type="hidden" value="{escape(circle_request_id)}" />
           <label for="circle_otp">Circle OTP</label>
           <input id="circle_otp" name="otp" autocomplete="one-time-code" required />
-          <button>Complete Circle login</button>
+          <button style="width: 100%;">Complete Circle login</button>
         </form>
         """
         if circle_request_id
         else ""
     )
     return f"""
-    <div class="ops-grid">
-      <section class="panel">
-        <div class="eyebrow">Arc identity</div>
+    <div class="ops-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-bottom: 24px;">
+      <section class="panel" style="margin-bottom: 0;">
+        <div class="eyebrow" style="color: var(--primary);">Arc identity</div>
         <h2>On-chain NOTARY</h2>
         <p class="panel-copy">The agent has an Arc identity, operating agreement hash, privacy policy hash, and governance record.</p>
         {notary_panel}
       </section>
-      <section class="panel">
-        <div class="eyebrow">User funding</div>
+      <section class="panel" style="margin-bottom: 0;">
+        <div class="eyebrow" style="color: var(--primary);">User funding</div>
         <h2>NOTARY holds escrow, NOTARY witnesses</h2>
-        <p class="panel-copy">Users sign in with email, create a case, and fund the NOTARY conditional escrow. Circle CLI stays server-side for the NOTARY agent wallet and executor.</p>
-        <div class="facts">
-          <div class="fact"><span>User step</span><strong>Email login</strong></div>
-          <div class="fact"><span>Payment step</span><strong>Fund NOTARY escrow</strong></div>
-          <div class="fact"><span>Agent step</span><strong>Witness then release</strong></div>
+        <p class="panel-copy">Users sign in with password, create a case, and fund the NOTARY conditional escrow. Circle CLI stays server-side for the NOTARY agent wallet and executor.</p>
+        <div class="facts" style="margin-bottom: 14px;">
+          <div class="fact"><span>User step</span><strong>Direct Auth</strong></div>
+          <div class="fact"><span>Payment step</span><strong>Fund Escrow</strong></div>
+          <div class="fact"><span>Agent step</span><strong>Witness &amp; Settle</strong></div>
         </div>
         <details>
-          <summary>Operator Circle session</summary>
-          <p class="panel-copy">Only builders/operators need this while running the agent server locally. End users do not install Circle CLI.</p>
-        <form class="inline-form" method="post" action="/ui/circle/login/init">
-          <label for="circle_email">Operator Circle email</label>
-          <input id="circle_email" name="email" type="email" placeholder="operator@example.com" required />
-          <button>Start operator Circle login</button>
-        </form>
-        {otp_form}
-        <form class="inline-form" method="post" action="/ui/circle/deposit">
-          <label for="wallet_id">NOTARY agent wallet or address</label>
-          <input id="wallet_id" name="wallet_id" value="{escape(str(latest.get("agent_wallet") or ""))}" placeholder="0x... or Circle wallet ID" />
-          <label for="deposit_amount">Operator deposit amount USDC</label>
-          <input id="deposit_amount" name="amount_usdc" type="number" min="0.01" step="0.01" value="10" required />
-          <button>Prepare operator Gateway route</button>
-        </form>
+          <summary style="font-size: 13px; color: var(--primary); font-weight: 600; cursor: pointer;">Operator Circle session</summary>
+          <p class="panel-copy" style="margin-top: 8px;">Only builders/operators need this while running the agent server locally. End users do not install Circle CLI.</p>
+          <form class="inline-form" method="post" action="/ui/circle/login/init">
+            <label for="circle_email">Operator Circle email</label>
+            <input id="circle_email" name="email" type="email" placeholder="operator@example.com" required />
+            <button style="width: 100%;">Start operator Circle login</button>
+          </form>
+          {otp_form}
+          <form class="inline-form" method="post" action="/ui/circle/deposit" style="margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 12px;">
+            <label for="wallet_id">NOTARY agent wallet or address</label>
+            <input id="wallet_id" name="wallet_id" value="{escape(str(latest.get("agent_wallet") or ""))}" placeholder="0x... or Circle wallet ID" required />
+            <label for="deposit_amount">Operator deposit amount USDC</label>
+            <input id="deposit_amount" name="amount_usdc" type="number" min="0.01" step="0.01" value="10" required />
+            <button style="width: 100%;">Prepare operator Gateway route</button>
+          </form>
         </details>
-        <div class="facts">{route_rows}</div>
+        <div class="facts" style="margin-top: 14px;">{route_rows}</div>
       </section>
     </div>
     """
@@ -959,41 +1023,41 @@ def render_landing(state: dict[str, Any], user: dict[str, Any] | None = None) ->
     average_confidence = round(sum(confidence_values) / len(confidence_values), 2) if confidence_values else "n/a"
     body = f"""
     <main class="shell">
-      <section class="hero">
-        <div class="hero-copy">
+      <section class="hero" style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 32px; align-items: stretch; margin-bottom: 40px;">
+        <div class="hero-copy" style="border: 1px solid var(--line); border-radius: 16px; padding: 48px; background: var(--surface); backdrop-filter: blur(16px); box-shadow: var(--shadow); display: flex; flex-direction: column; justify-content: space-between;">
           <div>
-            <div class="eyebrow">AI Witness Layer</div>
-            <h1>Programmable USDC payments triggered by real-world proof.</h1>
-            <p>NOTARY turns real-world proof — voice notes, files, videos, work logs, and approvals — into signed AI attestations that trigger programmable USDC payments on Arc.</p>
-            <div class="actions">
-              <a class="button" href="/app">Open workspace</a>
+            <div class="eyebrow" style="color: var(--primary); font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;">AI Witness Layer</div>
+            <h1 style="font-size: 46px; line-height: 1.1; letter-spacing: -0.02em; margin: 12px 0 16px; color: #fff; font-family: 'Outfit'; font-weight: 900;">Programmable USDC payments triggered by real-world proof.</h1>
+            <p style="color: var(--muted); font-size: 16px; line-height: 1.6; margin-bottom: 28px;">NOTARY turns real-world proof — voice notes, files, videos, work logs, and approvals — into signed AI attestations that trigger programmable USDC payments on Arc.</p>
+            <div class="actions" style="display: flex; gap: 12px;">
+              <a class="button" href="/app" style="width: auto;">Open workspace</a>
               <a class="button secondary" href="/ledger">View all public records</a>
             </div>
           </div>
-          <div class="metrics">
+          <div class="metrics" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 40px;">
             <div class="metric"><span>Public rulings</span><strong>{len(rulings)}</strong></div>
             <div class="metric"><span>Avg confidence</span><strong>{escape(str(average_confidence))}</strong></div>
             <div class="metric"><span>Disputes</span><strong>{len(state.get("disputes", []))}</strong></div>
             <div class="metric"><span>Reversals</span><strong>{len(state.get("reversals", []))}</strong></div>
           </div>
         </div>
-        <div class="flow">
+        <div class="flow" style="border: 1px solid var(--line); border-radius: 16px; background: var(--surface); padding: 36px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 16px;">
           <div>
-            <div class="eyebrow">Settlement flow</div>
-            <h2>Release, hold, or correct on the record</h2>
+            <div class="eyebrow" style="color: var(--primary);">Settlement flow</div>
+            <h2 style="font-size: 24px; color: #fff; font-family: 'Outfit'; font-weight: 800;">Release, hold, or correct on the record</h2>
           </div>
           {_public_flow_items(rulings)}
         </div>
       </section>
-      <section class="section">
-        <div class="section-head">
+      <section class="section" style="margin-top: 48px;">
+        <div class="section-head" style="margin-bottom: 24px;">
           <div>
-            <h2>Recent public records</h2>
-            <p>Summaries and commitments are public. Raw evidence remains private.</p>
+            <h2 style="font-size: 28px; color: #fff; font-family: 'Outfit'; font-weight: 800; margin-bottom: 4px;">Recent public records</h2>
+            <p style="color: var(--muted); font-size: 15px;">Summaries and commitments are public. Raw evidence remains private.</p>
           </div>
           <a class="button secondary" href="/ledger">See all</a>
         </div>
-        <div class="grid">{_record_cards(rulings, limit=3, compact=True)}</div>
+        <div class="grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px;">{_record_cards(rulings, limit=3, compact=True)}</div>
       </section>
     </main>
     """
@@ -1003,15 +1067,15 @@ def render_landing(state: dict[str, Any], user: dict[str, Any] | None = None) ->
 def render_public_ledger(state: dict[str, Any], user: dict[str, Any] | None = None) -> str:
     body = f"""
     <main class="shell">
-      <div class="section-head">
+      <div class="section-head" style="margin-bottom: 32px; border-bottom: 1px solid var(--line); padding-bottom: 20px;">
         <div>
-          <div class="eyebrow">Public ledger</div>
-          <h2>Inspectable rulings, reversals, and reasoning</h2>
-          <p>Only summaries, verdicts, hashes, and attestation chains are public by default.</p>
+          <div class="eyebrow" style="color: var(--primary);">Public ledger</div>
+          <h2 style="font-size: 34px; color: #fff; font-family: 'Outfit'; font-weight: 800; margin: 4px 0;">Inspectable rulings, reversals, and reasoning</h2>
+          <p style="color: var(--muted); font-size: 15px;">Only summaries, verdicts, hashes, and attestation chains are public by default.</p>
         </div>
         <a class="button secondary" href="/">Back home</a>
       </div>
-      <div class="grid">{_record_cards(state.get("rulings", []))}</div>
+      <div style="max-width: 900px; margin: 0 auto;">{_record_cards(state.get("rulings", []))}</div>
     </main>
     """
     return _page("Public ledger · NOTARY", body, user)
@@ -1024,46 +1088,66 @@ def render_sign_in(
     phone: str | None = None,
     message: str | None = None,
     error: str | None = None,
+    tab: str | None = None,
+    prefill: str | None = None,
 ) -> str:
     notice = ""
     if message:
         notice = f'<div class="notice">{escape(message)}</div>'
     if error:
         notice = f'<div class="notice bad">{escape(error)}</div>'
-        
+
+    show_register = tab == "register"
+    login_active = "" if show_register else "active"
+    register_active = "active" if show_register else ""
+
+    prefill_val = escape(prefill or "")
+    login_prefill = f'value="{prefill_val}"' if prefill_val else ""
+
     form = f"""
     <div class="login-section">
       <div class="tabs-header login-tabs">
-        <button type="button" class="tab-btn active" onclick="switchTab('email-login-tab', event)">Email or Handle</button>
-        <button type="button" class="tab-btn" onclick="switchTab('phone-login-tab', event)">Phone Number</button>
+        <button type="button" class="tab-btn {login_active}" onclick="switchTab('login-tab', event)">Sign In</button>
+        <button type="button" class="tab-btn {register_active}" onclick="switchTab('register-tab', event)">Register</button>
       </div>
-      
-      <div id="email-login-tab" class="tab-content active">
-        <form method="post" action="/auth/send-code">
-          <label for="email">Email address or @handle</label>
-          <input id="email" name="email" type="text" placeholder="mebstel@gmail.com or @yourhandle" required autofocus />
-          <button class="submit-code" style="width: 100%; margin-top: 12px;">Sign in instantly</button>
+
+      <div id="login-tab" class="tab-content {login_active}">
+        <form method="post" action="/auth/login">
+          <label for="username">Email address or @handle</label>
+          <input id="username" name="username" type="text" placeholder="mebstel@gmail.com or @yourhandle" {login_prefill} required {'autofocus' if not show_register else ''} />
+
+          <label for="password" style="margin-top: 12px; display: block;">Password</label>
+          <input id="password" name="password" type="password" placeholder="••••••••" required />
+
+          <button class="submit-code" style="width: 100%; margin-top: 18px;">Sign In to NOTARY</button>
         </form>
       </div>
-      
-      <div id="phone-login-tab" class="tab-content">
-        <form method="post" action="/auth/send-phone-code">
-          <label for="phone">Phone Number</label>
-          <input id="phone" name="phone" type="tel" placeholder="+15550000000" autocomplete="tel" required />
-          <button class="submit-code" style="width: 100%; margin-top: 12px;">Sign in instantly</button>
+
+      <div id="register-tab" class="tab-content {register_active}">
+        <form method="post" action="/auth/register">
+          <label for="reg-username">Email address or @handle</label>
+          <input id="reg-username" name="username" type="text" placeholder="mebstel@gmail.com or @yourhandle" value="{prefill_val}" required {'autofocus' if show_register else ''} />
+
+          <label for="reg-password" style="margin-top: 12px; display: block;">Password (min 6 characters)</label>
+          <input id="reg-password" name="password" type="password" placeholder="••••••••" required />
+
+          <label for="confirm-password" style="margin-top: 12px; display: block;">Confirm Password</label>
+          <input id="confirm-password" name="confirm_password" type="password" placeholder="••••••••" required />
+
+          <button class="submit-code" style="width: 100%; margin-top: 18px;">Set Password &amp; Sign In</button>
         </form>
       </div>
     </div>
     """
-    
+
     body = f"""
     <main class="signin">
-      <section class="panel signin-card">
-        <div class="eyebrow">Private workspace</div>
-        <h1>Sign in to use NOTARY</h1>
-        <p class="panel-copy">Each payer, payee, approver, or agent counterparty gets its own workspace. Public records stay on the landing page; your evidence and actions stay here.</p>
-        <div class="notice" style="border-color: rgba(16, 185, 129, 0.2); background: rgba(16, 185, 129, 0.05); color: #a7f3d0;">
-          💡 Direct Sign-in: Enter any email, handle, or phone number to instantly access your secure workspace and auto-generate your agent wallet.
+      <section class="panel signin-card" style="border-radius: 16px; border: 1px solid var(--line); background: var(--surface); padding: 40px; box-shadow: var(--shadow);">
+        <div class="eyebrow" style="color: var(--primary);">Private workspace</div>
+        <h1 style="font-size: 30px; font-family: 'Outfit'; font-weight: 800; color: #fff; margin: 6px 0 12px;">Sign in to use NOTARY</h1>
+        <p class="panel-copy" style="font-size: 14px; line-height: 1.5;">Each payer, payee, approver, or agent counterparty gets its own workspace. Public records stay on the landing page; your evidence and actions stay here.</p>
+        <div class="notice" style="border-color: rgba(99, 102, 241, 0.25); background: rgba(99, 102, 241, 0.05); color: #c7d2fe; font-size: 13px; padding: 12px 16px; margin-bottom: 20px;">
+          💡 Secure Auth: Access your workspace with a handle and password. A local agent wallet is automatically mapped to your account.
         </div>
         {notice}
         {form}
@@ -1077,12 +1161,12 @@ def render_sign_in(
         ev.currentTarget.classList.add('active');
       }}
       document.querySelectorAll("form").forEach(form => {{
-        form.addEventListener("submit", () => {{
+        form.addEventListener("submit", (e) => {{
           const button = form.querySelector("button[type='submit'], button:not([type])");
           if (button && !button.disabled) {{
             button.dataset.originalText = button.textContent || "";
             button.textContent = "Entering Workspace...";
-            button.disabled = true;
+            setTimeout(() => {{ button.disabled = true; }}, 1);
           }}
         }});
       }});
@@ -1160,45 +1244,27 @@ def render_workspace(
 ) -> str:
     user_label = escape(str(user.get("email") or user.get("id")))
     profile_username = escape(profile.get("username", "unknown"))
-    profile_wallet = escape(profile.get("wallet", "0x0000000000000000000000000000000000000000"))
-    profile_balance = escape(str(profile.get("balance", "0.00")))
-    circle_chain = escape(state.get("circle_wallet_summary", {}).get("chain", "ARC-TESTNET"))
-
+    
     default_payer = f"@{profile_username}"
-    error_html = f'<div class="notice bad">{escape(error)}</div>' if error else ""
-    message_html = f'<div class="notice">{escape(message)}</div>' if message else ""
+    error_html = f'<div class="notice bad" style="border-radius: 8px;">{escape(error)}</div>' if error else ""
+    message_html = f'<div class="notice" style="border-radius: 8px;">{escape(message)}</div>' if message else ""
+    
     body = f"""
     <main class="shell">
-      <section class="workspace-intro">
+      <section class="workspace-intro" style="margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid var(--line);">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 20px;">
           <div>
-            <div class="eyebrow">Interactive Console</div>
-            <h2>Autonomous AI Witness Portal</h2>
-            <p class="panel-copy">Welcome back, <strong>{user_label}</strong>. NOTARY turns real-world proof into signed AI attestations that trigger programmable USDC payments on Arc.</p>
-          </div>
-          <div class="sandbox-section" style="margin: 0; min-width: 320px; border: 1px solid var(--line); background: var(--surface-2); border-radius: 8px; padding: 16px; box-shadow: var(--shadow);">
-            <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
-              <div>
-                <span class="eyebrow" style="color: var(--green); margin: 0;">Your Profile</span>
-                <h3 style="margin: 4px 0 2px; color: #fff; font-family: 'Outfit';">@{profile_username}</h3>
-                <p style="margin: 0; font-size: 11px; color: var(--muted); cursor: pointer;" onclick="navigator.clipboard.writeText('{profile_wallet}'); alert('Copied address!')">
-                  Wallet: <code style="color: var(--green); font-size: 11px;">{profile_wallet[:10]}...{profile_wallet[-8:]} 📋</code>
-                </p>
-              </div>
-              <div style="text-align: right;">
-                <span class="eyebrow" style="color: var(--green); margin: 0;">Balance</span>
-                <h3 style="margin: 4px 0 2px; color: #fff; font-size: 20px; font-family: 'Outfit';">{profile_balance} USDC</h3>
-                <p style="margin: 0; font-size: 10px; color: var(--muted);">{circle_chain}</p>
-              </div>
-            </div>
+            <div class="eyebrow" style="color: var(--primary);">Interactive Console</div>
+            <h2 style="font-size: 36px; color: #fff; font-family: 'Outfit'; font-weight: 900; letter-spacing: -0.02em; margin: 4px 0 8px;">Autonomous AI Witness Portal</h2>
+            <p class="panel-copy" style="margin: 0; font-size: 15px;">Welcome back, <strong>{user_label}</strong>. NOTARY turns real-world proof into signed AI attestations that trigger programmable USDC escrow payments on Arc.</p>
           </div>
         </div>
         {error_html}
         {message_html}
-        <div class="steps">
+        <div class="steps" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 28px;">
           <div class="step">
             <strong>1. Define Secured Agreement</strong>
-            <span>Write the payment condition in plain English (e.g. who pays, who gets paid, and what deliverables are required).</span>
+            <span>Write the payment condition in plain English (e.g., who pays, who gets paid, and what deliverables are required).</span>
           </div>
           <div class="step">
             <strong>2. Fund the Escrow Reserve</strong>
@@ -1211,29 +1277,15 @@ def render_workspace(
         </div>
       </section>
       
-      <section class="workspace">
-        <aside>
-          <div class="panel" style="border: 1px solid rgba(16, 185, 129, 0.25);">
-            <h2>Send USDC Funds</h2>
-            <p class="panel-copy">Transfer USDC instantly from your agent wallet to any recipient handle (e.g. <code>@jennycruzy</code>) or raw EVM address.</p>
-            <form method="post" action="/ui/wallet/send">
-              <label for="recipient">Recipient (Username or Wallet)</label>
-              <input id="recipient" name="recipient" required placeholder="e.g. @jennycruzy or 0x..." />
-              
-              <label for="amount" style="margin-top: 10px;">Amount in USDC</label>
-              <input id="amount" name="amount" type="number" min="0.01" step="0.01" value="10" required placeholder="e.g. 10" />
-              
-              <button style="margin-top: 14px; width: 100%;">Send USDC Transfer</button>
-            </form>
-          </div>
-
-          <div class="panel">
+      <section class="workspace" style="display: grid; grid-template-columns: 380px 1fr; gap: 36px; align-items: start;">
+        <aside style="position: sticky; top: 100px;">
+          <div class="panel" style="border: 1px solid var(--line); border-radius: 16px; background: var(--surface); padding: 32px; box-shadow: var(--shadow);">
             <h2>Create New Secure Escrow</h2>
             <p class="panel-copy">Draft a natural-language contract. The system automatically extracts obligations and generates secure webhook links.</p>
             
             <form method="post" action="/ui/cases">
               <label for="instruction">Agreement Details (Obligation)</label>
-              <p class="panel-copy" style="margin-top: -4px; margin-bottom: 8px; font-size: 12px; color: var(--green);">Include the payee username and exact deliverables (e.g., "Pay @jennycruzy $50 when delivery manifest is complete and payer approves").</p>
+              <p class="panel-copy" style="margin-top: -4px; margin-bottom: 8px; font-size: 12px; color: var(--primary);">Include the payee username and exact deliverables (e.g., "Pay @jennycruzy $50 when delivery manifest is complete and payer approves").</p>
               <textarea id="instruction" name="instruction" required placeholder="Type your natural language payment agreement here..."></textarea>
               
               <div class="split" style="margin-top: 8px;">
@@ -1267,7 +1319,7 @@ def render_workspace(
               <label for="amount_usdc">USDC Amount to Lock</label>
               <input id="amount_usdc" name="amount_usdc" type="number" min="0.01" step="0.01" value="50" required placeholder="e.g. 50" />
               
-              <button style="margin-top: 18px;">Create Secured Agreement</button>
+              <button style="margin-top: 18px; width: 100%;">Create Secured Agreement</button>
             </form>
           </div>
           
@@ -1294,7 +1346,7 @@ def render_workspace(
               <label for="media_transcript_text">Or, Paste Pre-Recorded Transcript</label>
               <textarea id="media_transcript_text" name="transcript_text" placeholder="Copy/paste transcript text if you already have it..."></textarea>
               
-              <button style="margin-top: 12px;">Process Upload & Run Witness</button>
+              <button style="margin-top: 12px; width: 100%;">Process Upload & Run Witness</button>
             </form>
           </div>
           
@@ -1310,7 +1362,7 @@ def render_workspace(
               </select>
               <label for="transcript_text">Written Evidence</label>
               <textarea id="transcript_text" name="transcript_text" placeholder="Include clear confirmation markers (e.g. 'I, @yourhandle, approve release of $50 because the pull request #5 is complete and merged')."></textarea>
-              <button>Submit Evidence</button>
+              <button style="width: 100%;">Submit Evidence</button>
             </form>
           </div>
         </aside>
@@ -1339,7 +1391,7 @@ def render_workspace(
         {_ops_panels(state, circle_request_id)}
         <div class="section-head" style="margin-top:18px">
           <div>
-            <div class="eyebrow">6-Agent Autonomous Swarm</div>
+            <div class="eyebrow" style="color: var(--primary);">6-Agent Autonomous Swarm</div>
             <h2>Decision Roles</h2>
             <p>Every case triggers our orchestrated pipeline, split into six specialized consensus agents:</p>
           </div>
@@ -1364,9 +1416,9 @@ def render_case_evidence(case: dict[str, Any], token: str | None, user: dict[str
     body = f"""
     <main class="signin">
       <section class="panel signin-card" style="width: min(600px, 100%);">
-        <div class="eyebrow">Contract Evidence Portal</div>
-        <h1>Submit Secured Evidence</h1>
-        <p class="panel-copy" style="font-size: 14px; line-height: 1.55;">
+        <div class="eyebrow" style="color: var(--primary);">Contract Evidence Portal</div>
+        <h1 style="font-size: 30px; font-family: 'Outfit'; font-weight: 800; color: #fff; margin: 6px 0 12px;">Submit Secured Evidence</h1>
+        <p class="panel-copy" style="font-size: 14.5px; line-height: 1.55;">
           You are submitting verification proof for: <br/>
           <strong>"{_text(case.get("instruction"))}"</strong>
         </p>
@@ -1398,9 +1450,161 @@ def render_case_evidence(case: dict[str, Any], token: str | None, user: dict[str
           </p>
           <textarea id="evidence_text" name="evidence_text" required placeholder="Paste your links, commits, or signed approval statements here..." {disabled}></textarea>
           
-          <button style="margin-top: 20px;" {disabled}>🚀 Submit & Verify Proof</button>
+          <button style="margin-top: 20px; width: 100%;" {disabled}>🚀 Submit &amp; Verify Proof</button>
         </form>
       </section>
     </main>
     """
     return _page("Submit evidence · NOTARY", body, user)
+
+
+def render_user_profile(
+    profile: dict[str, Any],
+    transactions: list[dict[str, Any]],
+    viewer: dict[str, Any] | None = None,
+    error: str | None = None,
+    message: str | None = None,
+) -> str:
+    from datetime import datetime
+    
+    profile_username = escape(profile.get("username", "unknown"))
+    profile_wallet = escape(profile.get("wallet", "0x0000000000000000000000000000000000000000"))
+    profile_balance = escape(str(profile.get("balance", "0.00")))
+    
+    # Check if the viewer is the owner
+    viewer_username = ""
+    if viewer and isinstance(viewer, dict) and viewer.get("user"):
+        viewer_username = viewer["user"].get("id", "").split("@")[0].lower()
+    elif viewer and isinstance(viewer, dict) and viewer.get("id"):
+        viewer_username = viewer.get("id", "").split("@")[0].lower()
+        
+    viewer_is_owner = viewer_username == profile_username
+    
+    tx_rows = []
+    if not transactions:
+        tx_rows.append('<div class="empty" style="text-align: center; padding: 40px; background: var(--surface-2); border-radius: 12px; border: 1px solid var(--line); color: var(--muted);">No transaction history recorded yet.</div>')
+    else:
+        for tx in transactions:
+            direction = tx.get("direction")
+            is_send = direction == "send"
+            color = "#ef4444" if is_send else "#10b981"
+            prefix = "-" if is_send else "+"
+            arrow = "↗️" if is_send else "↙️"
+            amount_display = f'<strong style="color: {color}; font-family: \'Outfit\'; font-size: 16px;">{prefix}{tx.get("amount_usdc")} USDC</strong>'
+            
+            try:
+                date_str = datetime.fromtimestamp(tx.get("timestamp", 0)).strftime("%Y-%m-%d %H:%M:%S")
+            except Exception:
+                date_str = "unknown date"
+                
+            tx_rows.append(
+                f"""
+                <div class="flow-step" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px; display: grid; grid-template-columns: auto 1fr auto; padding: 16px 20px; align-items: center; transition: all 0.2s ease;">
+                  <div style="font-size: 24px; line-height: 1; margin-right: 16px;">{arrow}</div>
+                  <div>
+                    <strong style="font-size: 16px; color: #fff; font-family: 'Outfit';">{escape(tx.get("description", ""))}</strong>
+                    <span style="display: block; font-size: 12px; color: var(--muted); margin-top: 4px;">Party: {escape(tx.get("party", ""))} · {date_str}</span>
+                  </div>
+                  <div style="text-align: right;">
+                    {amount_display}
+                    <span class="badge good" style="display: inline-block; margin-top: 6px; font-size: 10px; padding: 2px 8px; border-radius: 99px; background: rgba(16,185,129,0.1); color: var(--green); border: 1px solid rgba(16,185,129,0.2);">{escape(tx.get("status", "completed"))}</span>
+                  </div>
+                </div>
+                """
+            )
+            
+    txs_html = "".join(tx_rows)
+    
+    error_html = f'<div class="notice bad" style="margin-bottom: 20px; border-radius: 8px;">{escape(error)}</div>' if error else ""
+    message_html = f'<div class="notice" style="margin-bottom: 20px; border-radius: 8px;">{escape(message)}</div>' if message else ""
+    
+    # Left Sidebar (aside)
+    # 1. Wallet Card
+    wallet_card = f"""
+    <div class="panel" style="border: 1px solid rgba(99, 102, 241, 0.2); background: var(--surface); border-radius: 12px; padding: 24px; box-shadow: var(--shadow); margin-bottom: 24px;">
+      <div class="eyebrow" style="color: var(--primary);">Secure Wallet</div>
+      <h2 style="margin: 6px 0 2px; color: #fff; font-size: 28px; font-family: 'Outfit'; font-weight: 800;">{profile_balance} USDC</h2>
+      <p style="margin: 0 0 16px; font-size: 12px; color: var(--muted);">ARC-TESTNET</p>
+      
+      <label style="font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px;">EVM Address</label>
+      <div style="display: flex; gap: 8px; align-items: center; background: var(--surface-2); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); cursor: pointer;" onclick="navigator.clipboard.writeText('{profile_wallet}'); alert('Copied address!')">
+        <code style="color: var(--green); font-size: 12px; font-weight: 700; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{profile_wallet}</code>
+        <span style="font-size: 12px;">📋</span>
+      </div>
+    </div>
+    """
+    
+    # 2. Change Username form (only if owner and not changed yet)
+    change_username_card = ""
+    if viewer_is_owner:
+        if not profile.get("username_changed"):
+            change_username_card = f"""
+            <div class="panel" style="margin-bottom: 24px; border-radius: 12px; padding: 24px; background: var(--surface); border: 1px solid var(--line);">
+              <h2>✏️ Change Username</h2>
+              <p class="panel-copy">You can update your handle exactly once. This will also update your session credentials and profile URL.</p>
+              <form method="post" action="/ui/profile/update-username">
+                <label for="new_username">New Handle</label>
+                <input id="new_username" name="new_username" required placeholder="e.g. newhandle" />
+                <button style="margin-top: 14px; width: 100%;">Save Changes</button>
+              </form>
+            </div>
+            """
+        else:
+            change_username_card = f"""
+            <div class="panel" style="margin-bottom: 24px; border-radius: 12px; padding: 20px; background: var(--surface); border: 1px solid var(--line); text-align: center;">
+              <span style="font-size: 13px; color: var(--muted);">🔒 Username locked (limit reached)</span>
+            </div>
+            """
+            
+    # 3. Send USDC Funds form (only if owner)
+    send_funds_card = ""
+    if viewer_is_owner:
+        send_funds_card = f"""
+        <div class="panel" style="border: 1px solid rgba(16, 185, 129, 0.25); background: var(--surface); border-radius: 12px; padding: 24px; box-shadow: var(--shadow); margin-bottom: 24px;">
+          <h2>Send USDC Funds</h2>
+          <p class="panel-copy">Transfer USDC instantly from your agent wallet to any recipient handle or raw address.</p>
+          <form method="post" action="/ui/wallet/send">
+            <input type="hidden" name="redirect_to" value="profile" />
+            <label for="recipient">Recipient Handle or EVM Address</label>
+            <input id="recipient" name="recipient" required placeholder="e.g. @jennycruzy or 0x..." />
+            
+            <label for="amount" style="margin-top: 12px;">Amount in USDC</label>
+            <input id="amount" name="amount" type="number" min="0.01" step="0.01" value="10" required placeholder="e.g. 10" />
+            
+            <button style="margin-top: 18px; width: 100%;">Send USDC Transfer</button>
+          </form>
+        </div>
+        """
+        
+    body = f"""
+    <main class="shell">
+      <div style="margin-bottom: 32px;">
+        <div class="eyebrow" style="color: var(--primary);">{ 'Your Personal Account' if viewer_is_owner else 'Public Agent Profile' }</div>
+        <h1 style="margin: 6px 0 0; font-size: 46px; color: #fff; font-family: 'Outfit'; font-weight: 900; letter-spacing: -0.02em;">@{profile_username}</h1>
+      </div>
+      
+      {error_html}
+      {message_html}
+      
+      <section class="workspace" style="display: grid; grid-template-columns: 360px 1fr; gap: 32px; align-items: start;">
+        <aside style="position: sticky; top: 100px;">
+          {wallet_card}
+          {send_funds_card}
+          {change_username_card}
+        </aside>
+        
+        <section style="background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 32px; box-shadow: var(--shadow);">
+          <div class="section-head" style="margin-bottom: 24px; border-bottom: 1px solid var(--line); padding-bottom: 16px;">
+            <div>
+              <h2 style="font-size: 24px; color: #fff; margin: 0;">Verified Transaction Ledger</h2>
+              <p style="margin: 6px 0 0; font-size: 14px; color: var(--muted);">Direct USDC transfers, case deposits, and escrow releases verified by NOTARY.</p>
+            </div>
+          </div>
+          <div>
+            {txs_html}
+          </div>
+        </section>
+      </section>
+    </main>
+    """
+    return _page(f"@{profile_username}'s Profile · NOTARY", body, viewer)

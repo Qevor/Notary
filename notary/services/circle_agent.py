@@ -46,6 +46,7 @@ class CircleAgentClient:
     wallet_email: str | None = None
     chain: str = "ARC-TESTNET"
     testnet: bool = True
+    rpc_url: str | None = None
 
     async def login_init(self, email: str | None = None) -> dict[str, Any]:
         if self.demo_mode:
@@ -87,18 +88,78 @@ class CircleAgentClient:
         return created[0] | {"ownerHint": owner_hint, "demo": False}
 
     async def get_unified_balance(self, wallet_id: str) -> dict[str, Any]:
+        # Try to resolve or deduce the address first
+        address = None
+        try:
+            address = await self._resolve_address(wallet_id)
+        except Exception:
+            if wallet_id and wallet_id.startswith("0x"):
+                address = wallet_id
+
+        # Query blockchain balance via RPC if configured
+        if address and self.rpc_url:
+            try:
+                import httpx
+                # Query USDC balance via standard JSON-RPC eth_call (balanceOf selector = 0x70a08231)
+                addr_clean = address[2:].lower()
+                data = "0x70a08231" + addr_clean.rjust(64, "0")
+                async with httpx.AsyncClient(timeout=5) as client:
+                    resp = await client.post(
+                        self.rpc_url,
+                        json={
+                            "jsonrpc": "2.0",
+                            "id": 1,
+                            "method": "eth_call",
+                            "params": [
+                                {
+                                    "to": "0x3600000000000000000000000000000000000000",
+                                    "data": data
+                                },
+                                "latest"
+                            ]
+                        }
+                    )
+                    if resp.status_code == 200:
+                        res_json = resp.json()
+                        if "result" in res_json and res_json["result"] != "0x":
+                            val_hex = res_json["result"]
+                            val_dec = int(val_hex, 16)
+                            balance_usdc = f"{val_dec / 1_000_000:.2f}"
+                            return {
+                                "walletId": wallet_id,
+                                "address": address,
+                                "amount": balance_usdc,
+                                "walletBalance": {"amount": balance_usdc},
+                                "demo": False,
+                            }
+            except Exception as e:
+                print(f"[CircleAgentClient] Direct blockchain balance query failed: {e}")
+
         if self.demo_mode:
             return {"walletId": wallet_id, "asset": "USDC", "amount": "1000.00", "demo": True}
-        address = await self._resolve_address(wallet_id)
-        wallet_balance = await self._run("wallet", "balance", "--address", address, "--chain", self.chain)
-        gateway_balance = await self._run("gateway", "balance", "--address", address, "--chain", self.chain)
-        return {
-            "walletId": wallet_id,
-            "address": address,
-            "walletBalance": wallet_balance,
-            "gatewayBalance": gateway_balance,
-            "demo": False,
-        }
+
+        # Live mode CLI execution
+        try:
+            address = address or await self._resolve_address(wallet_id)
+            wallet_balance = await self._run("wallet", "balance", "--address", address, "--chain", self.chain)
+            gateway_balance = await self._run("gateway", "balance", "--address", address, "--chain", self.chain)
+            return {
+                "walletId": wallet_id,
+                "address": address,
+                "walletBalance": wallet_balance,
+                "gatewayBalance": gateway_balance,
+                "demo": False,
+            }
+        except Exception as e:
+            # Fallback when Circle CLI is not installed or fails
+            print(f"[CircleAgentClient] Circle CLI balance command failed: {e}")
+            return {
+                "walletId": wallet_id,
+                "address": address or "",
+                "amount": "0.00",
+                "walletBalance": {"amount": "0.00"},
+                "demo": False,
+            }
 
     async def prepare_gateway_route(self, wallet_id: str, amount_usdc: float) -> dict[str, Any]:
         if self.demo_mode:
