@@ -774,6 +774,31 @@ class NotaryAppService:
         self.store.put("obligations", obligation.obligation_id, obligation.model_dump(mode="json"))
         self.store.put("evidence", evidence.evidence_id, evidence.model_dump(mode="json"))
 
+        # Trigger the 6-agent LangGraph swarm in parallel to log swarm execution
+        from notary.swarm import notary_swarm
+        swarm_state = {
+            "case_id": obligation.metadata.get("notaryCaseId"),
+            "instruction": request.instruction,
+            "payer_identity": request.payer_identity,
+            "payee_identity": request.payee_identity,
+            "payer_wallet": request.metadata.get("payerWallet") if request.metadata else None,
+            "payee_wallet": request.metadata.get("payeeWallet") if request.metadata else None,
+            "amount_usdc": request.amount_usdc or 0.0,
+            "uploaded_media": request.evidence_ref if request.evidence_type != "text" else None,
+            "transcript": request.evidence_text if request.evidence_type == "text" else None,
+            "evidence": {"text": request.evidence_text or ""},
+            "karma_score": 0,
+            "status": "init",
+            "errors": []
+        }
+        try:
+            import asyncio
+            # Run the graph synchronously in the context of the async request
+            swarm_result = await notary_swarm.ainvoke(swarm_state)
+            print(f"[Swarm] 6-agent LangGraph cycle completed. Final status: {swarm_result.get('status')}")
+        except Exception as e:
+            print(f"[Swarm] LangGraph execution error: {e}")
+
         integrity = pipeline.verify(obligation, [evidence])
         verdict = pipeline.judge(obligation, [evidence], integrity, self._precedent())
         attestation, payload = pipeline.attest(
