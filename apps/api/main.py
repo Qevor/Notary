@@ -782,54 +782,233 @@ async def list_payments() -> dict[str, list[dict]]:
 
 
 @app.get("/pay/{reference}", response_class=HTMLResponse)
+@app.get("/request/{reference}", response_class=HTMLResponse)
 async def local_payment_page(reference: str) -> HTMLResponse:
-    payments = get_app_service().list_bucket("payments")
-    payment = next((item for item in payments if item.get("reference") == reference), None)
-    if not payment:
-        return HTMLResponse("<h1>Payment not found</h1>", status_code=404)
-    request = payment.get("request", {})
-    amount = request.get("amount_usdc", request.get("amountUSDC", "n/a"))
-    description = request.get("description", "NOTARY payment")
+    service = get_app_service()
+    case = next((item for item in service.store.list("cases") if item.get("escrow_payment_reference") == reference), None)
+    
+    amount = "n/a"
+    description = "NOTARY Escrow Deposit"
+    payer = "@me"
+    payee = "@someone"
+    status = "awaiting_funding"
+    
+    if case:
+        amount = f"{case.get('amount_usdc')} USDC"
+        description = case.get("instruction")
+        payer = case.get("payer_identity")
+        payee = case.get("payee_identity")
+        status = case.get("status")
+    else:
+        payments = service.list_bucket("payments")
+        payment = next((item for item in payments if item.get("reference") == reference), None)
+        if payment:
+            request = payment.get("request", {})
+            amount = f"{request.get('amount_usdc', request.get('amountUSDC', 'n/a'))} USDC"
+            description = request.get("description", "NOTARY payment")
+            status = payment.get("status", "created")
+            payer = request.get("payer_identity") or payer
+            payee = request.get("payee_identity") or payee
+
     return HTMLResponse(
         f"""
         <!doctype html>
-        <html>
+        <html lang="en">
           <head>
+            <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <title>NOTARY Escrow Payment</title>
+            <title>Authorize Escrow · NOTARY</title>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;800&display=swap" rel="stylesheet" />
             <style>
+              :root {{
+                --bg: #0B0F19;
+                --surface: rgba(17, 24, 39, 0.7);
+                --primary: #6366f1;
+                --primary-glow: rgba(99, 102, 241, 0.15);
+                --green: #10b981;
+                --green-glow: rgba(16, 185, 129, 0.2);
+                --text: #f3f4f6;
+                --muted: #9ca3af;
+                --line: rgba(255, 255, 255, 0.08);
+              }}
               body {{
-                font-family: Inter, system-ui, sans-serif;
+                font-family: 'Inter', system-ui, sans-serif;
                 margin: 0;
                 min-height: 100vh;
-                display: grid;
-                place-items: center;
-                background: #f7f3ea;
-                color: #151515;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                background-color: var(--bg);
+                background-image: 
+                  radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+                  radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.08) 0px, transparent 50%);
+                color: var(--text);
+                padding: 16px;
               }}
               main {{
-                width: min(520px, calc(100vw - 32px));
-                background: #fffaf0;
-                border: 1px solid #d8d5cc;
-                border-radius: 8px;
-                padding: 24px;
+                width: min(540px, 100%);
+                background: var(--surface);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+                border: 1px solid var(--line);
+                border-radius: 24px;
+                padding: 40px;
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+                text-align: center;
               }}
-              strong {{ font-size: 42px; display: block; }}
-              a {{ color: #116149; font-weight: 800; }}
+              .badge {{
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                background: var(--primary-glow);
+                border: 1px solid rgba(99, 102, 241, 0.3);
+                color: #818cf8;
+                padding: 6px 14px;
+                border-radius: 9999px;
+                font-size: 13px;
+                font-weight: 600;
+                margin-bottom: 24px;
+              }}
+              h1 {{
+                font-family: 'Outfit', sans-serif;
+                font-size: 32px;
+                font-weight: 800;
+                margin: 0 0 8px;
+                color: #fff;
+                letter-spacing: -0.5px;
+              }}
+              .amount-display {{
+                font-family: 'Outfit', sans-serif;
+                font-size: 48px;
+                font-weight: 800;
+                color: var(--green);
+                text-shadow: 0 0 20px var(--green-glow);
+                margin: 18px 0;
+              }}
+              .contract-details {{
+                background: rgba(255, 255, 255, 0.02);
+                border: 1px solid var(--line);
+                border-radius: 16px;
+                padding: 20px;
+                text-align: left;
+                margin-bottom: 28px;
+              }}
+              .detail-row {{
+                display: flex;
+                justify-content: space-between;
+                padding: 8px 0;
+                font-size: 14px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+              }}
+              .detail-row:last-child {{
+                border-bottom: none;
+              }}
+              .detail-label {{
+                color: var(--muted);
+              }}
+              .detail-value {{
+                color: #fff;
+                font-weight: 600;
+              }}
+              .instruction-box {{
+                margin-top: 12px;
+                padding: 12px;
+                background: rgba(0, 0, 0, 0.2);
+                border-radius: 8px;
+                font-size: 14px;
+                color: var(--text);
+                line-height: 1.5;
+                border-left: 3px solid var(--primary);
+              }}
+              button {{
+                display: block;
+                width: 100%;
+                background: var(--green);
+                color: #0b0f19;
+                border: none;
+                border-radius: 12px;
+                padding: 16px;
+                font-family: 'Inter', sans-serif;
+                font-size: 16px;
+                font-weight: 700;
+                cursor: pointer;
+                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                box-shadow: 0 4px 12px var(--green-glow);
+              }}
+              button:hover {{
+                transform: translateY(-2px);
+                box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+                background: #34d399;
+              }}
+              button:active {{
+                transform: translateY(0);
+              }}
+              .cancel-link {{
+                display: inline-block;
+                margin-top: 20px;
+                color: var(--muted);
+                text-decoration: none;
+                font-size: 14px;
+                font-weight: 500;
+                transition: color 0.15s ease;
+              }}
+              .cancel-link:hover {{
+                color: #fff;
+              }}
             </style>
           </head>
           <body>
             <main>
-              <h1>NOTARY Escrow Payment</h1>
-              <p>{description}</p>
-              <strong>{amount} USDC</strong>
-              <p>Status: {payment.get("status", "created")}</p>
-              <p><a href="/">Back to NOTARY</a></p>
+              <div class="badge">
+                <span>🔒 SECURE ESCROW AGENT</span>
+              </div>
+              <h1>Secure Escrow Checkout</h1>
+              <p style="color: var(--muted); margin: 0 0 24px; font-size: 15px;">Review the payment terms and approve the smart contract lock.</p>
+              
+              <div class="amount-display">{amount}</div>
+              
+              <div class="contract-details">
+                <div class="detail-row">
+                  <span class="detail-label">Payer Account</span>
+                  <span class="detail-value">{escape(payer)}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Payee Account</span>
+                  <span class="detail-value">{escape(payee)}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Escrow Reference</span>
+                  <span class="detail-value" style="font-family: monospace; font-size: 12px;">{escape(reference[:18])}...</span>
+                </div>
+                <div style="margin-top: 14px; font-size: 13px; color: var(--muted); font-weight: 500;">OBLIGATION STATEMENT:</div>
+                <div class="instruction-box">
+                  "{escape(description)}"
+                </div>
+              </div>
+              
+              <form method="post">
+                <button type="submit">🔒 Authorize & Fund Escrow</button>
+              </form>
+              
+              <a href="/app" class="cancel-link">Return to Console</a>
             </main>
           </body>
         </html>
         """
     )
+
+
+@app.post("/pay/{reference}")
+@app.post("/request/{reference}")
+async def local_payment_submit(reference: str):
+    service = get_app_service()
+    service.mark_case_funded(reference, {"status": "paid"})
+    existing = service.store.get("payments", reference)
+    if existing:
+        existing["status"] = "paid"
+        service.store.put("payments", reference, existing)
+    return RedirectResponse("/app?message=Escrow%20funded%20successfully!", status_code=303)
 
 
 @app.post("/media/transcribe")
