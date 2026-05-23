@@ -314,6 +314,15 @@ async def test_registered_users_can_create_local_checkout_case_without_supabase(
     )
     service = NotaryAppService(settings)
 
+    class FakeCircle:
+        async def create_agent_wallet(self, owner_hint):
+            return {
+                "walletId": f"circle_{owner_hint}",
+                "address": "0x" + owner_hint.encode().hex()[-40:].rjust(40, "0"),
+            }
+
+    service.circle = FakeCircle()
+
     payer = await service.register_user("localpayer", "password123")
     payee = await service.register_user("localpayee", "password123")
 
@@ -337,6 +346,59 @@ async def test_registered_users_can_create_local_checkout_case_without_supabase(
     assert case["case_id"].startswith("case_")
     assert case["escrow_payment_reference"].startswith("notary_reserve_")
     assert case["escrow_payment_url"].startswith("/request/notary_reserve_")
-    assert case["escrow_provider"] == "notary_local"
+    assert case["escrow_provider"] == "notary_arc_manual_request"
     assert case["metadata"]["payerWallet"] == payer["wallet"]
     assert case["metadata"]["payeeWallet"] == payee["wallet"]
+
+
+async def test_arc_funding_must_verify_before_case_unlocks(tmp_path) -> None:
+    settings = Settings(
+        notary_db_path=tmp_path / "notary.sqlite3",
+        notary_env="development",
+        notary_escrow_demo_mode=False,
+    )
+    service = NotaryAppService(settings)
+
+    class FakeCircle:
+        async def create_agent_wallet(self, owner_hint):
+            return {
+                "walletId": f"circle_{owner_hint}",
+                "address": "0x" + owner_hint.encode().hex()[-40:].rjust(40, "0"),
+            }
+
+    service.circle = FakeCircle()
+    payer = await service.register_user("chainpayer", "password123")
+    payee = await service.register_user("chainpayee", "password123")
+    case = await service.create_conditional_case(
+        created_by_identity="chainpayer",
+        payer_identity="chainpayer",
+        payee_identity="chainpayee",
+        approver_identity="chainpayer",
+        instruction="Pay chainpayee 4 USDC after approval.",
+        amount_usdc=4,
+    )
+
+    class FakeArc:
+        async def verify_usdc_transfer(self, *, tx_hash, from_address, to_address, amount_usdc):
+            assert tx_hash == "0x" + "1" * 64
+            assert from_address == payer["wallet"]
+            assert to_address == case["metadata"]["executorEscrowAddress"]
+            assert amount_usdc == 4
+            return {
+                "txHash": tx_hash,
+                "status": "verified",
+                "from": from_address,
+                "to": to_address,
+                "amount_usdc": amount_usdc,
+            }
+
+    service.arc = FakeArc()
+    funded = await service.verify_arc_funding_and_mark_case(
+        case["escrow_payment_reference"],
+        "0x" + "1" * 64,
+    )
+
+    assert funded["status"] == "funded_awaiting_evidence"
+    assert funded["metadata"]["fundingEvent"]["verification"]["status"] == "verified"
+    receipt = service.store.get("arc_receipts", "0x" + "1" * 64)
+    assert receipt["status"] == "verified_funding"

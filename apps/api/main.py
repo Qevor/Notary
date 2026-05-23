@@ -784,7 +784,7 @@ async def list_payments() -> dict[str, list[dict]]:
 
 @app.get("/pay/{reference}", response_class=HTMLResponse)
 @app.get("/request/{reference}", response_class=HTMLResponse)
-async def local_payment_page(reference: str) -> HTMLResponse:
+async def local_payment_page(reference: str, error: str | None = None) -> HTMLResponse:
     service = get_app_service()
     case = next((item for item in service.store.list("cases") if item.get("escrow_payment_reference") == reference), None)
     
@@ -793,6 +793,8 @@ async def local_payment_page(reference: str) -> HTMLResponse:
     payer = "@me"
     payee = "@someone"
     status = "awaiting_funding"
+    payer_wallet = ""
+    reserve_wallet = ""
     
     if case:
         amount = f"{case.get('amount_usdc')} USDC"
@@ -800,6 +802,9 @@ async def local_payment_page(reference: str) -> HTMLResponse:
         payer = case.get("payer_identity")
         payee = case.get("payee_identity")
         status = case.get("status")
+        metadata = case.get("metadata", {}) or {}
+        payer_wallet = str(metadata.get("payerWallet") or "")
+        reserve_wallet = str(metadata.get("executorEscrowAddress") or "")
     else:
         payments = service.list_bucket("payments")
         payment = next((item for item in payments if item.get("reference") == reference), None)
@@ -810,6 +815,11 @@ async def local_payment_page(reference: str) -> HTMLResponse:
             status = payment.get("status", "created")
             payer = request.get("payer_identity") or payer
             payee = request.get("payee_identity") or payee
+    error_html = (
+        f'<div style="margin:0 0 16px;padding:12px;border-left:4px solid #ef4444;background:rgba(239,68,68,0.12);color:#fecaca;text-align:left;border-radius:10px;">{escape(error)}</div>'
+        if error
+        else ""
+    )
 
     return HTMLResponse(
         f"""
@@ -964,8 +974,9 @@ async def local_payment_page(reference: str) -> HTMLResponse:
               <div class="badge">
                 <span>🔒 SECURE ESCROW AGENT</span>
               </div>
-              <h1>Secure Escrow Checkout</h1>
-              <p style="color: var(--muted); margin: 0 0 24px; font-size: 15px;">Review the payment terms and approve the smart contract lock.</p>
+              <h1>Fund on Arc</h1>
+              <p style="color: var(--muted); margin: 0 0 24px; font-size: 15px;">Send the exact USDC amount on Arc, then paste the transaction hash. NOTARY unlocks evidence only after RPC verification.</p>
+              {error_html}
               
               <div class="amount-display">{amount}</div>
               
@@ -982,6 +993,14 @@ async def local_payment_page(reference: str) -> HTMLResponse:
                   <span class="detail-label">Escrow Reference</span>
                   <span class="detail-value" style="font-family: monospace; font-size: 12px;">{escape(reference[:18])}...</span>
                 </div>
+                <div class="detail-row">
+                  <span class="detail-label">From Wallet</span>
+                  <span class="detail-value" style="font-family: monospace; font-size: 12px;">{escape(payer_wallet or 'payer wallet unavailable')}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Reserve Wallet</span>
+                  <span class="detail-value" style="font-family: monospace; font-size: 12px;">{escape(reserve_wallet or 'reserve wallet unavailable')}</span>
+                </div>
                 <div style="margin-top: 14px; font-size: 13px; color: var(--muted); font-weight: 500;">OBLIGATION STATEMENT:</div>
                 <div class="instruction-box">
                   "{escape(description)}"
@@ -989,7 +1008,8 @@ async def local_payment_page(reference: str) -> HTMLResponse:
               </div>
               
               <form method="post">
-                <button type="submit">🔒 Authorize & Fund Escrow</button>
+                <input name="tx_hash" required placeholder="Arc transaction hash: 0x..." style="box-sizing:border-box;width:100%;margin-bottom:12px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,0.04);color:var(--text);padding:14px;font-family:monospace;" />
+                <button type="submit">Verify Arc Funding</button>
               </form>
               
               <a href="/app" class="cancel-link">Return to Console</a>
@@ -1002,14 +1022,19 @@ async def local_payment_page(reference: str) -> HTMLResponse:
 
 @app.post("/pay/{reference}")
 @app.post("/request/{reference}")
-async def local_payment_submit(reference: str):
+async def local_payment_submit(
+    reference: str,
+    tx_hash: str = Form(...),
+):
     service = get_app_service()
-    service.mark_case_funded(reference, {"status": "paid"})
-    existing = service.store.get("payments", reference)
-    if existing:
-        existing["status"] = "paid"
-        service.store.put("payments", reference, existing)
-    return RedirectResponse("/app?message=Escrow%20funded%20successfully!", status_code=303)
+    try:
+        await service.verify_arc_funding_and_mark_case(reference, tx_hash.strip())
+    except Exception as exc:
+        return RedirectResponse(
+            f"/request/{quote(reference)}?error={quote(_ui_error(exc))}",
+            status_code=303,
+        )
+    return RedirectResponse("/app?message=Arc%20funding%20verified%20successfully!", status_code=303)
 
 
 @app.post("/media/transcribe")
@@ -1178,7 +1203,14 @@ async def escrow_settlement_webhook(request: Request) -> dict:
             existing["status"] = payload.get("status") or payload.get("state") or existing.get("status")
             existing["settlement"] = payload
             service.store.put("payments", str(payment_ref), existing)
-        service.mark_case_funded(str(payment_ref), payload)
+        funding_tx = (
+            payload.get("arcTxHash")
+            or payload.get("txHash")
+            or payload.get("transactionHash")
+            or payload.get("tx_hash")
+        )
+        if funding_tx:
+            await service.verify_arc_funding_and_mark_case(str(payment_ref), str(funding_tx))
     return {"ok": True, "settlementId": settlement_id}
 
 

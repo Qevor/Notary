@@ -33,7 +33,7 @@ class NotaryEscrowClient:
     executor_agent_wallet_id: str | None = None
     creator_wallet: str | None = None
     store: Any = None
-    allow_local_fallback: bool = False
+    allow_manual_arc_requests: bool = False
 
     async def resolve_identity_to_wallet(self, identity: str | None) -> dict[str, Any]:
         if not identity:
@@ -146,11 +146,11 @@ class NotaryEscrowClient:
             try:
                 return await self._create_supabase_reserve(request)
             except Exception as exc:
-                if self.allow_local_fallback:
+                if self.allow_manual_arc_requests:
                     return self._local_conditional_reserve(request, fallback_reason=str(exc))
                 raise
-        if not self.batch_distribution_path and self.allow_local_fallback:
-            return self._local_conditional_reserve(request)
+        if not self.batch_distribution_path and self.allow_manual_arc_requests:
+            return self._local_conditional_reserve(request, fallback_reason="manual_arc_request")
         return await self._post(
             self._required_path(self.batch_distribution_path, "NOTARY_ESCROW_BATCH_PATH"),
             request.model_dump(mode="json"),
@@ -160,14 +160,7 @@ class NotaryEscrowClient:
         if self.demo_mode:
             return self._local_batch_distribution(request)
         if not self.batch_distribution_path and self.supabase_url:
-            try:
-                return await self._create_supabase_batch(request)
-            except Exception as exc:
-                if self.allow_local_fallback:
-                    return self._local_batch_distribution(request, fallback_reason=str(exc))
-                raise
-        if not self.batch_distribution_path and self.allow_local_fallback:
-            return self._local_batch_distribution(request)
+            return await self._create_supabase_batch(request)
         return await self._post(
             self._required_path(self.batch_distribution_path, "NOTARY_ESCROW_BATCH_PATH"),
             request.model_dump(mode="json"),
@@ -241,13 +234,6 @@ class NotaryEscrowClient:
                 "status": "held",
                 "trigger": trigger.model_dump(mode="json"),
             }
-        if not self.release_escrow_path and self.allow_local_fallback:
-            return {
-                "reference": new_id("notary_hold"),
-                "status": "held",
-                "provider": "notary_local_fallback",
-                "trigger": trigger.model_dump(mode="json"),
-            }
         return await self._post(
             self._required_path(self.release_escrow_path, "NOTARY_ESCROW_RELEASE_PATH"),
             trigger.model_dump(mode="json"),
@@ -299,27 +285,11 @@ class NotaryEscrowClient:
             "reference": ref,
             "url": f"/request/{ref}",
             "status": "pending_reserve",
-            "provider": "notary_local_fallback" if fallback_reason else "notary_local",
+            "provider": "notary_arc_manual_request" if fallback_reason else "notary_local",
             "request": request.model_dump(mode="json"),
         }
         if fallback_reason:
-            result["fallbackReason"] = "remote escrow provider unavailable; using local development checkout"
-        return result
-
-    def _local_batch_distribution(
-        self,
-        request: EscrowBatchDistributionRequest,
-        *,
-        fallback_reason: str | None = None,
-    ) -> dict[str, Any]:
-        result = {
-            "reference": new_id("notary_batch"),
-            "status": "queued",
-            "provider": "notary_local_fallback" if fallback_reason else "notary_local",
-            "request": request.model_dump(mode="json"),
-        }
-        if fallback_reason:
-            result["fallbackReason"] = "remote escrow provider unavailable; using local development receipt"
+            result["fallbackReason"] = "remote escrow provider unavailable; manual Arc funding proof required"
         return result
 
     async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:

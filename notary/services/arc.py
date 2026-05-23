@@ -19,6 +19,8 @@ from notary.models.schemas import ArcTransactionPayload, new_id
 
 
 MethodSpec = tuple[str, list[str]]
+USDC_TOKEN_ADDRESS = "0x3600000000000000000000000000000000000000"
+TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 
 
 METHOD_SPECS: dict[tuple[str, str], MethodSpec] = {
@@ -159,6 +161,65 @@ class ArcClient:
             "to": to_checksum_address(contract_address),
         }
 
+    async def get_transaction(self, tx_hash: str) -> dict[str, Any]:
+        if not self.enabled:
+            raise RuntimeError("Live Arc RPC is required to verify transactions")
+        return await self._rpc("eth_getTransactionByHash", [tx_hash])
+
+    async def get_transaction_receipt(self, tx_hash: str) -> dict[str, Any]:
+        if not self.enabled:
+            raise RuntimeError("Live Arc RPC is required to verify transactions")
+        receipt = await self._rpc("eth_getTransactionReceipt", [tx_hash])
+        if not receipt:
+            raise RuntimeError("Arc transaction receipt was not found")
+        return receipt
+
+    async def verify_usdc_transfer(
+        self,
+        *,
+        tx_hash: str,
+        from_address: str,
+        to_address: str,
+        amount_usdc: float,
+        token_address: str = USDC_TOKEN_ADDRESS,
+    ) -> dict[str, Any]:
+        receipt = await self.get_transaction_receipt(tx_hash)
+        if str(receipt.get("status", "")).lower() != "0x1":
+            raise RuntimeError("Arc transaction did not succeed")
+
+        expected_from = _topic_address(from_address)
+        expected_to = _topic_address(to_address)
+        token = token_address.lower()
+        min_amount = int(round(float(amount_usdc) * 1_000_000))
+
+        for log in receipt.get("logs", []) or []:
+            topics = [str(topic).lower() for topic in log.get("topics", [])]
+            if len(topics) < 3:
+                continue
+            if str(log.get("address", "")).lower() != token:
+                continue
+            if topics[0] != TRANSFER_TOPIC:
+                continue
+            if topics[1] != expected_from or topics[2] != expected_to:
+                continue
+            amount = int(str(log.get("data") or "0x0"), 16)
+            if amount < min_amount:
+                raise RuntimeError(
+                    f"Arc USDC transfer amount is too small: expected at least {amount_usdc} USDC"
+                )
+            return {
+                "txHash": tx_hash,
+                "status": "verified",
+                "token": token_address,
+                "from": from_address,
+                "to": to_address,
+                "amount_usdc": amount / 1_000_000,
+                "blockNumber": receipt.get("blockNumber"),
+                "logIndex": log.get("logIndex"),
+            }
+
+        raise RuntimeError("Arc transaction does not contain the required USDC transfer")
+
     async def _rpc(self, method: str, params: list[Any]) -> Any:
         if not self.rpc_url:
             raise RuntimeError("ARC RPC URL is not configured")
@@ -174,3 +235,10 @@ class ArcClient:
         if body.get("error"):
             raise RuntimeError(f"ARC RPC error for {method}: {body['error']}")
         return body["result"]
+
+
+def _topic_address(address: str) -> str:
+    clean = address.lower().removeprefix("0x")
+    if len(clean) != 40:
+        raise RuntimeError(f"Invalid EVM address: {address}")
+    return "0x" + clean.rjust(64, "0")

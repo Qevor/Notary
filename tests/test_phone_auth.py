@@ -159,7 +159,7 @@ async def test_app_service_change_username_logic(tmp_path):
     from notary.config import Settings
     from notary.app_service import NotaryAppService
     
-    settings = Settings(notary_db_path=tmp_path / "notary_test.sqlite3")
+    settings = Settings(notary_db_path=tmp_path / "notary_test.sqlite3", notary_demo_mode=True)
     service = NotaryAppService(settings)
     
     # 1. Register a test user
@@ -194,7 +194,7 @@ async def test_get_user_transactions_logic(tmp_path):
     from notary.config import Settings
     from notary.app_service import NotaryAppService
     
-    settings = Settings(notary_db_path=tmp_path / "notary_test_tx.sqlite3")
+    settings = Settings(notary_db_path=tmp_path / "notary_test_tx.sqlite3", notary_demo_mode=True)
     service = NotaryAppService(settings)
     
     await service.register_user("alice", "password123")
@@ -274,7 +274,7 @@ async def test_login_by_email_after_username_change(tmp_path):
     from notary.config import Settings
     from notary.app_service import NotaryAppService
     
-    settings = Settings(notary_db_path=tmp_path / "notary_test_email.sqlite3")
+    settings = Settings(notary_db_path=tmp_path / "notary_test_email.sqlite3", notary_demo_mode=True)
     service = NotaryAppService(settings)
     
     user = await service.register_user("mebstel@gmail.com", "password123")
@@ -327,5 +327,20 @@ async def test_login_by_email_after_username_change_migrated_compatibility(tmp_p
     assert p_updated["email"] == "mebstel@gmail.com"
 
 
+@pytest.mark.anyio
+async def test_live_registration_requires_circle_wallet(tmp_path):
+    from notary.config import Settings
+    from notary.app_service import NotaryAppService
 
+    settings = Settings(notary_db_path=tmp_path / "notary_test_live_wallet.sqlite3", notary_demo_mode=False)
+    service = NotaryAppService(settings)
+
+    class FailingCircle:
+        async def create_agent_wallet(self, owner_hint):
+            raise RuntimeError("Circle CLI unavailable")
+
+    service.circle = FailingCircle()
+
+    with pytest.raises(RuntimeError, match="Circle agent wallet provisioning is required"):
+        await service.register_user("liveuser", "password123")
 

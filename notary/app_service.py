@@ -83,7 +83,7 @@ class NotaryAppService:
             executor_agent_wallet_id=settings.notary_executor_agent_wallet_id,
             creator_wallet=settings.notary_creator_wallet,
             store=self.store,
-            allow_local_fallback=settings.notary_env != "production",
+            allow_manual_arc_requests=settings.notary_env != "production",
         )
         self.arc = ArcClient(
             rpc_url=settings.arc_rpc_url,
@@ -549,6 +549,58 @@ class NotaryAppService:
                 self.store.put("cases", case.case_id, case.model_dump(mode="json"))
             return case.model_dump(mode="json")
         return None
+
+    async def verify_arc_funding_and_mark_case(
+        self,
+        payment_reference: str,
+        tx_hash: str,
+    ) -> dict[str, Any]:
+        case_item = next(
+            (
+                item
+                for item in self.store.list("cases")
+                if str(item.get("escrow_payment_reference")) == str(payment_reference)
+            ),
+            None,
+        )
+        if not case_item:
+            raise RuntimeError("Escrow reference was not found")
+        case = NotaryCase.model_validate(case_item)
+        payer_wallet = str(case.metadata.get("payerWallet") or "")
+        reserve_wallet = str(case.metadata.get("executorEscrowAddress") or "")
+        if not payer_wallet or not reserve_wallet:
+            raise RuntimeError("Case is missing payer or reserve wallet metadata")
+
+        verification = await self.arc.verify_usdc_transfer(
+            tx_hash=tx_hash,
+            from_address=payer_wallet,
+            to_address=reserve_wallet,
+            amount_usdc=case.amount_usdc,
+        )
+        funded = self.mark_case_funded(
+            payment_reference,
+            {
+                "status": "funded",
+                "arcTxHash": tx_hash,
+                "verification": verification,
+            },
+        )
+        if not funded:
+            raise RuntimeError("Funding transaction verified, but the case could not be updated")
+        self.store.put(
+            "arc_receipts",
+            tx_hash,
+            {
+                "txHash": tx_hash,
+                "status": "verified_funding",
+                "contract": "USDC",
+                "method": "Transfer",
+                "payload": verification,
+                "caseId": case.case_id,
+                "escrowReference": payment_reference,
+            },
+        )
+        return funded
 
     async def submit_case_evidence(
         self,
@@ -1595,6 +1647,22 @@ class NotaryAppService:
             },
         )
 
+    def _is_demo_wallet_id(self, wallet_id: str | None) -> bool:
+        return bool(wallet_id and (wallet_id.startswith("local_") or wallet_id.startswith("local_circle_wallet")))
+
+    async def _provision_live_wallet(self, username: str) -> dict[str, Any]:
+        try:
+            wallet_info = await self.circle.create_agent_wallet(username)
+        except Exception as exc:
+            raise RuntimeError(
+                "Circle agent wallet provisioning is required for live NOTARY users. "
+                "Authenticate the Circle CLI/operator session before registering users."
+            ) from exc
+        wallet_address = wallet_info.get("address")
+        if not wallet_address:
+            raise RuntimeError("Circle did not return an EVM wallet address")
+        return wallet_info
+
     async def get_or_create_user_profile(self, email_or_id: str) -> dict[str, Any]:
         raw_identity = email_or_id.strip()
         if raw_identity.startswith("@"):
@@ -1609,6 +1677,12 @@ class NotaryAppService:
         if local_profile:
             # Fetch live balance from Circle; fall back to 0.00 (never fake)
             wallet_address = local_profile.get("wallet", "")
+            if not self.settings.notary_demo_mode and self._is_demo_wallet_id(local_profile.get("circle_wallet_id")):
+                wallet_info = await self._provision_live_wallet(username)
+                wallet_address = wallet_info.get("address")
+                local_profile["wallet"] = wallet_address
+                local_profile["circle_wallet_id"] = wallet_info.get("walletId")
+                self.store.put("profiles", username, local_profile)
             self._remember_local_agent_wallet(
                 username=username,
                 wallet_address=wallet_address,
@@ -1664,9 +1738,7 @@ class NotaryAppService:
             }
 
         # --- Create brand-new profile and agent wallet ---
-        try:
-            wallet_info = await self.circle.create_agent_wallet(username)
-        except Exception:
+        if self.settings.notary_demo_mode:
             wallet_id = new_id("local_circle_wallet")
             wallet_info = {
                 "walletId": wallet_id,
@@ -1674,6 +1746,8 @@ class NotaryAppService:
                 "ownerHint": username,
                 "demo": True,
             }
+        else:
+            wallet_info = await self._provision_live_wallet(username)
 
         wallet_address = wallet_info.get("address")
 
@@ -1754,11 +1828,18 @@ class NotaryAppService:
                 amount=amount_usdc,
             )
         except Exception as exc:
-            print(f"[Send Funds] Circle transfer note: {exc}")
+            if not self.settings.notary_demo_mode:
+                raise RuntimeError("Circle transfer failed; no USDC movement was recorded") from exc
+            circle_result = {
+                "txHash": new_id("demo_transfer"),
+                "status": "simulated",
+                "demo": True,
+            }
 
-        # Log transfer in SQLite for transaction history regardless of Circle outcome
+        # Log only confirmed live transfers, or explicit demo-mode simulations.
         tx_id = (
-            circle_result.get("id")
+            circle_result.get("txHash")
+            or circle_result.get("id")
             or circle_result.get("transferId")
             or new_id("tx")
         )
@@ -1769,8 +1850,9 @@ class NotaryAppService:
             "sender": sender_username,
             "recipient": clean_recipient,
             "amount_usdc": amount_usdc,
-            "status": "completed",
+            "status": "completed" if not circle_result.get("demo") else "simulated",
             "timestamp": int(time.time()),
+            "receipt": circle_result,
         }
         self.store.put("transfers", tx_id, transfer_record)
         return {"tx_id": tx_id, "status": "completed", "amount_usdc": amount_usdc}
@@ -1805,14 +1887,17 @@ class NotaryAppService:
         if existing:
             wallet_address = existing.get("wallet")
             circle_wallet_id = existing.get("circle_wallet_id")
-            
+            if not self.settings.notary_demo_mode and self._is_demo_wallet_id(circle_wallet_id):
+                wallet_address = None
+                circle_wallet_id = None
+
         if not wallet_address:
-            try:
-                wallet_info = await self.circle.create_agent_wallet(username)
+            if not self.settings.notary_demo_mode:
+                wallet_info = await self._provision_live_wallet(username)
                 wallet_address = wallet_info.get("address")
                 circle_wallet_id = wallet_info.get("walletId")
-            except Exception:
-                # Deterministic fallback: same username ALWAYS produces the same wallet address
+            else:
+                # Demo-only deterministic fallback: same username always produces the same address.
                 import hashlib as _hl
                 deterministic_seed = f"notary_agent_wallet_v1_{username}"
                 wallet_address = "0x" + _hl.sha256(deterministic_seed.encode()).hexdigest()[-40:]
@@ -2044,4 +2129,3 @@ class NotaryAppService:
 
         txs.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
         return txs
-

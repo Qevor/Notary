@@ -113,6 +113,13 @@ The NOTARY swarm is a **6-agent LangGraph network** focused entirely on machine 
 - **Reputation Layer:** Recording validator performance and karma checks via `HelixAIKarma`.
 - **Governance:** Operating agreements and permissions via `NotaryGovernance`.
 
+### Verifiability Rule
+NOTARY fails closed on payment state. A case can exist as an off-chain work request, but it is not marked funded, released, refunded, or paid unless the backend can verify the relevant Arc transaction through RPC.
+
+Funding verification requires a successful Arc USDC `Transfer` log from the payer wallet to the case reserve wallet for at least the case amount. The checkout page therefore asks for an Arc transaction hash and unlocks evidence only after that hash is verified against the expected wallets and amount.
+
+In live mode (`NOTARY_DEMO_MODE=false`), user onboarding also requires real Circle agent wallet provisioning. The app does not silently invent local wallets when Circle CLI/operator authentication is unavailable.
+
 ---
 
 ## Project Setup & Running
