@@ -39,29 +39,36 @@ def _badge(text: str, tone: str = "neutral") -> str:
 def _css() -> str:
     return """
     :root {
-      color-scheme: light;
-      --bg: #f7f8f4;
-      --ink: #0d1210;
-      --muted: #69746f;
-      --surface: #ffffff;
-      --surface-2: #f1f4ee;
-      --line: #dde4dc;
-      --green: #08724f;
-      --green-2: #073f31;
-      --amber: #a56b08;
-      --red: #b83b31;
-      --blue: #285c7a;
-      --black: #08110d;
-      --mint: #dff7e9;
-      --shadow: 0 18px 50px rgba(8, 17, 13, .08);
+      color-scheme: dark;
+      --bg: #060a08;
+      --ink: #e2e8f0;
+      --muted: #94a3b8;
+      --surface: rgba(15, 23, 20, 0.7);
+      --surface-2: rgba(30, 41, 35, 0.45);
+      --line: rgba(255, 255, 255, 0.08);
+      --line-hover: rgba(255, 255, 255, 0.16);
+      --green: #10b981;
+      --green-glow: rgba(16, 185, 129, 0.2);
+      --green-2: #059669;
+      --amber: #f59e0b;
+      --amber-glow: rgba(245, 158, 11, 0.15);
+      --red: #ef4444;
+      --red-glow: rgba(239, 68, 68, 0.15);
+      --blue: #3b82f6;
+      --black: #020403;
+      --mint: rgba(16, 185, 129, 0.1);
+      --shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       background: var(--bg);
+      background-image: radial-gradient(circle at 50% -20%, #0d281a 0%, #060a08 100%);
+      background-attachment: fixed;
       color: var(--ink);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
       font-size: 15px;
+      line-height: 1.5;
     }
     a { color: inherit; text-decoration: none; }
     header {
@@ -69,145 +76,397 @@ def _css() -> str:
       align-items: center;
       justify-content: space-between;
       gap: 20px;
-      padding: 16px 28px;
-      border-bottom: 1px solid rgba(255,255,255,.08);
-      background: var(--black);
-      color: white;
+      padding: 16px 36px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(2, 4, 3, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       position: sticky;
       top: 0;
-      z-index: 4;
+      z-index: 10;
     }
-    h1, h2, h3, p { margin-top: 0; }
-    .brand strong { display: block; font-size: 22px; letter-spacing: 0; }
-    .brand span { color: rgba(255,255,255,.62); }
-    nav { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
+    h1, h2, h3, h4, p { margin-top: 0; }
+    h1, h2, h3, h4 {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+    }
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .brand strong {
+      font-size: 24px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      color: #fff;
+      text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+    }
+    .brand span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+    }
+    nav { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
     .nav-link, .pill, .mini-form button {
       border: 1px solid var(--line);
       border-radius: 999px;
-      background: rgba(255,255,255,.08);
-      color: white;
-      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--muted);
+      padding: 8px 16px;
       font-size: 13px;
-      font-weight: 900;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      cursor: pointer;
     }
-    .nav-link.primary, .mini-form button { background: #f5fff8; color: var(--green-2); border-color: #f5fff8; }
+    .nav-link:hover, .mini-form button:hover {
+      border-color: var(--line-hover);
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+    }
+    .nav-link.primary {
+      background: var(--green);
+      color: #fff;
+      border-color: var(--green);
+      font-weight: 700;
+      box-shadow: 0 4px 12px var(--green-glow);
+    }
+    .nav-link.primary:hover {
+      background: var(--green-2);
+      border-color: var(--green-2);
+      transform: translateY(-1px);
+    }
     .mini-form { margin: 0; }
-    .shell { padding: 28px; max-width: 1480px; margin: 0 auto; }
+    .mini-form button {
+      background: transparent;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+      min-height: auto;
+    }
+    .mini-form button:hover {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: #ef4444;
+      color: #fff;
+    }
+    .shell { padding: 36px; max-width: 1400px; margin: 0 auto; }
     .hero {
-      min-height: 520px;
+      min-height: 480px;
       display: grid;
-      grid-template-columns: minmax(340px, 1.1fr) minmax(320px, .9fr);
-      gap: 22px;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 28px;
       align-items: stretch;
+      margin-bottom: 40px;
     }
     .hero-copy {
       border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 30px;
+      border-radius: 16px;
+      padding: 40px;
       background: var(--surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
       box-shadow: var(--shadow);
       display: flex;
       flex-direction: column;
       justify-content: space-between;
     }
-    .eyebrow { color: var(--green); font-size: 12px; font-weight: 950; text-transform: uppercase; letter-spacing: .04em; }
-    .hero h1 { font-size: 54px; line-height: .98; letter-spacing: 0; max-width: 820px; margin: 12px 0 16px; }
-    .hero p { color: var(--muted); font-size: 17px; line-height: 1.55; max-width: 760px; }
-    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
+    .eyebrow {
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+      display: inline-block;
+    }
+    .hero h1 {
+      font-size: 48px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      margin: 12px 0 16px;
+      color: #fff;
+    }
+    .hero p {
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.6;
+      max-width: 700px;
+      margin-bottom: 24px;
+    }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 24px; }
     .button {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-height: 44px;
-      border-radius: 6px;
+      min-height: 46px;
+      border-radius: 8px;
       border: 1px solid var(--green);
       background: var(--green);
       color: white;
-      padding: 0 16px;
-      font-weight: 950;
+      padding: 0 24px;
+      font-weight: 700;
+      font-size: 14px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+      box-shadow: 0 4px 12px var(--green-glow);
+      width: 100%;
     }
-    .button.secondary { background: var(--surface); color: var(--green-2); border-color: var(--line); }
-    .metrics { display: grid; grid-template-columns: repeat(4, minmax(110px, 1fr)); gap: 10px; margin-top: 28px; }
+    .button:hover {
+      background: var(--green-2);
+      border-color: var(--green-2);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
+    }
+    .button.secondary {
+      background: var(--surface-2);
+      color: #fff;
+      border-color: var(--line);
+      box-shadow: none;
+      width: auto;
+    }
+    .button.secondary:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: var(--line-hover);
+      transform: translateY(-1px);
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-top: 36px;
+    }
     .metric {
       border: 1px solid var(--line);
-      border-radius: 6px;
+      border-radius: 12px;
       background: var(--surface-2);
-      padding: 14px;
+      padding: 16px;
+      text-align: center;
+      transition: all 0.2s ease;
     }
-    .metric span, .fact span { display: block; color: var(--muted); font-size: 12px; font-weight: 950; text-transform: uppercase; }
-    .metric strong { display: block; margin-top: 6px; font-size: 25px; }
+    .metric:hover {
+      border-color: var(--line-hover);
+      background: rgba(255, 255, 255, 0.05);
+      transform: translateY(-2px);
+    }
+    .metric span, .fact span {
+      display: block;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .metric strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 28px;
+      color: #fff;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+    }
     .flow {
       border: 1px solid var(--line);
-      border-radius: 6px;
+      border-radius: 16px;
       background: var(--surface);
-      padding: 20px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      padding: 32px;
       box-shadow: var(--shadow);
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 16px;
     }
-    .flow h2 { margin-bottom: 2px; font-size: 20px; }
+    .flow h2 {
+      margin-bottom: 4px;
+      font-size: 24px;
+      color: #fff;
+    }
     .flow-step, .record, .panel {
       border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--surface);
-      padding: 16px;
+      border-radius: 12px;
+      background: var(--surface-2);
+      padding: 20px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .flow-step { display: grid; grid-template-columns: 34px 1fr auto; gap: 13px; align-items: start; }
+    .flow-step {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 16px;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .flow-step:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: var(--line-hover);
+      transform: translateX(4px);
+    }
     .number {
-      width: 34px;
-      height: 34px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
       display: grid;
       place-items: center;
       background: var(--mint);
-      color: var(--green-2);
-      font-weight: 950;
+      color: var(--green);
+      font-weight: 800;
+      font-size: 15px;
+      border: 1px solid rgba(16, 185, 129, 0.2);
     }
-    .flow-step strong { display: block; margin-bottom: 4px; }
-    .flow-step p, .record p, .panel-copy { color: var(--muted); line-height: 1.45; margin-bottom: 0; }
+    .flow-step strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 16px;
+      color: #fff;
+    }
+    .flow-step p, .record p, .panel-copy {
+      color: var(--muted);
+      line-height: 1.5;
+      margin-bottom: 0;
+      font-size: 14px;
+    }
     .badge {
       display: inline-flex;
       align-items: center;
       border-radius: 999px;
-      padding: 5px 9px;
+      padding: 4px 10px;
       border: 1px solid var(--line);
-      background: var(--surface-2);
-      color: var(--green-2);
-      font-size: 12px;
-      font-weight: 950;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--ink);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
       white-space: nowrap;
     }
-    .badge.good { background: #e4f1eb; border-color: #c6dfd3; color: var(--green-2); }
-    .badge.warn, .badge.hold { background: #fff2d8; border-color: #e8cc93; color: #76500f; }
-    .badge.bad { background: #f9e3df; border-color: #e9beb7; color: var(--red); }
-    .section { margin-top: 22px; }
-    .section-head { display: flex; justify-content: space-between; gap: 12px; align-items: end; margin-bottom: 12px; }
-    .section-head h2 { margin-bottom: 3px; font-size: 24px; }
-    .section-head p { margin-bottom: 0; color: var(--muted); }
-    .grid { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 12px; }
-    .grid.two { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
-    .ops-grid { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 12px; margin-bottom: 18px; }
-    .agent-grid { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 10px; }
+    .badge.good {
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.3);
+      color: #34d399;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.05);
+    }
+    .badge.warn, .badge.hold {
+      background: rgba(245, 158, 11, 0.1);
+      border-color: rgba(245, 158, 11, 0.3);
+      color: #fbbf24;
+    }
+    .badge.bad {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #f87171;
+    }
+    .section { margin-top: 40px; }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-end;
+      margin-bottom: 20px;
+    }
+    .section-head h2 {
+      margin-bottom: 6px;
+      font-size: 32px;
+      color: #fff;
+      letter-spacing: -0.01em;
+    }
+    .section-head p { margin-bottom: 0; color: var(--muted); font-size: 15px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .grid.two { grid-template-columns: repeat(2, 1fr); }
+    .ops-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 24px; }
+    .agent-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
     .agent-card {
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--surface);
-      padding: 13px;
+      border-radius: 12px;
+      background: var(--surface-2);
+      padding: 16px;
       min-width: 0;
-      box-shadow: 0 8px 24px rgba(8, 17, 13, .04);
+      transition: all 0.2s ease;
     }
-    .agent-card h3 { font-size: 15px; margin-bottom: 6px; }
-    .agent-card p { color: var(--muted); font-size: 12px; line-height: 1.35; margin-bottom: 10px; }
-    .agent-card code { display: block; overflow-wrap: anywhere; font-size: 12px; }
-    .record-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; margin-bottom: 12px; }
-    .record h3 { margin: 3px 0 5px; font-size: 19px; line-height: 1.15; }
-    .kicker { color: var(--muted); font-size: 12px; font-weight: 950; text-transform: uppercase; }
-    .facts { display: grid; grid-template-columns: repeat(3, minmax(100px, 1fr)); gap: 8px; margin-top: 13px; }
-    .fact { border-top: 1px solid var(--line); padding-top: 9px; min-width: 0; }
-    .fact strong, .fact code { display: block; margin-top: 4px; font-size: 13px; overflow-wrap: anywhere; }
-    details { border-top: 1px dashed var(--line); margin-top: 13px; padding-top: 11px; }
-    summary { cursor: pointer; color: var(--green-2); font-weight: 950; }
+    .agent-card:hover {
+      border-color: var(--line-hover);
+      background: rgba(255, 255, 255, 0.04);
+      transform: translateY(-2px);
+    }
+    .agent-card h3 { font-size: 16px; margin-bottom: 6px; color: #fff; }
+    .agent-card p { color: var(--muted); font-size: 13px; line-height: 1.45; margin-bottom: 12px; }
+    .agent-card code {
+      display: block;
+      overflow-wrap: anywhere;
+      font-size: 11px;
+      color: var(--green);
+      background: rgba(16, 185, 129, 0.05);
+      padding: 6px 8px;
+      border-radius: 4px;
+    }
+    .record {
+      background: var(--surface);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+    .record:hover {
+      transform: translateY(-2px);
+      border-color: rgba(16, 185, 129, 0.3);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+    }
+    .record-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    .record h3 {
+      margin: 4px 0 6px;
+      font-size: 20px;
+      line-height: 1.25;
+      color: #fff;
+    }
+    .kicker {
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .facts {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .fact {
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+      min-width: 0;
+    }
+    .fact strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 14px;
+      color: #fff;
+    }
+    .fact code {
+      display: block;
+      margin-top: 6px;
+      font-size: 11px;
+      overflow-wrap: anywhere;
+      color: var(--muted);
+    }
+    details {
+      border-top: 1px dashed var(--line);
+      margin-top: 16px;
+      padding-top: 12px;
+    }
+    summary {
+      cursor: pointer;
+      color: var(--green);
+      font-weight: 600;
+      font-size: 13px;
+      user-select: none;
+    }
+    summary:hover {
+      color: #34d399;
+    }
     pre {
       white-space: pre-wrap;
       background: var(--surface-2);
@@ -352,6 +611,9 @@ def _page(title: str, body: str, user: dict[str, Any] | None = None) -> str:
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{escape(title)}</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
         <style>{_css()}</style>
       </head>
       <body>
@@ -906,113 +1168,150 @@ def render_workspace(
     circle_request_id: str | None = None,
 ) -> str:
     user_label = escape(str(user.get("email") or user.get("id")))
+    default_payer = user_label if user_label.startswith("@") else "@qevor"
     error_html = f'<div class="notice bad">{escape(error)}</div>' if error else ""
     body = f"""
     <main class="shell">
       <section class="workspace-intro">
         <div>
-          <div class="eyebrow">Workspace</div>
-          <h2>Witness-to-pay console</h2>
-          <p class="panel-copy">Signed in as {user_label}. Create a Qevor-funded case, wait for funding, then submit evidence for NOTARY to attest and trigger the payment action.</p>
+          <div class="eyebrow">Interactive Console</div>
+          <h2>Witness-to-Pay Portal</h2>
+          <p class="panel-copy">Welcome back, <strong>{user_label}</strong>. NOTARY bridges trust by evaluating evidence and automating USDC settlements on the Arc Testnet. Follow the simple three-step process below to secure a contract:</p>
         </div>
         {error_html}
         <div class="steps">
-          <div class="step"><strong>1. Create case</strong><span>Define payer, payee, amount, and the condition for release.</span></div>
-          <div class="step"><strong>2. Fund in Qevor</strong><span>The evidence link unlocks only after the conditional payment is funded.</span></div>
-          <div class="step"><strong>3. Submit evidence</strong><span>NOTARY signs the verdict and sends Qevor the release, hold, or refund instruction.</span></div>
+          <div class="step">
+            <strong>1. Define Secured Agreement</strong>
+            <span>Write the payment condition in plain English (e.g. who pays, who gets paid, and what deliverables are required).</span>
+          </div>
+          <div class="step">
+            <strong>2. Fund the Escrow Reserve</strong>
+            <span>The payer moves funds into a secure conditional vault. Evidence submission unlocks only after funding is confirmed.</span>
+          </div>
+          <div class="step">
+            <strong>3. Submit Proof & Settle</strong>
+            <span>Provide a PR merge hash, file link, or payer approval. NOTARY's AI witness runs instant verification and releases the USDC!</span>
+          </div>
         </div>
       </section>
+      
       <section class="workspace">
         <aside>
           <div class="panel">
-            <h2>Create conditional payment case</h2>
-            <p class="panel-copy">This creates the shared case ID, Qevor payment reference, and evidence invite link.</p>
+            <h2>Create New Secure Escrow</h2>
+            <p class="panel-copy">Draft a natural-language contract. The system automatically extracts obligations and generates secure webhook links.</p>
+            
             <form method="post" action="/ui/cases">
-              <label for="instruction">Obligation</label>
-              <textarea id="instruction" name="instruction" required placeholder="Pay Daniel $250 when the design package is complete and I approve."></textarea>
-              <label for="payer_identity">Payer Qevor username</label>
-              <input id="payer_identity" name="payer_identity" required placeholder="@maya or marketing.agent" />
-              <label for="payer_type">Payer type</label>
-              <select id="payer_type" name="payer_type">
-                <option value="human">Human</option>
-                <option value="agent">Agent</option>
-              </select>
-              <label for="payee_identity">Payee identity</label>
-              <input id="payee_identity" name="payee_identity" required placeholder="@daniel or logistics.agent" />
-              <label for="amount_usdc">Amount USDC</label>
-              <input id="amount_usdc" name="amount_usdc" type="number" min="0.01" step="0.01" required />
-              <label for="payee_type">Payee type</label>
-              <select id="payee_type" name="payee_type">
-                <option value="human">Human</option>
-                <option value="agent">Agent</option>
-              </select>
-              <button>Create case and Qevor reference</button>
+              <label for="instruction">Agreement Details (Obligation)</label>
+              <p class="panel-copy" style="margin-top: -4px; margin-bottom: 8px; font-size: 12px; color: var(--green);">Include the payee username and exact deliverables (e.g., "Pay @jennycruzy $50 when delivery manifest is complete and payer @qevor approves").</p>
+              <textarea id="instruction" name="instruction" required placeholder="Type your natural language payment agreement here..."></textarea>
+              
+              <div class="split" style="margin-top: 8px;">
+                <div>
+                  <label for="payer_identity">Payer Username</label>
+                  <input id="payer_identity" name="payer_identity" value="{default_payer}" required placeholder="e.g. @qevor" />
+                </div>
+                <div>
+                  <label for="payer_type">Payer Type</label>
+                  <select id="payer_type" name="payer_type">
+                    <option value="human">Human Participant</option>
+                    <option value="agent">Autonomous AI Agent</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div class="split">
+                <div>
+                  <label for="payee_identity">Payee Username</label>
+                  <input id="payee_identity" name="payee_identity" value="@jennycruzy" required placeholder="e.g. @jennycruzy" />
+                </div>
+                <div>
+                  <label for="payee_type">Payee Type</label>
+                  <select id="payee_type" name="payee_type">
+                    <option value="human">Human Participant</option>
+                    <option value="agent">Autonomous AI Agent</option>
+                  </select>
+                </div>
+              </div>
+              
+              <label for="amount_usdc">USDC Amount to Lock</label>
+              <input id="amount_usdc" name="amount_usdc" type="number" min="0.01" step="0.01" value="50" required placeholder="e.g. 50" />
+              
+              <button style="margin-top: 18px;">Create Secured Agreement</button>
             </form>
           </div>
+          
           <div class="panel">
-            <h2>Capture evidence</h2>
-            <p class="panel-copy">Record in the browser or upload an audio/video file. Speechmatics transcribes it, then NOTARY runs the witness pipeline under your identity.</p>
-            <label for="record_privacy_mode">Privacy</label>
+            <h2>Capture Voice Proof</h2>
+            <p class="panel-copy">Speak into your microphone or upload a voice note describing work completion. Speechmatics automatically generates transcription logs for NOTARY to judge.</p>
+            <label for="record_privacy_mode">Privacy Shielding</label>
             <select id="record_privacy_mode">
-              <option value="protected">Protected</option>
-              <option value="private">Private</option>
-              <option value="public">Public</option>
+              <option value="protected">Protected (Only counterparties & arbitrators see details)</option>
+              <option value="private">Private (Completely encrypted, zero public exposure)</option>
+              <option value="public">Public (Fully discoverable on public ledger)</option>
             </select>
             <div class="button-row">
-              <button id="start_recording" type="button">Start recording</button>
-              <button id="stop_recording" class="danger" type="button" disabled>Stop & transcribe</button>
+              <button id="start_recording" type="button">🎙️ Start Recording</button>
+              <button id="stop_recording" class="danger" type="button" disabled>⏹️ Stop & Transcribe</button>
             </div>
-            <p id="recording_status" class="status-line">Microphone ready.</p>
-            <form method="post" action="/ui/media" enctype="multipart/form-data">
-              <label for="file">Upload recording</label>
+            <p id="recording_status" class="status-line">Microphone is ready.</p>
+            
+            <form method="post" action="/ui/media" enctype="multipart/form-data" style="border-top: 1px dashed var(--line); margin-top: 16px; padding-top: 16px;">
+              <label for="file">Upload Audio/Video Recording</label>
               <input id="file" name="file" type="file" accept="audio/*,video/*" />
               <input name="privacy_mode" type="hidden" value="protected" />
-              <label for="media_transcript_text">Transcript override</label>
-              <textarea id="media_transcript_text" name="transcript_text" placeholder="Optional if you already have a transcript."></textarea>
-              <button>Upload and run witness</button>
+              
+              <label for="media_transcript_text">Or, Paste Pre-Recorded Transcript</label>
+              <textarea id="media_transcript_text" name="transcript_text" placeholder="Copy/paste transcript text if you already have it..."></textarea>
+              
+              <button style="margin-top: 12px;">Process Upload & Run Witness</button>
             </form>
           </div>
+          
           <div class="panel">
-            <h2>Manual transcript</h2>
-            <p class="panel-copy">Paste a payment instruction, work call, or evidence summary.</p>
+            <h2>Quick Written Proof</h2>
+            <p class="panel-copy">Manually submit a text summary, signed authorization, or commit record to trigger instant witness analysis.</p>
             <form method="post" action="/ui/attest">
-              <label for="privacy_mode">Privacy</label>
+              <label for="privacy_mode">Privacy Shielding</label>
               <select id="privacy_mode" name="privacy_mode">
-                <option value="protected">Protected</option>
-                <option value="private">Private</option>
-                <option value="public">Public</option>
+                <option value="protected">Protected (Default)</option>
+                <option value="private">Private (Encrypted)</option>
+                <option value="public">Public (Unrestricted)</option>
               </select>
-              <label for="transcript_text">Transcript</label>
-              <textarea id="transcript_text" name="transcript_text" placeholder="Pay Daniel $250 when the design is complete and I approve. Evidence: timestamped signed approval and final file link."></textarea>
-              <button>Run witness pipeline</button>
+              <label for="transcript_text">Written Evidence</label>
+              <textarea id="transcript_text" name="transcript_text" placeholder="Include clear confirmation markers (e.g. 'I, @qevor, approve release of $50 because the pull request #5 is complete and merged')."></textarea>
+              <button>Submit Evidence</button>
             </form>
           </div>
         </aside>
+        
         <section>
           <div class="section-head">
             <div>
-              <h2>My cases</h2>
-              <p>{len(state.get("cases", []))} conditional payment case(s) connected to this account.</p>
+              <h2>My Active Escrow Cases</h2>
+              <p>{len(state.get("cases", []))} conditional payment case(s) active on this account.</p>
             </div>
           </div>
           <div class="grid">{_case_cards(state.get("cases", []))}</div>
-          <div class="section-head" style="margin-top:22px">
+          
+          <div class="section-head" style="margin-top:28px">
             <div>
-              <h2>My rulings</h2>
-              <p>{len(state.get("rulings", []))} ruling(s) connected to this account.</p>
+              <h2>My Witness Rulings</h2>
+              <p>{len(state.get("rulings", []))} automated witness ruling(s) committed.</p>
             </div>
           </div>
           <div class="grid">{_record_cards(state.get("rulings", []))}</div>
         </section>
       </section>
+      
       <details class="advanced-stack">
-        <summary>Agent, Arc, and operator controls</summary>
+        <summary>Advanced Dev Swarm, Arc, & Operator Controls</summary>
         {_ops_panels(state, circle_request_id)}
         <div class="section-head" style="margin-top:18px">
           <div>
-            <div class="eyebrow">6-agent witness swarm</div>
-            <h2>Decision roles</h2>
-            <p>The app runs one orchestrated pipeline, surfaced as six accountable roles.</p>
+            <div class="eyebrow">6-Agent Autonomous Swarm</div>
+            <h2>Decision Roles</h2>
+            <p>Every case triggers our orchestrated pipeline, split into six specialized consensus agents:</p>
           </div>
         </div>
         <div class="agent-grid">{_agent_role_cards(state.get("swarm_roles", []))}</div>
@@ -1027,35 +1326,49 @@ def render_case_evidence(case: dict[str, Any], token: str | None, user: dict[str
     hidden_token = f'<input name="token" type="hidden" value="{escape(token)}" />' if token else ""
     is_funded = case.get("status") != "awaiting_funding"
     funding_notice = (
-        '<div class="notice">This case is not funded yet. Evidence cannot be submitted until Qevor reports the conditional payment as funded.</div>'
+        '<div class="notice bad">🚨 This contract is currently awaiting funding. Submitting proof is locked until the Payer deposits USDC into the secure conditional escrow vault.</div>'
         if not is_funded
         else ""
     )
     disabled = "" if is_funded else "disabled"
     body = f"""
     <main class="signin">
-      <section class="panel signin-card">
-        <div class="eyebrow">Evidence submission</div>
-        <h1>{_text(case.get("instruction"))}</h1>
-        <p class="panel-copy">Case {escape(_short(case.get("case_id"), 24))}. Evidence submitted here is matched by case ID, not by name matching or free text.</p>
-        <div class="facts">
-          <div class="fact"><span>Payer</span><strong>{_text(case.get("payer_identity"))}</strong></div>
-          <div class="fact"><span>Payee</span><strong>{_text(case.get("payee_identity"))}</strong></div>
-          <div class="fact"><span>Qevor ref</span><code>{escape(_short(case.get("qevor_payment_reference"), 28))}</code></div>
+      <section class="panel signin-card" style="width: min(600px, 100%);">
+        <div class="eyebrow">Contract Evidence Portal</div>
+        <h1>Submit Secured Evidence</h1>
+        <p class="panel-copy" style="font-size: 14px; line-height: 1.55;">
+          You are submitting verification proof for: <br/>
+          <strong>"{_text(case.get("instruction"))}"</strong>
+        </p>
+        
+        <div class="facts" style="margin-bottom: 20px;">
+          <div class="fact"><span>Contract Payer</span><strong>{_text(case.get("payer_identity"))}</strong></div>
+          <div class="fact"><span>Contract Payee</span><strong>{_text(case.get("payee_identity"))}</strong></div>
+          <div class="fact"><span>Secure Escrow Ref</span><code>{escape(_short(case.get("qevor_payment_reference"), 24))}</code></div>
         </div>
+        
         {funding_notice}
-        <form method="post" action="/cases/{escape(case.get("case_id"))}/evidence">
+        
+        <form method="post" action="/cases/{escape(case.get("case_id"))}/evidence" style="border-top: 1px dashed var(--line); padding-top: 20px;">
           {hidden_token}
-          <label for="submitter_identity">Submitter identity</label>
+          <label for="submitter_identity">Your Username</label>
+          <p class="panel-copy" style="margin-top: -4px; margin-bottom: 8px; font-size: 12px;">Confirm your Qevor identity (e.g. <i>@jennycruzy</i> or <i>@qevor</i>).</p>
           <input id="submitter_identity" name="submitter_identity" value="{escape(str((user or {}).get("email") or case.get("payee_identity") or ""))}" required {disabled} />
-          <label for="submitter_type">Submitter type</label>
+          
+          <label for="submitter_type" style="margin-top: 14px;">Identity Classification</label>
           <select id="submitter_type" name="submitter_type" {disabled}>
-            <option value="human">Human</option>
-            <option value="agent">Agent</option>
+            <option value="human">Human Operator</option>
+            <option value="agent">AI Assistant / Autonomous Agent</option>
           </select>
-          <label for="evidence_text">Evidence</label>
-          <textarea id="evidence_text" name="evidence_text" required placeholder="Timestamped file link, signed approval, commit hash, invoice receipt, delivery notes..." {disabled}></textarea>
-          <button {disabled}>Submit evidence to NOTARY</button>
+          
+          <label for="evidence_text" style="margin-top: 14px;">Evidence / Verifiable Proof</label>
+          <p class="panel-copy" style="margin-top: -4px; margin-bottom: 8px; font-size: 12px; color: var(--green);">
+            Provide objective proof (e.g. commit hashes, PR merge links, file paths). 
+            Include positive action terms like <strong>"completed"</strong>, <strong>"delivered"</strong>, or <strong>"approved"</strong> to guarantee instant payment release!
+          </p>
+          <textarea id="evidence_text" name="evidence_text" required placeholder="Paste your links, commits, or signed approval statements here..." {disabled}></textarea>
+          
+          <button style="margin-top: 20px;" {disabled}>🚀 Submit & Verify Proof</button>
         </form>
       </section>
     </main>

@@ -41,3 +41,4 @@ target-version = "py312"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 pythonpath = ["."]
+addopts = "--basetemp=.pytest_tmp"
