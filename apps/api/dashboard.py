@@ -497,11 +497,13 @@ def _css() -> str:
     .step {
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: #fbfcfa;
+      background: var(--surface-2);
       padding: 12px;
+      transition: all 0.2s ease;
     }
-    .step strong { display: block; margin-bottom: 4px; }
-    .step span { color: var(--muted); line-height: 1.35; display: block; }
+    .step:hover { border-color: var(--green); background: rgba(16,185,129,0.06); }
+    .step strong { display: block; margin-bottom: 4px; color: #fff; }
+    .step span { color: var(--muted); line-height: 1.35; display: block; font-size: 13px; }
     .advanced-stack {
       border: 1px solid var(--line);
       border-radius: 6px;
@@ -516,20 +518,26 @@ def _css() -> str:
       font-size: 18px;
     }
     .panel { margin-bottom: 14px; }
-    label { display: block; margin: 12px 0 6px; font-size: 13px; font-weight: 850; color: #18231f; }
+    label { display: block; margin: 12px 0 6px; font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: 0.01em; text-transform: uppercase; font-size: 11px; }
     input, textarea, select {
       width: 100%;
       border: 1px solid var(--line);
-      border-radius: 6px;
-      background: #fff;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.04);
       color: var(--ink);
-      padding: 11px 12px;
+      padding: 11px 14px;
       font: inherit;
+      font-size: 14px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
+    input::placeholder, textarea::placeholder { color: rgba(148,163,184,0.5); }
     input:focus, textarea:focus, select:focus {
-      outline: 3px solid rgba(8,114,79,.14);
+      outline: none;
       border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(16,185,129,0.15);
+      background: rgba(16,185,129,0.04);
     }
+    select option { background: #0f1714; color: var(--ink); }
     textarea { min-height: 118px; resize: vertical; }
     button {
       min-height: 43px;
@@ -553,20 +561,23 @@ def _css() -> str:
       border-radius: 6px;
       padding: 24px;
       color: var(--muted);
-      background: #fbfcfa;
+      background: rgba(255,255,255,0.02);
       text-align: center;
+      font-size: 14px;
     }
     .notice {
-      border: 1px solid #cae9d7;
+      border: 1px solid rgba(16,185,129,0.3);
       border-left: 4px solid var(--green);
-      border-radius: 6px;
-      background: #eef9f2;
+      border-radius: 8px;
+      background: rgba(16,185,129,0.08);
       padding: 12px 14px;
       margin: 12px 0;
-      font-weight: 800;
+      font-weight: 600;
+      font-size: 14px;
       overflow-wrap: anywhere;
+      color: #a7f3d0;
     }
-    .notice.bad { border-color: #f0c9c4; border-left-color: var(--red); background: #fff0ee; }
+    .notice.bad { border-color: rgba(239,68,68,0.3); border-left-color: var(--red); background: rgba(239,68,68,0.08); color: #fca5a5; }
     .signin {
       min-height: calc(100vh - 82px);
       display: grid;
@@ -591,6 +602,59 @@ def _css() -> str:
       .flow-step { grid-template-columns: 34px 1fr; }
       .flow-step .badge { grid-column: 2; width: max-content; }
     }
+    .tabs-header {
+      display: flex;
+      gap: 6px;
+      margin: 16px 0 0;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 8px;
+    }
+    .tab-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 13px;
+      padding: 9px 12px;
+      border-radius: 6px 6px 0 0;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+    .tab-btn:hover { color: #fff; background: rgba(255,255,255,0.04); }
+    .tab-btn.active {
+      color: var(--green);
+      background: rgba(16,185,129,0.08);
+      border-bottom: 2px solid var(--green);
+    }
+    .tab-content { display: none; padding-top: 12px; }
+    .tab-content.active { display: block; }
+    .sandbox-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 20px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .sandbox-divider::before, .sandbox-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--line);
+    }
+    .sandbox-section {
+      border: 1px solid rgba(245,158,11,0.2);
+      border-radius: 8px;
+      background: rgba(245,158,11,0.04);
+      padding: 14px;
+      margin-top: 10px;
+    }
+    .login-section { margin-top: 4px; }
     """
 
 
