@@ -8,6 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 import time
 from urllib.parse import quote
+from html import escape
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
