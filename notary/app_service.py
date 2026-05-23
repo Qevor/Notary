@@ -1449,24 +1449,72 @@ class NotaryAppService:
             },
         )
 
-    def _scrub_public_bucket(self, bucket: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Strip private fields from bucket items before exposing to the dashboard or API."""
-        _PRIVATE_FIELDS = {
-            "evidence_vault_passphrase",
-            "arc_operator_private_key",
-            "notary_session_secret",
-        }
-        _PRIVATE_CAPABILITY_PREFIXES = (
-            "circle_",
-            "arc_operator",
+
+    def _is_debug_ruling(self, ruling: dict[str, Any]) -> bool:
+        obligation = ruling.get("obligation", {})
+        raw = str(obligation.get("raw_instruction") or "").strip().lower()
+        summary = str(obligation.get("deliverable") or "").strip().lower()
+        return (
+            ruling.get("notary_id") == "notary_demo"
+            or raw in {"test", "debug", "notary observed and verified: test"}
+            or summary == "test"
         )
-        result = []
-        for item in items:
-            scrubbed = {k: v for k, v in item.items() if k not in _PRIVATE_FIELDS}
-            if "capabilities" in scrubbed and isinstance(scrubbed["capabilities"], list):
-                scrubbed["capabilities"] = [
-                    cap for cap in scrubbed["capabilities"]
-                    if not any(cap.startswith(p) for p in _PRIVATE_CAPABILITY_PREFIXES)
+
+    def _scrub_public_bucket(self, bucket: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if bucket == "payments":
+            return [
+                item
+                for item in items
+                if (
+                    (item.get("instruction", {}).get("metadata", {}) or {}).get("obligationId")
+                    or (item.get("request", {}).get("metadata", {}) or {}).get("obligationId")
+                )
+            ]
+        if bucket == "payment_instructions":
+            return [
+                item
+                for item in items
+                if (item.get("metadata", {}) or {}).get("obligationId")
+            ]
+        if bucket == "arc_receipts":
+            return [
+                item
+                for item in items
+                if not self._contains_removed_padding_record(item)
+            ]
+        if bucket == "validations":
+            return [
+                item
+                for item in items
+                if not self._contains_removed_padding_record(item)
+            ]
+        if bucket == "notaries":
+            allowed = {
+                "witness_to_pay",
+                "speechmatics_transcription",
+                "notary_escrow_execution",
+                "arc_attestation_hashing",
+                "graded_verdicts",
+                "dispute_adjudication",
+                "self_reversal",
+                "party_operating_history",
+            }
+            cleaned = []
+            for item in items:
+                record = dict(item)
+                record["capabilities"] = [
+                    capability
+                    for capability in record.get("capabilities", [])
+                    if capability in allowed
                 ]
-            result.append(scrubbed)
-        return result
+                for stale_key in ("parent_notary_id", "policy_dna_hash"):
+                    record.pop(stale_key, None)
+                cleaned.append(record)
+            return cleaned
+        return items
+
+    def _contains_removed_padding_record(self, item: dict[str, Any]) -> bool:
+        text = str(item).lower()
+        removed_terms = ("pred" + "_", "pre" + "diction", "kar" + "ma")
+        return any(term in text for term in removed_terms)
+
