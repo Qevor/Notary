@@ -14,6 +14,9 @@ CONTRACTS = [
     ("AttestationRegistry", ROOT / "contracts" / "AttestationRegistry.sol"),
     ("NotaryValidationRegistry", ROOT / "contracts" / "NotaryValidationRegistry.sol"),
     ("NotaryGovernance", ROOT / "contracts" / "NotaryGovernance.sol"),
+    ("NotaryKarma", ROOT / "contracts" / "NotaryKarma.sol"),
+    ("NotaryAgentIdentity", ROOT / "contracts" / "NotaryAgentIdentity.sol"),
+    ("NotaryReplication", ROOT / "contracts" / "NotaryReplication.sol"),
 ]
 
 

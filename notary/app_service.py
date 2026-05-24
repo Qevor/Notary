@@ -1822,18 +1822,136 @@ class NotaryAppService:
         if payments:
             if self.settings.notary_escrow_demo_mode:
                 missing.append("NOTARY_ESCROW_DEMO_MODE=false")
-            for name, value in {
-                "NOTARY_SUPABASE_URL": self.settings.notary_supabase_url,
-                "NOTARY_SUPABASE_SERVICE_ROLE_KEY": (
-                    self.settings.notary_supabase_service_role_key
-                ),
-            }.items():
-                if not value:
-                    missing.append(name)
+            has_external_escrow = bool(
+                self.settings.notary_escrow_api_base_url
+                and (
+                    self.settings.notary_escrow_release_path
+                    or self.settings.notary_escrow_batch_path
+                    or self.settings.notary_escrow_refund_path
+                )
+            )
+            has_supabase_escrow = bool(
+                self.settings.notary_supabase_url
+                and self.settings.notary_supabase_service_role_key
+            )
+            if not (has_external_escrow or has_supabase_escrow or self._manual_arc_escrow_enabled()):
+                missing.append(
+                    "NOTARY escrow execution path "
+                    "(external endpoints, Supabase, or development manual Arc verification)"
+                )
         if missing:
             raise RuntimeError(
                 "Live NOTARY witness flow requires configuration: " + ", ".join(missing)
             )
+
+    def _manual_arc_escrow_enabled(self) -> bool:
+        return (
+            self.settings.notary_env != "production"
+            and not self.settings.notary_escrow_demo_mode
+            and not self.settings.notary_supabase_url
+            and not self.settings.notary_escrow_api_base_url
+        )
+
+    async def _execute_manual_arc_escrow_transfer(
+        self,
+        instruction: PaymentInstruction,
+    ) -> dict[str, Any]:
+        case_id = instruction.metadata.get("notaryCaseId")
+        escrow_reference = instruction.metadata.get("escrowReference")
+        case_item = None
+        if case_id:
+            case_item = self.store.get("cases", str(case_id))
+        if not case_item and escrow_reference:
+            case_item = next(
+                (
+                    item
+                    for item in self.store.list("cases")
+                    if str(item.get("escrow_payment_reference")) == str(escrow_reference)
+                ),
+                None,
+            )
+        if not case_item:
+            raise RuntimeError("Manual Arc escrow release requires a funded NOTARY case")
+
+        case = NotaryCase.model_validate(case_item)
+        metadata = case.metadata or {}
+        if str(metadata.get("fundingStatus")) != "funded":
+            raise RuntimeError("Manual Arc escrow release requires verified Arc funding first")
+
+        from_wallet = metadata.get("executorAgentWalletId") or metadata.get("executorEscrowAddress")
+        if not from_wallet:
+            raise RuntimeError("Manual Arc escrow release requires an executor escrow wallet")
+
+        if instruction.action == PaymentAction.REFUND:
+            target_identity = metadata.get("payerWallet") or instruction.payer_identity
+        else:
+            target_identity = metadata.get("payeeWallet") or instruction.payee_identity
+
+        target = await self.escrow.resolve_identity_to_wallet(str(target_identity))
+        to_wallet = target.get("wallet")
+        if not to_wallet:
+            raise RuntimeError("Manual Arc escrow release could not resolve recipient wallet")
+
+        amount = instruction.amount_usdc or case.amount_usdc
+        if not amount or amount <= 0:
+            raise RuntimeError("Manual Arc escrow release requires a positive amount")
+
+        receipt = await self.circle.transfer_usdc(
+            from_wallet_id=str(from_wallet),
+            to_address=str(to_wallet),
+            amount=float(amount),
+        )
+        tx_id = (
+            receipt.get("txHash")
+            or receipt.get("id")
+            or receipt.get("transferId")
+            or new_id("manual_arc_escrow")
+        )
+        return {
+            "reference": tx_id,
+            "status": "submitted",
+            "provider": "circle_cli_manual_arc_escrow",
+            "action": instruction.action.value,
+            "from": from_wallet,
+            "to": to_wallet,
+            "amount_usdc": float(amount),
+            "caseId": case.case_id,
+            "escrowReference": escrow_reference,
+            "receipt": receipt,
+        }
+
+    async def _execute_manual_arc_batch(
+        self,
+        instruction: PaymentInstruction,
+    ) -> dict[str, Any]:
+        receipts = []
+        for recipient in instruction.recipients:
+            amount = float(recipient.get("amount") or recipient.get("amount_usdc") or 0)
+            identity = str(
+                recipient.get("wallet")
+                or recipient.get("recipient")
+                or recipient.get("recipient_wallet")
+                or ""
+            )
+            if not identity or amount <= 0:
+                continue
+            child_instruction = instruction.model_copy(
+                update={
+                    "action": PaymentAction.RELEASE_PARTIAL,
+                    "amount_usdc": amount,
+                    "payee_identity": identity,
+                    "recipients": [],
+                }
+            )
+            receipts.append(await self._execute_manual_arc_escrow_transfer(child_instruction))
+        if not receipts:
+            raise RuntimeError("Manual Arc batch release requires at least one valid recipient")
+        return {
+            "reference": new_id("manual_arc_batch"),
+            "status": "submitted",
+            "provider": "circle_cli_manual_arc_batch",
+            "receipts": receipts,
+        }
 
     async def _extract_obligation_with_llm(self, request: WitnessIntakeRequest):
         if self.settings.groq_api_key:
@@ -1863,6 +1981,14 @@ class NotaryAppService:
             }
         else:
             if instruction.recipients:
+                if self._manual_arc_escrow_enabled():
+                    receipt = await self._execute_manual_arc_batch(instruction)
+                    self.store.put(
+                        "payments",
+                        receipt.get("reference") or instruction.instruction_id,
+                        receipt,
+                    )
+                    return receipt
                 receipt = await self.escrow.create_batch_distribution(
                     EscrowBatchDistributionRequest(
                         recipients=instruction.recipients,
@@ -1890,7 +2016,14 @@ class NotaryAppService:
                 authorized=True,
                 metadata=instruction.metadata | {"payerIdentity": instruction.payer_identity},
             )
-            receipt = await self.escrow.execute_trigger(trigger)
+            if self._manual_arc_escrow_enabled() and instruction.action in {
+                PaymentAction.RELEASE_ESCROW,
+                PaymentAction.RELEASE_PARTIAL,
+                PaymentAction.REFUND,
+            }:
+                receipt = await self._execute_manual_arc_escrow_transfer(instruction)
+            else:
+                receipt = await self.escrow.execute_trigger(trigger)
         self.store.put("payments", receipt.get("reference") or instruction.instruction_id, receipt)
         return receipt
 
