@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Any
-from uuid import uuid4, uuid5, NAMESPACE_URL
+from uuid import UUID, uuid4, uuid5, NAMESPACE_URL
 
 
 _CHAIN_TO_BLOCKCHAIN = {
@@ -38,6 +39,25 @@ def _first_wallet(payload: Any) -> dict[str, Any] | None:
             if found:
                 return found
     return None
+
+
+def _transaction_data(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    data = payload.get("data", payload)
+    if isinstance(data, dict) and isinstance(data.get("transaction"), dict):
+        return data["transaction"]
+    return data if isinstance(data, dict) else {}
+
+
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _jsonable(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_jsonable(item) for item in value]
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
 
 
 @dataclass(slots=True)
@@ -171,19 +191,34 @@ class CircleDeveloperWalletClient:
         )
         response = method(request)
         body = response.to_dict() if hasattr(response, "to_dict") else response
-        data = body.get("data", body) if isinstance(body, dict) else {}
-        data = data if isinstance(data, dict) else {}
+        data = _transaction_data(body)
+        final_body = body
+        transaction_id = data.get("id")
+        if transaction_id:
+            for _ in range(15):
+                state = str(data.get("state") or "").upper()
+                tx_hash = data.get("txHash") or data.get("transactionHash")
+                if tx_hash or state in {"COMPLETE", "FAILED", "CANCELLED", "DENIED"}:
+                    break
+                time.sleep(2)
+                poll_response = api.get_transaction(UUID(str(transaction_id)))
+                final_body = poll_response.to_dict() if hasattr(poll_response, "to_dict") else poll_response
+                data = _transaction_data(final_body)
+            if str(data.get("state") or "").upper() in {"FAILED", "CANCELLED", "DENIED"}:
+                raise RuntimeError(f"Circle Wallets API transfer did not complete: {data.get('state')}")
+
+        tx_hash = data.get("txHash") or data.get("transactionHash")
         return {
             "id": data.get("id") or (body.get("id") if isinstance(body, dict) else None),
             "transactionId": data.get("id"),
             "state": data.get("state"),
-            "txHash": data.get("txHash") or data.get("transactionHash"),
+            "txHash": tx_hash,
             "fromWalletId": wallet_id,
-            "fromWalletAddress": wallet_address,
-            "to": to_address,
+            "fromWalletAddress": data.get("sourceAddress") or wallet_address,
+            "to": data.get("destinationAddress") or to_address,
             "amount": amount_usdc,
-            "status": "submitted",
+            "status": "complete" if tx_hash else "submitted",
             "provider": "circle_developer_wallets",
-            "raw": body,
+            "raw": _jsonable(final_body),
             "demo": False,
         }
