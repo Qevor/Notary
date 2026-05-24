@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -179,10 +180,16 @@ class ArcClient:
             raise RuntimeError("Live Arc RPC is required to verify transactions")
         return await self._rpc("eth_getTransactionByHash", [tx_hash])
 
-    async def get_transaction_receipt(self, tx_hash: str) -> dict[str, Any]:
+    async def get_transaction_receipt(self, tx_hash: str, *, retries: int = 0, delay_seconds: float = 1.0) -> dict[str, Any]:
         if not self.enabled:
             raise RuntimeError("Live Arc RPC is required to verify transactions")
-        receipt = await self._rpc("eth_getTransactionReceipt", [tx_hash])
+        receipt = None
+        for attempt in range(retries + 1):
+            receipt = await self._rpc("eth_getTransactionReceipt", [tx_hash])
+            if receipt:
+                break
+            if attempt < retries:
+                await asyncio.sleep(delay_seconds)
         if not receipt:
             raise RuntimeError("Arc transaction receipt was not found")
         return receipt
@@ -267,6 +274,7 @@ class ArcClient:
             to_address=to_address,
             amount_usdc=amount_usdc,
             token_address=token_address,
+            receipt_retries=15,
         )
         return {
             "txHash": tx_hash,
@@ -286,8 +294,9 @@ class ArcClient:
         to_address: str,
         amount_usdc: float,
         token_address: str = USDC_TOKEN_ADDRESS,
+        receipt_retries: int = 0,
     ) -> dict[str, Any]:
-        receipt = await self.get_transaction_receipt(tx_hash)
+        receipt = await self.get_transaction_receipt(tx_hash, retries=receipt_retries)
         if str(receipt.get("status", "")).lower() != "0x1":
             raise RuntimeError("Arc transaction did not succeed")
 
