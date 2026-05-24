@@ -8,6 +8,38 @@ from notary.services.circle_wallets_api import CircleDeveloperWalletClient
 
 
 @pytest.mark.anyio
+async def test_circle_cli_transfer_uses_current_agent_stack_syntax(monkeypatch):
+    client = CircleAgentClient(demo_mode=False, chain="ARC-TESTNET", testnet=True)
+    captured: dict[str, tuple[str, ...]] = {}
+
+    async def fake_resolve_address(self, wallet_id):
+        assert wallet_id == "0x" + "1" * 40
+        return wallet_id
+
+    async def fake_run(self, *args):
+        captured["args"] = args
+        return {"txHash": "0x" + "2" * 64}
+
+    monkeypatch.setattr(CircleAgentClient, "_resolve_address", fake_resolve_address)
+    monkeypatch.setattr(CircleAgentClient, "_run", fake_run)
+
+    receipt = await client.transfer_usdc(
+        from_wallet_id="0x" + "1" * 40,
+        to_address="0x" + "3" * 40,
+        amount=0.05,
+    )
+
+    args = captured["args"]
+    assert args[:3] == ("wallet", "transfer", "0x" + "3" * 40)
+    assert "--address" in args
+    assert "--token" in args
+    assert "--chain" in args
+    assert "--from" not in args
+    assert "--to" not in args
+    assert receipt["status"] == "success"
+
+
+@pytest.mark.anyio
 async def test_agentic_commerce_primitives_are_operational(tmp_path):
     settings = Settings(
         notary_db_path=tmp_path / "notary_commerce.sqlite3",

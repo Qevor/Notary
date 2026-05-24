@@ -9,6 +9,8 @@ from typing import Any
 
 from notary.models.schemas import new_id
 
+USDC_TOKEN_ADDRESS = "0x3600000000000000000000000000000000000000"
+
 
 def _first_mapping_with_keys(payload: Any, keys: set[str]) -> dict[str, Any] | None:
     if isinstance(payload, dict):
@@ -315,12 +317,13 @@ class CircleAgentClient:
         result = await self._run(
             "wallet",
             "transfer",
-            "--from",
-            from_address,
-            "--to",
             to_address,
             "--amount",
             str(amount),
+            "--token",
+            USDC_TOKEN_ADDRESS,
+            "--address",
+            from_address,
             "--chain",
             self.chain,
         )
