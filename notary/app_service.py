@@ -364,7 +364,86 @@ class NotaryAppService:
             "createdAt": utc_now().isoformat(),
         }
         self.store.put("x402_payments", key, record)
+        await self._commit_validation(
+            kind="x402_paid_data_request",
+            subject_id=key,
+            payload=record,
+            notary_id=self._default_notary_id(),
+        )
         return record
+
+    async def _pay_or_verify_usdc(
+        self,
+        *,
+        payer_identity: str,
+        recipient_address: str,
+        amount_usdc: float,
+        tx_hash: str | None,
+        purpose: str,
+    ) -> dict[str, Any]:
+        if amount_usdc <= 0:
+            raise RuntimeError(f"{purpose} requires a positive USDC amount")
+
+        if self.settings.notary_demo_mode and not tx_hash:
+            return {
+                "mode": "demo",
+                "txHash": new_id("demo_usdc"),
+                "from": payer_identity,
+                "to": recipient_address,
+                "amountUSDC": amount_usdc,
+                "demo": True,
+            }
+
+        payer = await self.escrow.resolve_identity_to_wallet(payer_identity)
+        payer_wallet = payer.get("wallet")
+        if not payer_wallet:
+            raise RuntimeError(f"{purpose} could not resolve payer wallet")
+
+        if tx_hash:
+            verification = await self.arc.verify_usdc_transfer(
+                tx_hash=tx_hash,
+                from_address=payer_wallet,
+                to_address=recipient_address,
+                amount_usdc=amount_usdc,
+            )
+            return {
+                "mode": "verified_external_arc_transfer",
+                "txHash": tx_hash,
+                "from": payer_wallet,
+                "to": recipient_address,
+                "amountUSDC": amount_usdc,
+                "verification": verification,
+            }
+
+        if payer_wallet.lower() == recipient_address.lower():
+            raise RuntimeError(
+                f"{purpose} cannot auto-pay from and to the same wallet. "
+                "Supply an external Arc USDC tx hash from a separate payer wallet."
+            )
+
+        receipt = await self.circle.transfer_usdc(
+            from_wallet_id=payer_wallet,
+            to_address=recipient_address,
+            amount=amount_usdc,
+        )
+        tx = str(receipt.get("txHash") or receipt.get("id") or receipt.get("transferId") or "")
+        verification = None
+        if tx.startswith("0x"):
+            verification = await self.arc.verify_usdc_transfer(
+                tx_hash=tx,
+                from_address=payer_wallet,
+                to_address=recipient_address,
+                amount_usdc=amount_usdc,
+            )
+        return {
+            "mode": "circle_cli_transfer",
+            "txHash": tx,
+            "from": payer_wallet,
+            "to": recipient_address,
+            "amountUSDC": amount_usdc,
+            "receipt": receipt,
+            "verification": verification,
+        }
 
     async def create_reasoning_pay_to_peek(
         self,
@@ -381,28 +460,25 @@ class NotaryAppService:
         trace_hash = attestation.get("reasoning_trace_hash")
         if not trace_hash:
             raise RuntimeError("Ruling has no reasoning trace hash")
-        if not self.settings.notary_demo_mode and not tx_hash:
-            raise RuntimeError("Pay-to-Peek requires an Arc payment transaction hash in live mode")
-        payment_verification = None
-        if tx_hash:
-            treasury = self._default_agent_wallet()
-            buyer = await self.escrow.resolve_identity_to_wallet(buyer_identity)
-            if not treasury:
-                raise RuntimeError("Create a NOTARY treasury wallet before accepting Pay-to-Peek")
-            payment_verification = await self.arc.verify_usdc_transfer(
-                tx_hash=tx_hash,
-                from_address=buyer.get("wallet"),
-                to_address=treasury,
-                amount_usdc=amount_usdc,
-            )
+        treasury = self._default_agent_wallet()
+        if not treasury:
+            raise RuntimeError("Create a NOTARY treasury wallet before accepting Pay-to-Peek")
+        payment = await self._pay_or_verify_usdc(
+            payer_identity=buyer_identity,
+            recipient_address=treasury,
+            amount_usdc=amount_usdc,
+            tx_hash=tx_hash,
+            purpose="Pay-to-Peek",
+        )
         access = {
             "accessId": new_id("peek"),
             "rulingId": ruling_id,
             "buyerIdentity": buyer_identity,
             "reasoningTraceHash": trace_hash,
             "amountUSDC": amount_usdc,
-            "arcTxHash": tx_hash,
-            "paymentVerification": payment_verification,
+            "arcTxHash": payment.get("txHash") or tx_hash,
+            "payment": payment,
+            "paymentVerification": payment.get("verification"),
             "createdAt": utc_now().isoformat(),
         }
         self.store.put("reasoning_market", access["accessId"], access)
@@ -455,27 +531,24 @@ class NotaryAppService:
         prediction = self.store.get("predictions", prediction_id)
         if not prediction:
             raise RuntimeError("Prediction was not found")
-        if not self.settings.notary_demo_mode and not tx_hash:
-            raise RuntimeError("Micro-share purchase requires an Arc payment transaction hash in live mode")
-        verification = None
-        if tx_hash:
-            treasury = self._default_agent_wallet()
-            buyer = await self.escrow.resolve_identity_to_wallet(buyer_identity)
-            if not treasury:
-                raise RuntimeError("Create a NOTARY treasury wallet before selling micro-shares")
-            verification = await self.arc.verify_usdc_transfer(
-                tx_hash=tx_hash,
-                from_address=buyer.get("wallet"),
-                to_address=treasury,
-                amount_usdc=amount_usdc,
-            )
+        treasury = self._default_agent_wallet()
+        if not treasury:
+            raise RuntimeError("Create a NOTARY treasury wallet before selling micro-shares")
+        payment = await self._pay_or_verify_usdc(
+            payer_identity=buyer_identity,
+            recipient_address=treasury,
+            amount_usdc=amount_usdc,
+            tx_hash=tx_hash,
+            purpose="Micro-share purchase",
+        )
         share = {
             "shareId": new_id("share"),
             "predictionId": prediction_id,
             "buyerIdentity": buyer_identity,
             "amountUSDC": amount_usdc,
-            "arcTxHash": tx_hash,
-            "paymentVerification": verification,
+            "arcTxHash": payment.get("txHash") or tx_hash,
+            "payment": payment,
+            "paymentVerification": payment.get("verification"),
             "createdAt": utc_now().isoformat(),
         }
         self.store.put("micro_shares", share["shareId"], share)
@@ -635,14 +708,37 @@ class NotaryAppService:
         amount_usdc: float,
         tx_hash: str | None = None,
     ) -> dict[str, Any]:
-        if not self.settings.notary_demo_mode and not tx_hash:
-            raise RuntimeError("USYC treasury allocation requires an Arc transaction hash in live mode")
+        treasury = self._default_agent_wallet()
+        if not treasury:
+            raise RuntimeError("Create a NOTARY treasury wallet before allocating to USYC")
+        provider_address = self.settings.usyc_provider_address
+        if not provider_address and not tx_hash and not self.settings.notary_demo_mode:
+            raise RuntimeError(
+                "USYC_PROVIDER_ADDRESS or an Arc USYC allocation transaction hash is required in live mode"
+            )
+        payment = None
+        if provider_address or tx_hash:
+            payment = await self._pay_or_verify_usdc(
+                payer_identity=treasury,
+                recipient_address=provider_address or treasury,
+                amount_usdc=amount_usdc,
+                tx_hash=tx_hash,
+                purpose="USYC treasury allocation",
+            )
         record = {
             "intentId": new_id("usyc"),
             "notaryId": notary_id,
             "amountUSDC": amount_usdc,
-            "arcTxHash": tx_hash,
-            "status": "pending_provider_settlement" if tx_hash else "demo_intent",
+            "providerAddress": provider_address,
+            "arcTxHash": (payment or {}).get("txHash") or tx_hash,
+            "payment": payment,
+            "status": (
+                "submitted_to_usyc_provider"
+                if payment and not payment.get("demo")
+                else "demo_intent"
+                if self.settings.notary_demo_mode
+                else "pending_provider_settlement"
+            ),
             "createdAt": utc_now().isoformat(),
         }
         self.store.put("usyc_intents", record["intentId"], record)

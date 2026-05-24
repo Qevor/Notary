@@ -2,6 +2,8 @@ import pytest
 
 from notary.app_service import NotaryAppService
 from notary.config import Settings
+from notary.services.arc import ArcClient
+from notary.services.circle_agent import CircleAgentClient
 
 
 @pytest.mark.anyio
@@ -103,3 +105,90 @@ async def test_agentic_commerce_primitives_are_operational(tmp_path):
         "usyc_treasury_intent",
         "arbitrage_signal",
     }.issubset(kinds)
+
+
+@pytest.mark.anyio
+async def test_live_commerce_primitives_auto_pay_with_circle(tmp_path, monkeypatch):
+    settings = Settings(
+        notary_db_path=tmp_path / "notary_live_commerce.sqlite3",
+        notary_demo_mode=False,
+        arc_demo_mode=False,
+        arc_rpc_url="https://rpc.example",
+        arc_chain_id=5042002,
+        arc_operator_private_key="0x" + "1" * 64,
+        validator_private_key="0x" + "2" * 64,
+        usyc_provider_address="0x" + "9" * 40,
+    )
+    service = NotaryAppService(settings)
+    service.store.put(
+        "notaries",
+        "notary_live",
+        {
+            "notary_id": "notary_live",
+            "agent_wallet": "0x" + "a" * 40,
+            "treasury_address": "0x" + "a" * 40,
+            "capabilities": [],
+            "status": "active",
+        },
+    )
+    service.store.put("profiles", "alice", {"username": "alice", "wallet": "0x" + "b" * 40})
+
+    async def fake_transfer_usdc(self, *, from_wallet_id, to_address, amount):
+        return {
+            "txHash": "0x" + "c" * 64,
+            "from": from_wallet_id,
+            "to": to_address,
+            "amount": amount,
+            "status": "success",
+            "demo": False,
+        }
+
+    async def fake_verify_usdc_transfer(self, *, tx_hash, from_address, to_address, amount_usdc, token_address=None):
+        return {
+            "txHash": tx_hash,
+            "status": "verified",
+            "from": from_address,
+            "to": to_address,
+            "amount_usdc": amount_usdc,
+        }
+
+    monkeypatch.setattr(CircleAgentClient, "transfer_usdc", fake_transfer_usdc)
+    monkeypatch.setattr(ArcClient, "verify_usdc_transfer", fake_verify_usdc_transfer)
+
+    prediction = await service.create_prediction(
+        question="Will live users buy a NOTARY prediction share?",
+        probability_bps=6100,
+        horizon="48h",
+        rationale="The live app now executes Circle transfers when no tx hash is supplied.",
+        notary_id="notary_live",
+    )
+    share = await service.buy_micro_share(
+        prediction_id=prediction["predictionId"],
+        buyer_identity="@alice",
+        amount_usdc=0.25,
+    )
+    assert share["payment"]["mode"] == "circle_cli_transfer"
+    assert share["paymentVerification"]["status"] == "verified"
+
+    service.store.put(
+        "rulings",
+        "ruling_live_market",
+        {
+            "ruling_id": "ruling_live_market",
+            "notary_id": "notary_live",
+            "attestation": {"reasoning_trace_hash": "0x" + "d" * 64},
+        },
+    )
+    peek = await service.create_reasoning_pay_to_peek(
+        ruling_id="ruling_live_market",
+        buyer_identity="@alice",
+        amount_usdc=0.01,
+    )
+    assert peek["payment"]["mode"] == "circle_cli_transfer"
+
+    usyc = await service.create_usyc_intent(
+        notary_id="notary_live",
+        amount_usdc=1,
+    )
+    assert usyc["status"] == "submitted_to_usyc_provider"
+    assert usyc["payment"]["to"] == settings.usyc_provider_address

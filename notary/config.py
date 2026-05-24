@@ -86,6 +86,7 @@ class Settings(BaseModel):
     notary_supabase_service_role_key: str | None = None
     notary_executor_agent_wallet_id: str | None = None
     notary_creator_wallet: str | None = None
+    usyc_provider_address: str | None = None
 
     speechmatics_demo_mode: bool = False
     speechmatics_api_base_url: str | None = "https://asr.api.speechmatics.com/v2"
@@ -161,6 +162,7 @@ class Settings(BaseModel):
             ),
             notary_executor_agent_wallet_id=_optional_str("NOTARY_EXECUTOR_AGENT_WALLET_ID"),
             notary_creator_wallet=_optional_str("NOTARY_CREATOR_WALLET"),
+            usyc_provider_address=_optional_str("USYC_PROVIDER_ADDRESS"),
             speechmatics_demo_mode=_bool_env(
                 "SPEECHMATICS_DEMO_MODE",
                 _bool_env("SPEEDMATIC_DEMO_MODE", False),
