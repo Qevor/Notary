@@ -251,12 +251,13 @@ async def workspace(
             "balance": "0.00"
         }
     state = _user_state(service.dashboard_state(), user)
+    display_error = _ui_error(RuntimeError(error)) if error else None
     return HTMLResponse(
         render_workspace(
             state,
             user,
             profile,
-            error=error,
+            error=display_error,
             message=message,
             circle_request_id=circle_request_id,
         )
