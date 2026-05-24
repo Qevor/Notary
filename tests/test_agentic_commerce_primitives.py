@@ -40,6 +40,41 @@ async def test_circle_cli_transfer_uses_current_agent_stack_syntax(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_circle_x402_paid_data_supports_post_body_and_headers(monkeypatch):
+    client = CircleAgentClient(demo_mode=False, chain="ARC-TESTNET", testnet=True)
+    captured: dict[str, tuple[str, ...]] = {}
+
+    async def fake_default_agent_address(self):
+        return "0x" + "4" * 40
+
+    async def fake_run(self, *args):
+        captured["args"] = args
+        return {"paymentId": "x402_live_1", "status": "paid"}
+
+    monkeypatch.setattr(CircleAgentClient, "_default_agent_address", fake_default_agent_address)
+    monkeypatch.setattr(CircleAgentClient, "_run", fake_run)
+
+    receipt = await client.pay_for_data(
+        description="arbitrage scan",
+        max_usdc=0.02,
+        service_url="https://example.com/x402/arbitrage",
+        method="POST",
+        request_body='{"chain":"base","limit":5}',
+        headers=["Content-Type: application/json"],
+    )
+
+    args = captured["args"]
+    assert args[:3] == ("services", "pay", "https://example.com/x402/arbitrage")
+    assert "-X" in args
+    assert "POST" in args
+    assert "-d" in args
+    assert '{"chain":"base","limit":5}' in args
+    assert "-H" in args
+    assert "Content-Type: application/json" in args
+    assert receipt["paymentId"] == "x402_live_1"
+
+
+@pytest.mark.anyio
 async def test_agentic_commerce_primitives_are_operational(tmp_path):
     settings = Settings(
         notary_db_path=tmp_path / "notary_commerce.sqlite3",

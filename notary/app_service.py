@@ -353,18 +353,27 @@ class NotaryAppService:
         max_usdc: float,
         service_url: str,
         wallet_id: str | None = None,
+        method: str = "GET",
+        request_body: str | None = None,
+        headers: list[str] | None = None,
     ) -> dict[str, Any]:
         receipt = await self.circle.pay_for_data(
             description=description,
             max_usdc=max_usdc,
             service_url=service_url,
             wallet_id=wallet_id,
+            method=method,
+            request_body=request_body,
+            headers=headers,
         )
         key = str(receipt.get("paymentId") or new_id("x402"))
         record = {
             "paymentId": key,
             "description": description,
             "serviceUrl": service_url,
+            "method": method.upper(),
+            "requestBody": request_body,
+            "headers": headers or [],
             "maxUSDC": max_usdc,
             "walletId": wallet_id,
             "receipt": receipt,

@@ -214,7 +214,16 @@ class CircleAgentClient:
         )
         return {"walletId": wallet_id, "address": address, "amount": amount_usdc, "gateway": result, "demo": False}
 
-    async def pay_for_data(self, description: str, max_usdc: float, service_url: str | None = None, wallet_id: str | None = None) -> dict[str, Any]:
+    async def pay_for_data(
+        self,
+        description: str,
+        max_usdc: float,
+        service_url: str | None = None,
+        wallet_id: str | None = None,
+        method: str = "GET",
+        request_body: str | None = None,
+        headers: list[str] | None = None,
+    ) -> dict[str, Any]:
         if self.demo_mode:
             return {
                 "paymentId": new_id("x402"),
@@ -226,21 +235,30 @@ class CircleAgentClient:
         if not service_url:
             raise RuntimeError("A Circle x402 service URL is required to pay for data in live mode")
         address = await self._resolve_address(wallet_id) if wallet_id else await self._default_agent_address()
-        result = await self._run(
+        command = [
             "services",
             "pay",
             service_url,
+            "-X",
+            method.upper(),
             "--address",
             address,
             "--chain",
             self.chain,
             "--max-amount",
             str(max_usdc),
-        )
+        ]
+        if request_body:
+            command.extend(["-d", request_body])
+        for header in headers or []:
+            command.extend(["-H", header])
+        result = await self._run(*command)
         return {
             "paymentId": result.get("paymentId") or result.get("id") or new_id("x402"),
             "description": description,
             "serviceUrl": service_url,
+            "method": method.upper(),
+            "requestBody": request_body,
             "address": address,
             "raw": result,
             "demo": False,

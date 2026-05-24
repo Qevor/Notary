@@ -623,12 +623,30 @@ async def x402_paid_data(
     service_url: str = Form(...),
     max_usdc: float = Form(default=0.01),
     wallet_id: str | None = Form(default=None),
+    method: str = Form(default="GET"),
+    request_body: str | None = Form(default=None),
+    headers_json: str | None = Form(default=None),
 ) -> dict:
+    headers: list[str] = []
+    if headers_json:
+        try:
+            decoded = json.loads(headers_json)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail="headers_json must be a JSON object or array") from exc
+        if isinstance(decoded, dict):
+            headers = [f"{key}: {value}" for key, value in decoded.items()]
+        elif isinstance(decoded, list) and all(isinstance(item, str) for item in decoded):
+            headers = decoded
+        else:
+            raise HTTPException(status_code=400, detail="headers_json must be a JSON object or string array")
     return await get_app_service().paid_data_service_request(
         description=description,
         service_url=service_url,
         max_usdc=max_usdc,
         wallet_id=wallet_id or None,
+        method=method,
+        request_body=request_body,
+        headers=headers,
     )
 
 
