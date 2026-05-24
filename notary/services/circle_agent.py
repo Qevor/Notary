@@ -231,7 +231,15 @@ class CircleAgentClient:
     async def _ensure_authenticated(self) -> None:
         status = await self.wallet_status()
         status_text = json.dumps(status).lower()
-        if "authenticated" not in status_text and "active" not in status_text:
+        if not any(
+            marker in status_text
+            for marker in (
+                "authenticated",
+                "active",
+                '"tokenstatus": "valid"',
+                '"tokenstatus":"valid"',
+            )
+        ):
             raise RuntimeError(
                 "Circle CLI is not authenticated. Run login_init/login_complete or `circle wallet login` first."
             )
