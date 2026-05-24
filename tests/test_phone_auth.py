@@ -344,3 +344,45 @@ async def test_live_registration_requires_circle_wallet(tmp_path):
     with pytest.raises(RuntimeError, match="Circle agent wallet provisioning is required"):
         await service.register_user("liveuser", "password123")
 
+
+@pytest.mark.anyio
+async def test_live_registration_uses_circle_wallets_api_when_configured(tmp_path, monkeypatch):
+    from notary.config import Settings
+    from notary.app_service import NotaryAppService
+    from notary.services.circle_wallets_api import CircleDeveloperWalletClient
+
+    settings = Settings(
+        notary_db_path=tmp_path / "notary_wallets_api.sqlite3",
+        notary_demo_mode=False,
+        circle_api_key="TEST_API_KEY:abc:def",
+        circle_entity_secret="1" * 64,
+        circle_wallet_set_id="wallet-set-1",
+    )
+    service = NotaryAppService(settings)
+    called = {"wallets_api": False, "cli": False}
+
+    def fake_create_user_wallet(self, username):
+        called["wallets_api"] = True
+        return {
+            "walletId": "circle-user-wallet-1",
+            "address": "0x" + "7" * 40,
+            "walletSetId": self.wallet_set_id,
+            "provider": "circle_developer_wallets",
+            "demo": False,
+        }
+
+    class FailingIfCalledCircle:
+        async def create_agent_wallet(self, owner_hint):
+            called["cli"] = True
+            raise RuntimeError("CLI should not be used when Wallets API is configured")
+
+    monkeypatch.setattr(CircleDeveloperWalletClient, "create_user_wallet", fake_create_user_wallet)
+    service.circle = FailingIfCalledCircle()
+
+    profile = await service.register_user("walletapi@example.com", "secure-pass")
+
+    assert called["wallets_api"] is True
+    assert called["cli"] is False
+    assert profile["wallet"] == "0x" + "7" * 40
+    assert profile["circle_wallet_id"] == "circle-user-wallet-1"
+

@@ -37,6 +37,7 @@ from notary.models.schemas import (
 )
 from notary.services.arc import ArcClient
 from notary.services.circle_agent import CircleAgentClient
+from notary.services.circle_wallets_api import CircleDeveloperWalletClient
 from notary.services.evidence_vault import EvidenceVault
 from notary.services.obligation_extractor import GroqObligationExtractor
 from notary.services.escrow import NotaryEscrowClient
@@ -66,6 +67,12 @@ class NotaryAppService:
             chain=settings.circle_chain,
             testnet=settings.circle_testnet,
             rpc_url=settings.arc_rpc_url,
+        )
+        self.circle_wallets = CircleDeveloperWalletClient(
+            api_key=settings.circle_api_key,
+            entity_secret=settings.circle_entity_secret,
+            wallet_set_id=settings.circle_wallet_set_id,
+            chain=settings.circle_chain,
         )
         self.escrow = NotaryEscrowClient(
             api_base_url=settings.notary_escrow_api_base_url,
@@ -2342,6 +2349,11 @@ class NotaryAppService:
         return bool(wallet_id and (wallet_id.startswith("local_") or wallet_id.startswith("local_circle_wallet")))
 
     async def _provision_live_wallet(self, username: str) -> dict[str, Any]:
+        if self.circle_wallets.configured:
+            try:
+                return self.circle_wallets.create_user_wallet(username)
+            except Exception as exc:
+                print(f"[Onboarding] Circle Wallets API provisioning failed, falling back to CLI: {exc}")
         try:
             wallet_info = await self.circle.create_agent_wallet(username)
         except Exception as exc:

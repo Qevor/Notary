@@ -20,6 +20,7 @@ dependencies = [
   "langchain>=0.2.0",
   "eth-account>=0.13.0",
   "eth-utils>=4.1.0",
+  "circle-developer-controlled-wallets>=1.0.0",
 ]
 
 [project.optional-dependencies]

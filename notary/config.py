@@ -65,6 +65,9 @@ class Settings(BaseModel):
     arc_replication: str | None = None
 
     circle_cli_path: str = "circle"
+    circle_api_key: str | None = None
+    circle_entity_secret: str | None = None
+    circle_wallet_set_id: str | None = None
     circle_wallet_email: str | None = None
     circle_chain: str = "ARC-TESTNET"
     circle_testnet: bool = True
@@ -136,6 +139,9 @@ class Settings(BaseModel):
             arc_agent_identity=_optional_str("ARC_AGENT_IDENTITY"),
             arc_replication=_optional_str("ARC_REPLICATION"),
             circle_cli_path=os.getenv("CIRCLE_CLI_PATH", "circle"),
+            circle_api_key=_optional_str("CIRCLE_API_KEY"),
+            circle_entity_secret=_optional_str("CIRCLE_ENTITY_SECRET"),
+            circle_wallet_set_id=_optional_str("CIRCLE_WALLET_SET_ID"),
             circle_wallet_email=_optional_str("CIRCLE_WALLET_EMAIL"),
             circle_chain=os.getenv("CIRCLE_CHAIN", "ARC-TESTNET"),
             circle_testnet=_bool_env("CIRCLE_TESTNET", True),
