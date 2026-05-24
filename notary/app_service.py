@@ -405,6 +405,19 @@ class NotaryAppService:
         payer_wallet = payer.get("wallet")
         if not payer_wallet:
             raise RuntimeError(f"{purpose} could not resolve payer wallet")
+        payer_profile = None
+        payer_username = payer.get("username")
+        if payer_username:
+            payer_profile = self.store.get("profiles", str(payer_username))
+        if not payer_profile and payer_wallet:
+            payer_profile = next(
+                (
+                    item
+                    for item in self.store.list("profiles")
+                    if str(item.get("wallet", "")).lower() == str(payer_wallet).lower()
+                ),
+                None,
+            )
 
         if tx_hash:
             verification = await self.arc.verify_usdc_transfer(
@@ -428,11 +441,27 @@ class NotaryAppService:
                 "Supply an external Arc USDC tx hash from a separate payer wallet."
             )
 
-        receipt = await self.circle.transfer_usdc(
-            from_wallet_id=payer_wallet,
-            to_address=recipient_address,
-            amount=amount_usdc,
+        payer_wallet_id = str((payer_profile or {}).get("circle_wallet_id") or "")
+        uses_developer_wallet = (
+            self.circle_wallets.configured
+            and payer_wallet_id
+            and not payer_wallet_id.startswith("local_")
+            and not payer_wallet_id.startswith("0x")
         )
+        if uses_developer_wallet:
+            receipt = self.circle_wallets.transfer_usdc(
+                wallet_id=payer_wallet_id,
+                wallet_address=str(payer_wallet),
+                to_address=recipient_address,
+                amount_usdc=amount_usdc,
+                ref_id=purpose.lower().replace(" ", "_").replace("-", "_"),
+            )
+        else:
+            receipt = await self.circle.transfer_usdc(
+                from_wallet_id=payer_wallet,
+                to_address=recipient_address,
+                amount=amount_usdc,
+            )
         tx = str(receipt.get("txHash") or receipt.get("id") or receipt.get("transferId") or "")
         verification = None
         if tx.startswith("0x"):
@@ -443,7 +472,7 @@ class NotaryAppService:
                 amount_usdc=amount_usdc,
             )
         return {
-            "mode": "circle_cli_transfer",
+            "mode": "circle_wallets_api_transfer" if uses_developer_wallet else "circle_cli_transfer",
             "txHash": tx,
             "from": payer_wallet,
             "to": recipient_address,

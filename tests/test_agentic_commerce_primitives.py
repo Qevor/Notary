@@ -4,6 +4,7 @@ from notary.app_service import NotaryAppService
 from notary.config import Settings
 from notary.services.arc import ArcClient
 from notary.services.circle_agent import CircleAgentClient
+from notary.services.circle_wallets_api import CircleDeveloperWalletClient
 
 
 @pytest.mark.anyio
@@ -117,6 +118,9 @@ async def test_live_commerce_primitives_auto_pay_with_circle(tmp_path, monkeypat
         arc_chain_id=5042002,
         arc_operator_private_key="0x" + "1" * 64,
         validator_private_key="0x" + "2" * 64,
+        circle_api_key="TEST_API_KEY:abc:def",
+        circle_entity_secret="1" * 64,
+        circle_wallet_set_id="wallet-set-1",
         usyc_provider_address="0x" + "9" * 40,
     )
     service = NotaryAppService(settings)
@@ -131,7 +135,15 @@ async def test_live_commerce_primitives_auto_pay_with_circle(tmp_path, monkeypat
             "status": "active",
         },
     )
-    service.store.put("profiles", "alice", {"username": "alice", "wallet": "0x" + "b" * 40})
+    service.store.put(
+        "profiles",
+        "alice",
+        {
+            "username": "alice",
+            "wallet": "0x" + "b" * 40,
+            "circle_wallet_id": "circle-dev-wallet-alice",
+        },
+    )
 
     async def fake_transfer_usdc(self, *, from_wallet_id, to_address, amount):
         return {
@@ -140,6 +152,28 @@ async def test_live_commerce_primitives_auto_pay_with_circle(tmp_path, monkeypat
             "to": to_address,
             "amount": amount,
             "status": "success",
+            "demo": False,
+        }
+
+    def fake_wallets_api_transfer_usdc(
+        self,
+        *,
+        wallet_id,
+        wallet_address,
+        to_address,
+        amount_usdc,
+        ref_id=None,
+    ):
+        return {
+            "id": "circle-tx-1",
+            "transactionId": "circle-tx-1",
+            "txHash": "0x" + "c" * 64,
+            "fromWalletId": wallet_id,
+            "fromWalletAddress": wallet_address,
+            "to": to_address,
+            "amount": amount_usdc,
+            "status": "submitted",
+            "provider": "circle_developer_wallets",
             "demo": False,
         }
 
@@ -153,6 +187,7 @@ async def test_live_commerce_primitives_auto_pay_with_circle(tmp_path, monkeypat
         }
 
     monkeypatch.setattr(CircleAgentClient, "transfer_usdc", fake_transfer_usdc)
+    monkeypatch.setattr(CircleDeveloperWalletClient, "transfer_usdc", fake_wallets_api_transfer_usdc)
     monkeypatch.setattr(ArcClient, "verify_usdc_transfer", fake_verify_usdc_transfer)
 
     prediction = await service.create_prediction(
@@ -167,7 +202,7 @@ async def test_live_commerce_primitives_auto_pay_with_circle(tmp_path, monkeypat
         buyer_identity="@alice",
         amount_usdc=0.25,
     )
-    assert share["payment"]["mode"] == "circle_cli_transfer"
+    assert share["payment"]["mode"] == "circle_wallets_api_transfer"
     assert share["paymentVerification"]["status"] == "verified"
 
     service.store.put(
@@ -184,7 +219,7 @@ async def test_live_commerce_primitives_auto_pay_with_circle(tmp_path, monkeypat
         buyer_identity="@alice",
         amount_usdc=0.01,
     )
-    assert peek["payment"]["mode"] == "circle_cli_transfer"
+    assert peek["payment"]["mode"] == "circle_wallets_api_transfer"
 
     usyc = await service.create_usyc_intent(
         notary_id="notary_live",
