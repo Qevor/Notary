@@ -3030,7 +3030,7 @@ class NotaryAppService:
         wallet_topic = topic_address(wallet)
         logs: list[dict[str, Any]] = []
         # Arc RPC providers can enforce log range limits, so try progressively smaller windows.
-        for window in (250_000, 75_000, 20_000):
+        for window in (250_000, 75_000, 20_000, 9_999):
             from_block = max(0, latest_block - window)
             base_filter = {
                 "address": USDC_TOKEN_ADDRESS,
@@ -3070,11 +3070,14 @@ class NotaryAppService:
             is_send = from_address.lower() == wallet.lower()
             block_number = str(log.get("blockNumber") or "0x0")
             if block_number not in block_timestamps:
-                try:
-                    block = rpc("eth_getBlockByNumber", [block_number, False]) or {}
-                    block_timestamps[block_number] = int(str(block.get("timestamp") or "0x0"), 16) or int(time.time())
-                except Exception:
-                    block_timestamps[block_number] = int(time.time())
+                if log.get("blockTimestamp"):
+                    block_timestamps[block_number] = int(str(log.get("blockTimestamp")), 16)
+                else:
+                    try:
+                        block = rpc("eth_getBlockByNumber", [block_number, False]) or {}
+                        block_timestamps[block_number] = int(str(block.get("timestamp") or "0x0"), 16) or int(time.time())
+                    except Exception:
+                        block_timestamps[block_number] = int(time.time())
 
             rows.append({
                 "tx_id": tx_hash,
