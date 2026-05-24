@@ -51,7 +51,7 @@ NOTARY organizes its processing pipeline into three clear layers:
 
 ### FLOW 2 — Voice Note to Payment (The Killer Demo)
 1. **Voice Note Intake:** User sends a WhatsApp voice note: *"Pay Daniel $250 when he uploads the final animation and I approve it."*
-2. **Speedmatic Transcription:** Converts speech to a structured transcript.
+2. **Speechmatics Transcription:** Converts speech to a structured transcript. Legacy Speedmatic env aliases are still accepted for compatibility.
 3. **Signal Scanner Extraction:** Pulls payment amount ($250), recipient (@daniel), deliverables (animation), and approval triggers.
 4. **Automated Escrow Setup:** NOTARY automatically creates the escrow vault, registers the payment condition, and logs the Arc proof record.
 
@@ -119,6 +119,16 @@ NOTARY fails closed on payment state. A case can exist as an off-chain work requ
 Funding verification requires a successful Arc USDC `Transfer` log from the payer wallet to the case reserve wallet for at least the case amount. The checkout page therefore asks for an Arc transaction hash and unlocks evidence only after that hash is verified against the expected wallets and amount.
 
 In live mode (`NOTARY_DEMO_MODE=false`), user onboarding also requires real Circle agent wallet provisioning. The app does not silently invent local wallets when Circle CLI/operator authentication is unavailable.
+
+### Arc + Circle Coverage
+NOTARY now exposes its full hackathon surface through executable routes instead of README-only claims:
+
+- Arc registries: identity, attestation, validation, governance, karma, ERC-8004-style agent identity, and replication contract sources.
+- Circle stack: agent-wallet onboarding, Gateway deposit preparation, Paymaster-aware USDC UX, x402 paid-data calls, and unified-balance lookups.
+- Intelligence layer: Speechmatics/Speedmatic-compatible media observation, obligation extraction, Guardian/Risk/Strategy/Validator/Reflector flow, graded verdicts, disputes, reversals, and reasoning trace hashes.
+- Commerce layer: Pay-to-Peek reasoning access, prediction commitments, micro-share purchases, USYC allocation intents, arbitrage signal analysis, karma checkpoints, policy DNA, and self-replication.
+
+Use `GET /coverage` to inspect the current configured/live status of each primitive.
 
 ---
 

@@ -95,6 +95,9 @@ class NotaryAppService:
                 "AttestationRegistry": settings.arc_attestation_registry or "",
                 "NotaryValidationRegistry": settings.arc_validation_registry or "",
                 "NotaryGovernance": settings.arc_governance or "",
+                "NotaryKarma": settings.arc_notary_karma or "",
+                "NotaryAgentIdentity": settings.arc_agent_identity or "",
+                "NotaryReplication": settings.arc_replication or "",
             },
         )
         self.speechmatics = SpeechmaticsClient(
@@ -113,6 +116,53 @@ class NotaryAppService:
             passphrase=settings.evidence_vault_passphrase,
         )
 
+    async def feature_coverage(self) -> dict[str, Any]:
+        """Return an executable product checklist for the hackathon scope."""
+        return {
+            "arc": {
+                "finality": {"status": "external", "rpcUrlConfigured": bool(self.settings.arc_rpc_url)},
+                "usdcFeesPaymaster": {"status": "configured" if self.settings.circle_paymaster_enabled else "disabled"},
+                "registries": {
+                    "identity": bool(self.settings.arc_notary_identity_registry),
+                    "attestation": bool(self.settings.arc_attestation_registry),
+                    "validation": bool(self.settings.arc_validation_registry),
+                    "governance": bool(self.settings.arc_governance),
+                    "karma": bool(self.settings.arc_notary_karma),
+                    "agentIdentity": bool(self.settings.arc_agent_identity),
+                    "replication": bool(self.settings.arc_replication),
+                },
+                "eip712": {
+                    "domain": self.settings.validator_eip712_name,
+                    "version": self.settings.validator_eip712_version,
+                    "signerConfigured": bool(self.settings.validator_private_key),
+                },
+            },
+            "circle": {
+                "agentWallets": await self.circle_status(),
+                "gateway": {"enabled": self.settings.circle_gateway_enabled},
+                "paymaster": {"enabled": self.settings.circle_paymaster_enabled},
+                "x402": {"route": "/commerce/x402/pay-to-peek"},
+                "bridgeAppKit": {"route": "/circle/gateway/deposit"},
+                "usyc": {"route": "/treasury/usyc/intents"},
+            },
+            "notary": {
+                "multimodalObservation": self.speechmatics_status(),
+                "obligationMapping": {"route": "/witness/obligations"},
+                "adversarialEvidenceResistance": {"agent": "Guardian Sentinel"},
+                "gradedVerdicts": {"implemented": True},
+                "confidenceGates": {"implemented": True},
+                "disputeResolution": {"route": "/witness/rulings/{ruling_id}/dispute"},
+                "legalWitness": {"federalRules": "901/902 modeled", "route": "/attestations"},
+                "reasoningMarketplace": {"route": "/commerce/reasoning/pay-to-peek"},
+                "tradeableIntelligence": {"route": "/commerce/micro-shares"},
+                "selfImprovement": {"route": "/agents/karma/checkpoint"},
+                "legalEmbodiment": {"route": "/notaries/{notary_id}/operating-agreement"},
+                "publicIdentity": {"route": "/agents/identity/erc8004"},
+                "arbitrage": {"route": "/markets/arbitrage/analyze"},
+                "witnessToPay": {"route": "/api/cases"},
+            },
+        }
+
     async def create_notary(self, label: str | None = None) -> dict[str, Any]:
         identity = NotaryIdentity(
             capabilities=[
@@ -129,9 +179,11 @@ class NotaryAppService:
         )
         try:
             wallet = await self.circle.create_agent_wallet(label or identity.notary_id)
-        except RuntimeError:
-            if self.settings.notary_env == "production":
-                raise
+        except RuntimeError as exc:
+            if not self.settings.notary_demo_mode:
+                raise RuntimeError(
+                    "Circle agent wallet provisioning is required before creating a live NOTARY identity."
+                ) from exc
             wallet_id = new_id("local_circle_wallet")
             wallet = {
                 "walletId": wallet_id,
@@ -286,6 +338,369 @@ class NotaryAppService:
         }
         self.store.put("circle_routes", route_id, record)
         return record
+
+    async def paid_data_service_request(
+        self,
+        *,
+        description: str,
+        max_usdc: float,
+        service_url: str,
+        wallet_id: str | None = None,
+    ) -> dict[str, Any]:
+        receipt = await self.circle.pay_for_data(
+            description=description,
+            max_usdc=max_usdc,
+            service_url=service_url,
+            wallet_id=wallet_id,
+        )
+        key = str(receipt.get("paymentId") or new_id("x402"))
+        record = {
+            "paymentId": key,
+            "description": description,
+            "serviceUrl": service_url,
+            "maxUSDC": max_usdc,
+            "walletId": wallet_id,
+            "receipt": receipt,
+            "createdAt": utc_now().isoformat(),
+        }
+        self.store.put("x402_payments", key, record)
+        return record
+
+    async def create_reasoning_pay_to_peek(
+        self,
+        *,
+        ruling_id: str,
+        buyer_identity: str,
+        amount_usdc: float,
+        tx_hash: str | None = None,
+    ) -> dict[str, Any]:
+        ruling = self.store.get("rulings", ruling_id)
+        if not ruling:
+            raise RuntimeError("Ruling was not found")
+        attestation = ruling.get("attestation", {}) or {}
+        trace_hash = attestation.get("reasoning_trace_hash")
+        if not trace_hash:
+            raise RuntimeError("Ruling has no reasoning trace hash")
+        if not self.settings.notary_demo_mode and not tx_hash:
+            raise RuntimeError("Pay-to-Peek requires an Arc payment transaction hash in live mode")
+        payment_verification = None
+        if tx_hash:
+            treasury = self._default_agent_wallet()
+            buyer = await self.escrow.resolve_identity_to_wallet(buyer_identity)
+            if not treasury:
+                raise RuntimeError("Create a NOTARY treasury wallet before accepting Pay-to-Peek")
+            payment_verification = await self.arc.verify_usdc_transfer(
+                tx_hash=tx_hash,
+                from_address=buyer.get("wallet"),
+                to_address=treasury,
+                amount_usdc=amount_usdc,
+            )
+        access = {
+            "accessId": new_id("peek"),
+            "rulingId": ruling_id,
+            "buyerIdentity": buyer_identity,
+            "reasoningTraceHash": trace_hash,
+            "amountUSDC": amount_usdc,
+            "arcTxHash": tx_hash,
+            "paymentVerification": payment_verification,
+            "createdAt": utc_now().isoformat(),
+        }
+        self.store.put("reasoning_market", access["accessId"], access)
+        await self._commit_validation(
+            kind="pay_to_peek_reasoning",
+            subject_id=access["accessId"],
+            payload=access,
+            notary_id=str(ruling.get("notary_id") or self._default_notary_id()),
+        )
+        return access
+
+    async def create_prediction(
+        self,
+        *,
+        question: str,
+        probability_bps: int,
+        horizon: str,
+        rationale: str,
+        notary_id: str | None = None,
+    ) -> dict[str, Any]:
+        if probability_bps < 0 or probability_bps > 10_000:
+            raise ValueError("probability_bps must be between 0 and 10000")
+        record = {
+            "predictionId": new_id("pred"),
+            "notaryId": notary_id or self._default_notary_id(),
+            "question": question,
+            "probabilityBps": probability_bps,
+            "horizon": horizon,
+            "rationale": rationale,
+            "reasoningTraceHash": sha256_hex({"question": question, "rationale": rationale}),
+            "createdAt": utc_now().isoformat(),
+        }
+        self.store.put("predictions", record["predictionId"], record)
+        await self._commit_validation(
+            kind="prediction_commitment",
+            subject_id=record["predictionId"],
+            payload=record,
+            notary_id=str(record["notaryId"]),
+        )
+        return record
+
+    async def buy_micro_share(
+        self,
+        *,
+        prediction_id: str,
+        buyer_identity: str,
+        amount_usdc: float,
+        tx_hash: str | None = None,
+    ) -> dict[str, Any]:
+        prediction = self.store.get("predictions", prediction_id)
+        if not prediction:
+            raise RuntimeError("Prediction was not found")
+        if not self.settings.notary_demo_mode and not tx_hash:
+            raise RuntimeError("Micro-share purchase requires an Arc payment transaction hash in live mode")
+        verification = None
+        if tx_hash:
+            treasury = self._default_agent_wallet()
+            buyer = await self.escrow.resolve_identity_to_wallet(buyer_identity)
+            if not treasury:
+                raise RuntimeError("Create a NOTARY treasury wallet before selling micro-shares")
+            verification = await self.arc.verify_usdc_transfer(
+                tx_hash=tx_hash,
+                from_address=buyer.get("wallet"),
+                to_address=treasury,
+                amount_usdc=amount_usdc,
+            )
+        share = {
+            "shareId": new_id("share"),
+            "predictionId": prediction_id,
+            "buyerIdentity": buyer_identity,
+            "amountUSDC": amount_usdc,
+            "arcTxHash": tx_hash,
+            "paymentVerification": verification,
+            "createdAt": utc_now().isoformat(),
+        }
+        self.store.put("micro_shares", share["shareId"], share)
+        await self._commit_validation(
+            kind="micro_share_purchase",
+            subject_id=share["shareId"],
+            payload=share,
+            notary_id=str(prediction.get("notaryId") or self._default_notary_id()),
+        )
+        return share
+
+    async def record_karma_checkpoint(
+        self,
+        *,
+        notary_id: str,
+        delta: int,
+        reason: str,
+        evidence_ref: str | None = None,
+    ) -> dict[str, Any]:
+        prior = self.store.get("karma", notary_id) or {"score": 0}
+        score = int(prior.get("score", 0)) + int(delta)
+        checkpoint = {
+            "checkpointId": new_id("karma"),
+            "notaryId": notary_id,
+            "delta": int(delta),
+            "score": score,
+            "reason": reason,
+            "evidenceRef": evidence_ref,
+            "policyDnaHash": sha256_hex({"reason": reason, "evidenceRef": evidence_ref}),
+            "createdAt": utc_now().isoformat(),
+        }
+        self.store.put("karma", notary_id, {"notaryId": notary_id, "score": score})
+        self.store.put("karma_checkpoints", checkpoint["checkpointId"], checkpoint)
+        await self._commit_validation(
+            kind="karma_checkpoint",
+            subject_id=checkpoint["checkpointId"],
+            payload=checkpoint,
+            notary_id=notary_id,
+        )
+        if self.settings.arc_notary_karma:
+            payload = ArcTransactionPayload(
+                contract_name="NotaryKarma",
+                method="recordKarma",
+                args=[
+                    notary_id,
+                    checkpoint["checkpointId"],
+                    int(delta),
+                    int(score),
+                    checkpoint["policyDnaHash"],
+                    self._default_agent_wallet() or ZERO_ADDRESS,
+                ],
+            )
+            await self._submit_arc_payloads([payload])
+        return checkpoint
+
+    async def register_agent_identity_erc8004(
+        self,
+        *,
+        notary_id: str,
+        service_endpoint: str,
+        metadata_uri: str | None = None,
+    ) -> dict[str, Any]:
+        identity = self.store.get("notaries", notary_id)
+        if not identity:
+            raise RuntimeError("NOTARY identity was not found")
+        record = {
+            "agentIdentityId": new_id("agent8004"),
+            "notaryId": notary_id,
+            "agentWallet": identity.get("agent_wallet"),
+            "serviceEndpoint": service_endpoint,
+            "metadataUri": metadata_uri,
+            "serviceHash": sha256_hex(service_endpoint),
+            "metadataHash": sha256_hex(metadata_uri or ""),
+            "capabilitiesHash": sha256_hex(identity.get("capabilities", [])),
+            "createdAt": utc_now().isoformat(),
+        }
+        self.store.put("agent_identities", record["agentIdentityId"], record)
+        await self._commit_validation(
+            kind="erc8004_agent_identity",
+            subject_id=record["agentIdentityId"],
+            payload=record,
+            notary_id=notary_id,
+        )
+        if self.settings.arc_agent_identity:
+            payload = ArcTransactionPayload(
+                contract_name="NotaryAgentIdentity",
+                method="registerAgent",
+                args=[
+                    notary_id,
+                    identity.get("agent_wallet") or ZERO_ADDRESS,
+                    record["serviceHash"],
+                    record["metadataHash"],
+                    record["capabilitiesHash"],
+                ],
+            )
+            await self._submit_arc_payloads([payload])
+        return record
+
+    async def replicate_notary(
+        self,
+        *,
+        parent_notary_id: str,
+        mutation_prompt: str,
+        min_karma: int = 0,
+    ) -> dict[str, Any]:
+        parent = self.store.get("notaries", parent_notary_id)
+        if not parent:
+            raise RuntimeError("Parent NOTARY was not found")
+        score = int((self.store.get("karma", parent_notary_id) or {}).get("score", 0))
+        if score < min_karma:
+            raise RuntimeError("Parent NOTARY karma is below the replication threshold")
+        child = await self.create_notary(label=f"{parent_notary_id}-child")
+        child_identity = child["identity"]
+        policy_dna = {
+            "parentNotaryId": parent_notary_id,
+            "childNotaryId": child_identity["notary_id"],
+            "mutationPrompt": mutation_prompt,
+            "parentKarma": score,
+        }
+        policy_dna_hash = sha256_hex(policy_dna)
+        child_identity["metadata"] = {"parentNotaryId": parent_notary_id, "policyDnaHash": policy_dna_hash}
+        self.store.put("notaries", child_identity["notary_id"], child_identity)
+        record = {
+            "replicationId": new_id("repl"),
+            "parentNotaryId": parent_notary_id,
+            "childNotaryId": child_identity["notary_id"],
+            "policyDna": policy_dna,
+            "policyDnaHash": policy_dna_hash,
+            "createdAt": utc_now().isoformat(),
+        }
+        self.store.put("replications", record["replicationId"], record)
+        await self._commit_validation(
+            kind="notary_replication",
+            subject_id=record["replicationId"],
+            payload=record,
+            notary_id=parent_notary_id,
+        )
+        if self.settings.arc_replication:
+            payload = ArcTransactionPayload(
+                contract_name="NotaryReplication",
+                method="recordReplication",
+                args=[
+                    record["replicationId"],
+                    parent_notary_id,
+                    child_identity["notary_id"],
+                    policy_dna_hash,
+                    child_identity.get("agent_wallet") or ZERO_ADDRESS,
+                ],
+            )
+            await self._submit_arc_payloads([payload])
+        return record
+
+    async def create_usyc_intent(
+        self,
+        *,
+        notary_id: str,
+        amount_usdc: float,
+        tx_hash: str | None = None,
+    ) -> dict[str, Any]:
+        if not self.settings.notary_demo_mode and not tx_hash:
+            raise RuntimeError("USYC treasury allocation requires an Arc transaction hash in live mode")
+        record = {
+            "intentId": new_id("usyc"),
+            "notaryId": notary_id,
+            "amountUSDC": amount_usdc,
+            "arcTxHash": tx_hash,
+            "status": "pending_provider_settlement" if tx_hash else "demo_intent",
+            "createdAt": utc_now().isoformat(),
+        }
+        self.store.put("usyc_intents", record["intentId"], record)
+        await self._commit_validation(
+            kind="usyc_treasury_intent",
+            subject_id=record["intentId"],
+            payload=record,
+            notary_id=notary_id,
+        )
+        return record
+
+    async def analyze_arbitrage(
+        self,
+        *,
+        base_asset: str,
+        quote_asset: str,
+        amount_usdc: float,
+        venues: list[dict[str, Any]],
+        max_slippage_bps: int = 50,
+    ) -> dict[str, Any]:
+        if len(venues) < 2:
+            raise ValueError("At least two venues are required")
+        normalized = [
+            {
+                "venue": str(item.get("venue")),
+                "bid": float(item.get("bid")),
+                "ask": float(item.get("ask")),
+                "feeBps": int(item.get("feeBps", 0)),
+            }
+            for item in venues
+        ]
+        buy = min(normalized, key=lambda item: item["ask"])
+        sell = max(normalized, key=lambda item: item["bid"])
+        gross_edge = sell["bid"] - buy["ask"]
+        fee_cost = (buy["feeBps"] + sell["feeBps"] + max_slippage_bps) / 10_000 * buy["ask"]
+        net_edge = gross_edge - fee_cost
+        profit_usdc = (amount_usdc / buy["ask"]) * net_edge if buy["ask"] > 0 else 0
+        signal = {
+            "signalId": new_id("arb"),
+            "baseAsset": base_asset,
+            "quoteAsset": quote_asset,
+            "amountUSDC": amount_usdc,
+            "buyVenue": buy["venue"],
+            "sellVenue": sell["venue"],
+            "grossEdge": gross_edge,
+            "estimatedProfitUSDC": profit_usdc,
+            "safeToExecute": profit_usdc > 0,
+            "venues": normalized,
+            "createdAt": utc_now().isoformat(),
+        }
+        self.store.put("arbitrage_signals", signal["signalId"], signal)
+        await self._commit_validation(
+            kind="arbitrage_signal",
+            subject_id=signal["signalId"],
+            payload=signal,
+            notary_id=self._default_notary_id(),
+        )
+        return signal
 
     async def circle_wallet_summary(self) -> dict[str, Any]:
         wallet = self._default_agent_wallet()
@@ -1266,6 +1681,16 @@ class NotaryAppService:
                 or item.get("new_ruling_id") in public_ruling_ids
             ],
             "outcome_confirmations": self.store.list("outcome_confirmations"),
+            "predictions": self.store.list("predictions"),
+            "micro_shares": self.store.list("micro_shares"),
+            "reasoning_market": self.store.list("reasoning_market"),
+            "karma": self.store.list("karma"),
+            "karma_checkpoints": self.store.list("karma_checkpoints"),
+            "agent_identities": self.store.list("agent_identities"),
+            "replications": self.store.list("replications"),
+            "usyc_intents": self.store.list("usyc_intents"),
+            "arbitrage_signals": self.store.list("arbitrage_signals"),
+            "x402_payments": self.store.list("x402_payments"),
         }
 
     def swarm_roles(self) -> list[dict[str, Any]]:
@@ -1522,6 +1947,43 @@ class NotaryAppService:
             ),
         ]
         await self._submit_arc_payloads(payloads)
+
+    async def _commit_validation(
+        self,
+        *,
+        kind: str,
+        subject_id: str,
+        payload: dict[str, Any],
+        notary_id: str | None = None,
+    ) -> dict[str, Any]:
+        validation_id = new_id("val")
+        validation_hash = sha256_hex(payload)
+        record = {
+            "validationId": validation_id,
+            "notaryId": notary_id or self._default_notary_id(),
+            "subjectId": subject_id,
+            "kind": kind,
+            "kindHash": sha256_hex(kind),
+            "validationHash": validation_hash,
+            "payload": payload,
+            "createdAt": utc_now().isoformat(),
+        }
+        self.store.put("validations", validation_id, record)
+        if self.settings.arc_validation_registry:
+            tx = ArcTransactionPayload(
+                contract_name="NotaryValidationRegistry",
+                method="recordValidation",
+                args=[
+                    validation_id,
+                    record["notaryId"],
+                    subject_id,
+                    validation_hash,
+                    record["kindHash"],
+                    self._default_agent_wallet() or ZERO_ADDRESS,
+                ],
+            )
+            await self._submit_arc_payloads([tx])
+        return record
 
     async def _submit_arc_payloads(self, payloads: list[ArcTransactionPayload]) -> None:
         for payload in payloads:

@@ -10,7 +10,7 @@ import time
 from urllib.parse import quote
 from html import escape
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from apps.api.dashboard import (
@@ -590,6 +590,11 @@ async def speechmatics_status() -> dict:
     return get_app_service().speechmatics_status()
 
 
+@app.get("/coverage")
+async def feature_coverage() -> dict:
+    return await get_app_service().feature_coverage()
+
+
 @app.post("/circle/login/init")
 async def circle_login_init(email: str | None = None) -> dict:
     return await get_app_service().circle_login_init(email)
@@ -608,6 +613,133 @@ async def circle_gateway_deposit(
     return await get_app_service().prepare_circle_gateway_deposit(
         amount_usdc=amount_usdc,
         wallet_id=wallet_id or None,
+    )
+
+
+@app.post("/commerce/x402/data")
+async def x402_paid_data(
+    description: str = Form(...),
+    service_url: str = Form(...),
+    max_usdc: float = Form(default=0.01),
+    wallet_id: str | None = Form(default=None),
+) -> dict:
+    return await get_app_service().paid_data_service_request(
+        description=description,
+        service_url=service_url,
+        max_usdc=max_usdc,
+        wallet_id=wallet_id or None,
+    )
+
+
+@app.post("/commerce/reasoning/pay-to-peek")
+async def reasoning_pay_to_peek(
+    ruling_id: str = Form(...),
+    buyer_identity: str = Form(...),
+    amount_usdc: float = Form(...),
+    tx_hash: str | None = Form(default=None),
+) -> dict:
+    return await get_app_service().create_reasoning_pay_to_peek(
+        ruling_id=ruling_id,
+        buyer_identity=buyer_identity,
+        amount_usdc=amount_usdc,
+        tx_hash=tx_hash or None,
+    )
+
+
+@app.post("/markets/predictions")
+async def create_prediction(
+    question: str = Form(...),
+    probability_bps: int = Form(...),
+    horizon: str = Form(...),
+    rationale: str = Form(...),
+    notary_id: str | None = Form(default=None),
+) -> dict:
+    return await get_app_service().create_prediction(
+        question=question,
+        probability_bps=probability_bps,
+        horizon=horizon,
+        rationale=rationale,
+        notary_id=notary_id or None,
+    )
+
+
+@app.post("/commerce/micro-shares")
+async def buy_micro_share(
+    prediction_id: str = Form(...),
+    buyer_identity: str = Form(...),
+    amount_usdc: float = Form(...),
+    tx_hash: str | None = Form(default=None),
+) -> dict:
+    return await get_app_service().buy_micro_share(
+        prediction_id=prediction_id,
+        buyer_identity=buyer_identity,
+        amount_usdc=amount_usdc,
+        tx_hash=tx_hash or None,
+    )
+
+
+@app.post("/agents/karma/checkpoint")
+async def karma_checkpoint(
+    notary_id: str = Form(...),
+    delta: int = Form(...),
+    reason: str = Form(...),
+    evidence_ref: str | None = Form(default=None),
+) -> dict:
+    return await get_app_service().record_karma_checkpoint(
+        notary_id=notary_id,
+        delta=delta,
+        reason=reason,
+        evidence_ref=evidence_ref or None,
+    )
+
+
+@app.post("/agents/identity/erc8004")
+async def erc8004_identity(
+    notary_id: str = Form(...),
+    service_endpoint: str = Form(...),
+    metadata_uri: str | None = Form(default=None),
+) -> dict:
+    return await get_app_service().register_agent_identity_erc8004(
+        notary_id=notary_id,
+        service_endpoint=service_endpoint,
+        metadata_uri=metadata_uri or None,
+    )
+
+
+@app.post("/agents/replicate")
+async def replicate_notary(
+    parent_notary_id: str = Form(...),
+    mutation_prompt: str = Form(...),
+    min_karma: int = Form(default=0),
+) -> dict:
+    return await get_app_service().replicate_notary(
+        parent_notary_id=parent_notary_id,
+        mutation_prompt=mutation_prompt,
+        min_karma=min_karma,
+    )
+
+
+@app.post("/treasury/usyc/intents")
+async def usyc_intent(
+    notary_id: str = Form(...),
+    amount_usdc: float = Form(...),
+    tx_hash: str | None = Form(default=None),
+) -> dict:
+    return await get_app_service().create_usyc_intent(
+        notary_id=notary_id,
+        amount_usdc=amount_usdc,
+        tx_hash=tx_hash or None,
+    )
+
+
+@app.post("/markets/arbitrage/analyze")
+async def arbitrage_analyze(payload: dict = Body(...)) -> dict:
+    return await get_app_service().analyze_arbitrage(
+        base_asset=str(payload.get("base_asset") or payload.get("baseAsset") or "USDC"),
+        quote_asset=str(payload.get("quote_asset") or payload.get("quoteAsset") or "USD"),
+        amount_usdc=float(payload.get("amount_usdc") or payload.get("amountUSDC") or 0),
+        venues=list(payload.get("venues") or []),
+        max_slippage_bps=int(payload.get("max_slippage_bps") or payload.get("maxSlippageBps") or 50),
     )
 
 

@@ -60,6 +60,9 @@ class Settings(BaseModel):
     arc_attestation_registry: str | None = None
     arc_validation_registry: str | None = None
     arc_governance: str | None = None
+    arc_notary_karma: str | None = None
+    arc_agent_identity: str | None = None
+    arc_replication: str | None = None
 
     circle_cli_path: str = "circle"
     circle_wallet_email: str | None = None
@@ -128,6 +131,9 @@ class Settings(BaseModel):
             arc_attestation_registry=_optional_str("ARC_ATTESTATION_REGISTRY"),
             arc_validation_registry=_optional_str("ARC_VALIDATION_REGISTRY"),
             arc_governance=_optional_str("ARC_GOVERNANCE"),
+            arc_notary_karma=_optional_str("ARC_NOTARY_KARMA"),
+            arc_agent_identity=_optional_str("ARC_AGENT_IDENTITY"),
+            arc_replication=_optional_str("ARC_REPLICATION"),
             circle_cli_path=os.getenv("CIRCLE_CLI_PATH", "circle"),
             circle_wallet_email=_optional_str("CIRCLE_WALLET_EMAIL"),
             circle_chain=os.getenv("CIRCLE_CHAIN", "ARC-TESTNET"),

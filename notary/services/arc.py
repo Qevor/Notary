@@ -40,6 +40,18 @@ METHOD_SPECS: dict[tuple[str, str], MethodSpec] = {
         "updateGovernance(bytes32,bytes32,bytes32,bytes32,bytes32,address)",
         ["bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "address"],
     ),
+    ("NotaryKarma", "recordKarma"): (
+        "recordKarma(bytes32,bytes32,int256,uint256,bytes32,address)",
+        ["bytes32", "bytes32", "int256", "uint256", "bytes32", "address"],
+    ),
+    ("NotaryAgentIdentity", "registerAgent"): (
+        "registerAgent(bytes32,address,bytes32,bytes32,bytes32)",
+        ["bytes32", "address", "bytes32", "bytes32", "bytes32"],
+    ),
+    ("NotaryReplication", "recordReplication"): (
+        "recordReplication(bytes32,bytes32,bytes32,bytes32,address)",
+        ["bytes32", "bytes32", "bytes32", "bytes32", "address"],
+    ),
 }
 
 

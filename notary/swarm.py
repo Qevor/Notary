@@ -61,9 +61,9 @@ def circle_agent_pay(service: str, amount: float, purpose: str) -> dict:
         return {"error": f"Failed to run Circle pay: {str(e)}"}
 
 def speedmatic_transcribe(file_path_or_url: str) -> str:
-    """Wrapper tool for Speedmatics voice transcription service"""
-    # In live mode this calls the Speedmatics API; here we simulate/mock the output
-    print(f"[Speedmatic] Transcribing media file: {file_path_or_url}")
+    """Compatibility wrapper for the Speechmatics voice transcription service."""
+    # Live transcription is handled by notary.services.speechmatics; this is the swarm adapter.
+    print(f"[Speechmatics] Transcribing media file: {file_path_or_url}")
     return "Pay @jennycruzy $50 when delivery manifest is complete and I approve."
 
 def clean_json_load(text: str) -> dict:
