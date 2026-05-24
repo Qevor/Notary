@@ -1109,6 +1109,33 @@ def render_landing(state: dict[str, Any], user: dict[str, Any] | None = None) ->
 
 def render_public_ledger(state: dict[str, Any], user: dict[str, Any] | None = None) -> str:
     body = f"""
+    <script>
+      async function copyProfileWalletAddress(address) {{
+        const status = document.getElementById('copy-wallet-status');
+        try {{
+          if (navigator.clipboard && window.isSecureContext) {{
+            await navigator.clipboard.writeText(address);
+          }} else {{
+            const textArea = document.createElement('textarea');
+            textArea.value = address;
+            textArea.setAttribute('readonly', '');
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+          }}
+          if (status) {{
+            status.textContent = 'Address copied';
+            setTimeout(() => status.textContent = '', 2200);
+          }}
+        }} catch (error) {{
+          if (status) status.textContent = 'Select the address text and copy manually';
+        }}
+      }}
+    </script>
     <main class="shell">
       <div class="section-head" style="margin-bottom: 32px; border-bottom: 1px solid var(--line); padding-bottom: 20px;">
         <div>
@@ -1579,6 +1606,21 @@ def render_user_profile(
     </div>
     """
     
+    wallet_card = f"""
+    <div class="panel" style="border: 1px solid rgba(99, 102, 241, 0.2); background: var(--surface); border-radius: 12px; padding: 24px; box-shadow: var(--shadow); margin-bottom: 24px;">
+      <div class="eyebrow" style="color: var(--primary);">Secure Wallet</div>
+      <h2 style="margin: 6px 0 2px; color: #fff; font-size: 28px; font-family: 'Outfit'; font-weight: 800;">{profile_balance} USDC</h2>
+      <p style="margin: 0 0 16px; font-size: 12px; color: var(--muted);">ARC-TESTNET</p>
+
+      <label style="font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px;">EVM Address</label>
+      <div style="display: grid; gap: 10px; background: var(--surface-2); padding: 12px; border-radius: 8px; border: 1px solid var(--line);">
+        <code id="profile-wallet-address" style="color: var(--green); font-size: 12px; font-weight: 700; line-height: 1.5; word-break: break-all; white-space: normal;">{profile_wallet}</code>
+        <button type="button" id="copy-wallet-address" class="secondary" style="width: 100%; min-height: 40px; border-radius: 8px;" onclick="copyProfileWalletAddress({profile_wallet_js})">Copy address</button>
+        <span id="copy-wallet-status" style="min-height: 16px; color: var(--green); font-size: 12px; font-weight: 700;"></span>
+      </div>
+    </div>
+    """
+
     # 2. Change Username form (only if owner and not changed yet)
     change_username_card = ""
     if viewer_is_owner:
@@ -1622,6 +1664,33 @@ def render_user_profile(
         """
         
     body = f"""
+    <script>
+      async function copyProfileWalletAddress(address) {{
+        const status = document.getElementById('copy-wallet-status');
+        try {{
+          if (navigator.clipboard && window.isSecureContext) {{
+            await navigator.clipboard.writeText(address);
+          }} else {{
+            const textArea = document.createElement('textarea');
+            textArea.value = address;
+            textArea.setAttribute('readonly', '');
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+          }}
+          if (status) {{
+            status.textContent = 'Address copied';
+            setTimeout(() => status.textContent = '', 2200);
+          }}
+        }} catch (error) {{
+          if (status) status.textContent = 'Select the address text and copy manually';
+        }}
+      }}
+    </script>
     <main class="shell">
       <div style="margin-bottom: 32px;">
         <div class="eyebrow" style="color: var(--primary);">{ 'Your Personal Account' if viewer_is_owner else 'Public Agent Profile' }</div>
