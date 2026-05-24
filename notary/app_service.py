@@ -3062,5 +3062,60 @@ class NotaryAppService:
                         "timestamp": timestamp + 10, # offset slightly to sort correctly
                     })
 
+        profile = self.store.get("profiles", normalized) or {}
+        wallet = str(profile.get("wallet") or "").lower()
+
+        for item in self.store.list("yield_payouts"):
+            if wallet and str(item.get("targetWallet") or "").lower() == wallet:
+                txs.append({
+                    "tx_id": item.get("arcTxHash") or item.get("payoutId"),
+                    "type": "sponsored_yield",
+                    "direction": "receive",
+                    "party": "NOTARY reserve",
+                    "amount_usdc": item.get("amountUSDC"),
+                    "status": "verified",
+                    "description": "Sponsored treasury reward payout",
+                    "timestamp": _timestamp_from_iso(item.get("createdAt")),
+                })
+
+        for item in self.store.list("micro_shares"):
+            buyer = str(item.get("buyerIdentity") or "").strip().lower().lstrip("@")
+            if buyer == normalized:
+                txs.append({
+                    "tx_id": item.get("arcTxHash") or item.get("shareId"),
+                    "type": "micro_share",
+                    "direction": "send",
+                    "party": "NOTARY treasury",
+                    "amount_usdc": item.get("amountUSDC"),
+                    "status": "verified" if item.get("paymentVerification") else "submitted",
+                    "description": "Prediction micro-share purchase",
+                    "timestamp": _timestamp_from_iso(item.get("createdAt")),
+                })
+
+        for item in self.store.list("reasoning_market"):
+            buyer = str(item.get("buyerIdentity") or "").strip().lower().lstrip("@")
+            if buyer == normalized:
+                txs.append({
+                    "tx_id": item.get("arcTxHash") or item.get("accessId"),
+                    "type": "pay_to_peek",
+                    "direction": "send",
+                    "party": "NOTARY treasury",
+                    "amount_usdc": item.get("amountUSDC"),
+                    "status": "verified" if item.get("paymentVerification") else "submitted",
+                    "description": "Pay-to-Peek reasoning trace access",
+                    "timestamp": _timestamp_from_iso(item.get("createdAt")),
+                })
+
         txs.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
         return txs
+
+
+def _timestamp_from_iso(value: str | None) -> int:
+    if not value:
+        return int(time.time())
+    from datetime import datetime
+
+    try:
+        return int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp())
+    except ValueError:
+        return int(time.time())

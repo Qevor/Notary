@@ -719,6 +719,66 @@ def _css() -> str:
       grid-template-columns: repeat(3, 1fr);
       gap: 12px;
     }
+    .feature-grid, .profile-metrics, .commerce-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .feature-card, .status-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface);
+      padding: 22px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+    }
+    .feature-card h3, .status-card h3 {
+      margin: 6px 0 8px;
+      color: #fff;
+      font-size: 18px;
+    }
+    .feature-card p, .status-card p {
+      color: var(--muted);
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .status-card code, .tx-row code {
+      color: var(--green);
+      overflow-wrap: anywhere;
+      font-size: 12px;
+    }
+    .tx-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 16px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface-2);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .tx-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.04);
+      font-weight: 800;
+    }
+    @media (max-width: 980px) {
+      header { align-items: flex-start; flex-direction: column; padding: 16px 20px; }
+      .shell { padding: 24px 16px; }
+      .hero, .workspace, .ops-grid, .feature-grid, .profile-metrics, .commerce-grid, .grid, .grid.two, .facts {
+        grid-template-columns: 1fr !important;
+      }
+      aside { position: static !important; }
+      .hero h1 { font-size: 34px; }
+      .section-head { align-items: flex-start; flex-direction: column; }
+      .tx-row { grid-template-columns: 1fr; }
+    }
     """
 
 
@@ -1013,99 +1073,81 @@ def _ops_panels(state: dict[str, Any], circle_request_id: str | None = None) -> 
     </div>
     """
 
-    wallet_card = f"""
-    <div class="panel" style="border: 1px solid rgba(99, 102, 241, 0.2); background: var(--surface); border-radius: 12px; padding: 24px; box-shadow: var(--shadow); margin-bottom: 24px;">
-      <div class="eyebrow" style="color: var(--primary);">Secure Wallet</div>
-      <h2 style="margin: 6px 0 2px; color: #fff; font-size: 28px; font-family: 'Outfit'; font-weight: 800;">{profile_balance} USDC</h2>
-      <p style="margin: 0 0 16px; font-size: 12px; color: var(--muted);">ARC-TESTNET</p>
-
-      <label style="font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px;">EVM Address</label>
-      <div style="display: grid; gap: 10px; background: var(--surface-2); padding: 12px; border-radius: 8px; border: 1px solid var(--line);">
-        <code id="profile-wallet-address" style="color: var(--green); font-size: 12px; font-weight: 700; line-height: 1.5; word-break: break-all; white-space: normal;">{profile_wallet}</code>
-        <button type="button" id="copy-wallet-address" class="secondary" style="width: 100%; min-height: 40px; border-radius: 8px;" onclick="copyProfileWalletAddress({profile_wallet_js})">Copy address</button>
-        <span id="copy-wallet-status" style="min-height: 16px; color: var(--green); font-size: 12px; font-weight: 700;"></span>
-      </div>
-    </div>
-    """
-
 
 def render_landing(state: dict[str, Any], user: dict[str, Any] | None = None) -> str:
     rulings = state.get("rulings", [])
+    cases = state.get("cases", [])
+    predictions = state.get("predictions", [])
+    micro_shares = state.get("micro_shares", [])
+    reasoning_market = state.get("reasoning_market", [])
+    yield_payouts = state.get("yield_payouts", [])
+    yield_status = state.get("yield_status", {})
+    validations = state.get("validations", [])
     confidence_values = [
         float(item.get("confidence"))
         for item in rulings
         if isinstance(item.get("confidence"), (int, float))
     ]
     average_confidence = round(sum(confidence_values) / len(confidence_values), 2) if confidence_values else "n/a"
+    latest_yield_tx = (yield_payouts[-1] or {}).get("arcTxHash") if yield_payouts else "awaiting first payout"
+    usyc = yield_status.get("usyc", {}) if isinstance(yield_status, dict) else {}
     body = f"""
-    <script>
-      async function copyProfileWalletAddress(address) {{
-        const status = document.getElementById('copy-wallet-status');
-        try {{
-          if (navigator.clipboard && window.isSecureContext) {{
-            await navigator.clipboard.writeText(address);
-          }} else {{
-            const textArea = document.createElement('textarea');
-            textArea.value = address;
-            textArea.setAttribute('readonly', '');
-            textArea.style.position = 'fixed';
-            textArea.style.left = '-9999px';
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textArea);
-          }}
-          if (status) {{
-            status.textContent = 'Address copied';
-            setTimeout(() => status.textContent = '', 2200);
-          }}
-        }} catch (error) {{
-          if (status) status.textContent = 'Select the address text and copy manually';
-        }}
-      }}
-    </script>
     <main class="shell">
-      <section class="hero" style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 32px; align-items: stretch; margin-bottom: 40px;">
-        <div class="hero-copy" style="border: 1px solid var(--line); border-radius: 16px; padding: 48px; background: var(--surface); backdrop-filter: blur(16px); box-shadow: var(--shadow); display: flex; flex-direction: column; justify-content: space-between;">
+      <section class="hero">
+        <div class="hero-copy">
           <div>
-            <div class="eyebrow" style="color: var(--primary); font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;">AI Witness Layer</div>
-            <h1 style="font-size: 46px; line-height: 1.1; letter-spacing: -0.02em; margin: 12px 0 16px; color: #fff; font-family: 'Outfit'; font-weight: 900;">Programmable USDC payments triggered by real-world proof.</h1>
-            <p style="color: var(--muted); font-size: 16px; line-height: 1.6; margin-bottom: 28px;">NOTARY turns real-world proof — voice notes, files, videos, work logs, and approvals — into signed AI attestations that trigger programmable USDC payments on Arc.</p>
-            <div class="actions" style="display: flex; gap: 12px;">
+            <div class="eyebrow">Witness-to-Pay on Arc</div>
+            <h1>Machine witnesses that turn verified facts into programmable USDC movement.</h1>
+            <p>NOTARY combines autonomous AI review, Circle agent wallets, Arc attestations, paid intelligence, prediction micro-shares, and sponsored treasury rewards into one live payment terminal.</p>
+            <div class="actions">
               <a class="button" href="/app" style="width: auto;">Open workspace</a>
-              <a class="button secondary" href="/ledger">View all public records</a>
+              <a class="button secondary" href="/ledger">View public ledger</a>
+              <a class="button secondary" href="/coverage">Inspect coverage</a>
             </div>
           </div>
-          <div class="metrics" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 40px;">
-            <div class="metric"><span>Public rulings</span><strong>{len(rulings)}</strong></div>
+          <div class="metrics">
+            <div class="metric"><span>Cases</span><strong>{len(cases)}</strong></div>
+            <div class="metric"><span>Rulings</span><strong>{len(rulings)}</strong></div>
             <div class="metric"><span>Avg confidence</span><strong>{escape(str(average_confidence))}</strong></div>
-            <div class="metric"><span>Disputes</span><strong>{len(state.get("disputes", []))}</strong></div>
-            <div class="metric"><span>Reversals</span><strong>{len(state.get("reversals", []))}</strong></div>
+            <div class="metric"><span>Arc validations</span><strong>{len(validations)}</strong></div>
           </div>
         </div>
-        <div class="flow" style="border: 1px solid var(--line); border-radius: 16px; background: var(--surface); padding: 36px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 16px;">
-          <div>
-            <div class="eyebrow" style="color: var(--primary);">Settlement flow</div>
-            <h2 style="font-size: 24px; color: #fff; font-family: 'Outfit'; font-weight: 800;">Release, hold, or correct on the record</h2>
-          </div>
-          {_public_flow_items(rulings)}
+        <div class="flow" style="border: 1px solid var(--line); border-radius: 16px; background: var(--surface); padding: 30px; box-shadow: var(--shadow);">
+          <div class="eyebrow">Live rails</div>
+          <h2 style="font-size: 24px; color: #fff; margin-bottom: 18px;">What is working now</h2>
+          <div class="status-card" style="margin-bottom: 12px;"><span class="badge good">Circle wallet</span><h3>Agent wallets on signup</h3><p>Every profile maps to a Circle developer-controlled wallet for Arc testnet USDC.</p></div>
+          <div class="status-card" style="margin-bottom: 12px;"><span class="badge good">Arc verified</span><h3>Payments resolve to tx hashes</h3><p>Micro-shares, Pay-to-Peek, and yield payouts are verified against Arc USDC logs.</p></div>
+          <div class="status-card"><span class="badge warn">USYC ready</span><h3>Institutional yield path</h3><p>Teller configured: <code>{escape(_short(usyc.get("providerAddress"), 42))}</code></p></div>
         </div>
       </section>
-      <section class="section" style="margin-top: 48px;">
-        <div class="section-head" style="margin-bottom: 24px;">
-          <div>
-            <h2 style="font-size: 28px; color: #fff; font-family: 'Outfit'; font-weight: 800; margin-bottom: 4px;">Recent public records</h2>
-            <p style="color: var(--muted); font-size: 15px;">Summaries and commitments are public. Raw evidence remains private.</p>
-          </div>
+
+      <section class="section">
+        <div class="section-head">
+          <div><div class="eyebrow">Product map</div><h2>One app, full economic loop</h2><p>Everything below is part of the live NOTARY surface, not pitch-only copy.</p></div>
+        </div>
+        <div class="feature-grid">
+          <div class="feature-card"><span class="badge good">Witness</span><h3>Escrow cases</h3><p>Natural-language obligations become funded cases, evidence links, verdicts, and release/hold/refund actions.</p></div>
+          <div class="feature-card"><span class="badge good">Swarm</span><h3>6-agent review</h3><p>Scanner, Sentinel, Risk, Strategy, Validator, and Reflector coordinate evidence review.</p></div>
+          <div class="feature-card"><span class="badge good">Arc</span><h3>Onchain memory</h3><p>Identity, validations, attestation hashes, karma, replication, and payment proofs are committed on Arc.</p></div>
+          <div class="feature-card"><span class="badge good">Commerce</span><h3>Prediction micro-shares</h3><p>{len(predictions)} prediction(s), {len(micro_shares)} purchase(s), with USDC payment verification.</p></div>
+          <div class="feature-card"><span class="badge good">Marketplace</span><h3>Pay-to-Peek traces</h3><p>{len(reasoning_market)} reasoning access purchase(s) recorded with trace hashes and payment proofs.</p></div>
+          <div class="feature-card"><span class="badge good">Yield</span><h3>Sponsored reserve</h3><p>{len(yield_payouts)} payout(s). Latest: <code>{escape(_short(latest_yield_tx, 38))}</code></p></div>
+          <div class="feature-card"><span class="badge warn">x402</span><h3>Paid data requests</h3><p>GET/POST x402 calls are wired. Arc-compatible sellers or Gateway fallback are the remaining provider choice.</p></div>
+          <div class="feature-card"><span class="badge warn">USYC</span><h3>Future institutional yield</h3><p>Current mode: {escape(str(usyc.get("status", "awaiting_allowlist")))}. Sponsored reserve stays live meanwhile.</p></div>
+          <div class="feature-card"><span class="badge good">Multimodal</span><h3>Speechmatics evidence</h3><p>Audio/video uploads and transcripts feed the witness pipeline for real-world proof review.</p></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div><div class="eyebrow">Recent activity</div><h2>Public witness ledger</h2><p>Summaries and commitments are public. Raw evidence remains private or protected by default.</p></div>
           <a class="button secondary" href="/ledger">See all</a>
         </div>
-        <div class="grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px;">{_record_cards(rulings, limit=3, compact=True)}</div>
+        <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));">{_record_cards(rulings, limit=3, compact=True)}</div>
       </section>
     </main>
     """
     return _page("NOTARY", body, user)
-
 
 def render_public_ledger(state: dict[str, Any], user: dict[str, Any] | None = None) -> str:
     body = f"""
@@ -1551,6 +1593,9 @@ def render_user_profile(
         viewer_username = viewer.get("id", "").split("@")[0].lower()
         
     viewer_is_owner = viewer_username == profile_username
+    yield_total = sum(float(tx.get("amount_usdc") or 0) for tx in transactions if tx.get("type") == "sponsored_yield")
+    commerce_count = sum(1 for tx in transactions if tx.get("type") in {"micro_share", "pay_to_peek"})
+    escrow_count = sum(1 for tx in transactions if str(tx.get("type", "")).startswith("escrow"))
     
     tx_rows = []
     if not transactions:
@@ -1561,7 +1606,7 @@ def render_user_profile(
             is_send = direction == "send"
             color = "#ef4444" if is_send else "#10b981"
             prefix = "-" if is_send else "+"
-            arrow = "↗️" if is_send else "↙️"
+            arrow = "OUT" if is_send else "IN"
             amount_display = f'<strong style="color: {color}; font-family: \'Outfit\'; font-size: 16px;">{prefix}{tx.get("amount_usdc")} USDC</strong>'
             
             try:
@@ -1571,11 +1616,12 @@ def render_user_profile(
                 
             tx_rows.append(
                 f"""
-                <div class="flow-step" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px; display: grid; grid-template-columns: auto 1fr auto; padding: 16px 20px; align-items: center; transition: all 0.2s ease;">
-                  <div style="font-size: 24px; line-height: 1; margin-right: 16px;">{arrow}</div>
+                <div class="tx-row">
+                  <div class="tx-icon" style="color: {color};">{arrow}</div>
                   <div>
                     <strong style="font-size: 16px; color: #fff; font-family: 'Outfit';">{escape(tx.get("description", ""))}</strong>
-                    <span style="display: block; font-size: 12px; color: var(--muted); margin-top: 4px;">Party: {escape(tx.get("party", ""))} · {date_str}</span>
+                    <span style="display: block; font-size: 12px; color: var(--muted); margin-top: 4px;">{escape(str(tx.get("type", "transaction")).replace("_", " ").title())} / Party: {escape(tx.get("party", ""))} / {date_str}</span>
+                    <code>{escape(_short(tx.get("tx_id"), 48))}</code>
                   </div>
                   <div style="text-align: right;">
                     {amount_display}
@@ -1590,22 +1636,6 @@ def render_user_profile(
     error_html = f'<div class="notice bad" style="margin-bottom: 20px; border-radius: 8px;">{escape(error)}</div>' if error else ""
     message_html = f'<div class="notice" style="margin-bottom: 20px; border-radius: 8px;">{escape(message)}</div>' if message else ""
     
-    # Left Sidebar (aside)
-    # 1. Wallet Card
-    wallet_card = f"""
-    <div class="panel" style="border: 1px solid rgba(99, 102, 241, 0.2); background: var(--surface); border-radius: 12px; padding: 24px; box-shadow: var(--shadow); margin-bottom: 24px;">
-      <div class="eyebrow" style="color: var(--primary);">Secure Wallet</div>
-      <h2 style="margin: 6px 0 2px; color: #fff; font-size: 28px; font-family: 'Outfit'; font-weight: 800;">{profile_balance} USDC</h2>
-      <p style="margin: 0 0 16px; font-size: 12px; color: var(--muted);">ARC-TESTNET</p>
-      
-      <label style="font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px;">EVM Address</label>
-      <div style="display: flex; gap: 8px; align-items: center; background: var(--surface-2); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); cursor: pointer;" onclick="navigator.clipboard.writeText('{profile_wallet}'); alert('Copied address!')">
-        <code style="color: var(--green); font-size: 12px; font-weight: 700; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{profile_wallet}</code>
-        <span style="font-size: 12px;">📋</span>
-      </div>
-    </div>
-    """
-    
     wallet_card = f"""
     <div class="panel" style="border: 1px solid rgba(99, 102, 241, 0.2); background: var(--surface); border-radius: 12px; padding: 24px; box-shadow: var(--shadow); margin-bottom: 24px;">
       <div class="eyebrow" style="color: var(--primary);">Secure Wallet</div>
@@ -1615,7 +1645,7 @@ def render_user_profile(
       <label style="font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px;">EVM Address</label>
       <div style="display: grid; gap: 10px; background: var(--surface-2); padding: 12px; border-radius: 8px; border: 1px solid var(--line);">
         <code id="profile-wallet-address" style="color: var(--green); font-size: 12px; font-weight: 700; line-height: 1.5; word-break: break-all; white-space: normal;">{profile_wallet}</code>
-        <button type="button" id="copy-wallet-address" class="secondary" style="width: 100%; min-height: 40px; border-radius: 8px;" onclick="copyProfileWalletAddress({profile_wallet_js})">Copy address</button>
+        <button type="button" id="copy-wallet-address" class="button secondary" style="width: 100%; min-height: 40px; border-radius: 8px;" onclick="copyProfileWalletAddress({profile_wallet_js})">Copy address</button>
         <span id="copy-wallet-status" style="min-height: 16px; color: var(--green); font-size: 12px; font-weight: 700;"></span>
       </div>
     </div>
@@ -1627,7 +1657,7 @@ def render_user_profile(
         if not profile.get("username_changed"):
             change_username_card = f"""
             <div class="panel" style="margin-bottom: 24px; border-radius: 12px; padding: 24px; background: var(--surface); border: 1px solid var(--line);">
-              <h2>✏️ Change Username</h2>
+              <h2>Change Username</h2>
               <p class="panel-copy">You can update your handle exactly once. This will also update your session credentials and profile URL.</p>
               <form method="post" action="/ui/profile/update-username">
                 <label for="new_username">New Handle</label>
@@ -1639,7 +1669,7 @@ def render_user_profile(
         else:
             change_username_card = f"""
             <div class="panel" style="margin-bottom: 24px; border-radius: 12px; padding: 20px; background: var(--surface); border: 1px solid var(--line); text-align: center;">
-              <span style="font-size: 13px; color: var(--muted);">🔒 Username locked (limit reached)</span>
+              <span style="font-size: 13px; color: var(--muted);">Username locked (limit reached)</span>
             </div>
             """
             
@@ -1699,10 +1729,25 @@ def render_user_profile(
       
       {error_html}
       {message_html}
+
+      <section class="profile-metrics" style="margin-bottom: 28px;">
+        <div class="status-card"><span class="badge good">Wallet</span><h3>{profile_balance} USDC</h3><p>Live Arc testnet balance for this account wallet.</p></div>
+        <div class="status-card"><span class="badge good">Yield</span><h3>{yield_total:.6f} USDC</h3><p>Sponsored reserve rewards received by this wallet.</p></div>
+        <div class="status-card"><span class="badge good">Commerce</span><h3>{commerce_count} action(s)</h3><p>Micro-share and Pay-to-Peek purchases tied to this account.</p></div>
+      </section>
       
       <section class="workspace" style="display: grid; grid-template-columns: 360px 1fr; gap: 32px; align-items: start;">
         <aside style="position: sticky; top: 100px;">
           {wallet_card}
+          <div class="panel" style="border-radius: 12px; padding: 24px; background: var(--surface); border: 1px solid var(--line); margin-bottom: 24px;">
+            <div class="eyebrow">Account rails</div>
+            <div class="facts" style="grid-template-columns: 1fr; margin-top: 8px;">
+              <div class="fact"><span>Escrow activity</span><strong>{escrow_count} record(s)</strong></div>
+              <div class="fact"><span>Prediction commerce</span><strong>{commerce_count} record(s)</strong></div>
+              <div class="fact"><span>Yield route</span><strong>Sponsored reserve live</strong></div>
+              <div class="fact"><span>USYC</span><strong>Awaiting allowlist</strong></div>
+            </div>
+          </div>
           {send_funds_card}
           {change_username_card}
         </aside>
