@@ -81,14 +81,19 @@ class CircleAgentClient:
         before = await self._list_agent_wallets()
         before_addresses = {str(wallet["address"]).lower() for wallet in before}
         idempotency_key = "notary-" + hashlib.sha256(owner_hint.encode("utf-8")).hexdigest()[:32]
-        create_result = await self._run(
-            "wallet",
-            "create",
-            "--type",
-            "agent",
-            "--idempotency-key",
-            idempotency_key,
-        )
+        try:
+            create_result = await self._run(
+                "wallet",
+                "create",
+                "--type",
+                "agent",
+                "--idempotency-key",
+                idempotency_key,
+            )
+        except RuntimeError as exc:
+            if "parameter invalid" not in str(exc).lower():
+                raise
+            create_result = await self._run("wallet", "create", "--type", "agent")
         created = await self._list_agent_wallets()
         if not created:
             raise RuntimeError("Circle CLI did not return an agent wallet after creation")
