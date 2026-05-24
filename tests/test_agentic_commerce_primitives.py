@@ -294,3 +294,71 @@ async def test_live_commerce_primitives_auto_pay_with_circle(tmp_path, monkeypat
     )
     assert usyc["status"] == "submitted_to_usyc_provider"
     assert usyc["payment"]["to"] == settings.usyc_provider_address
+
+
+@pytest.mark.anyio
+async def test_sponsored_yield_pays_from_reserve_and_records_arc_validation(tmp_path, monkeypatch):
+    settings = Settings(
+        notary_db_path=tmp_path / "notary_yield.sqlite3",
+        notary_demo_mode=False,
+        arc_demo_mode=False,
+        arc_rpc_url="https://rpc.example",
+        arc_chain_id=5042002,
+        arc_operator_private_key="0x" + "1" * 64,
+        validator_private_key="0x" + "2" * 64,
+        notary_yield_mode="sponsored_reserve",
+        notary_yield_reserve_private_key="0x" + "3" * 64,
+        notary_yield_reserve_wallet="0x" + "4" * 40,
+        notary_yield_target_apy_bps=1000,
+        notary_yield_min_idle_usdc=1,
+        notary_yield_payout_interval_seconds=86400,
+        notary_yield_min_payout_usdc=0.000001,
+        usyc_provider_address="0x9fdF14c5B14173D74C08Af27AebFf39240dC105A",
+    )
+    service = NotaryAppService(settings)
+    service.store.put(
+        "notaries",
+        "notary_yield",
+        {
+            "notary_id": "notary_yield",
+            "agent_wallet": "0x" + "a" * 40,
+            "treasury_address": "0x" + "a" * 40,
+            "capabilities": [],
+            "status": "active",
+        },
+    )
+
+    async def fake_get_usdc_balance(self, address, token_address=None):
+        if address == settings.notary_yield_reserve_wallet:
+            return 5.0
+        return 11.0
+
+    async def fake_transfer_usdc_from_key(self, *, private_key, to_address, amount_usdc, token_address=None):
+        assert private_key == settings.notary_yield_reserve_private_key
+        assert to_address == "0x" + "a" * 40
+        assert amount_usdc > 0
+        return {
+            "txHash": "0x" + "5" * 64,
+            "status": "submitted",
+            "from": settings.notary_yield_reserve_wallet,
+            "to": to_address,
+            "amountUSDC": amount_usdc,
+            "verification": {"status": "verified"},
+            "demo": False,
+        }
+
+    monkeypatch.setattr(ArcClient, "get_usdc_balance", fake_get_usdc_balance)
+    monkeypatch.setattr(ArcClient, "transfer_usdc_from_key", fake_transfer_usdc_from_key)
+
+    result = await service.process_sponsored_yield(
+        target_identity="notary_yield",
+        force=True,
+    )
+
+    assert result["mode"] == "sponsored_reserve"
+    assert result["results"][0]["lastStatus"] == "paid"
+    assert result["results"][0]["payment"]["txHash"].startswith("0x")
+    assert result["usyc"]["status"] == "awaiting_allowlist"
+    assert service.store.list("yield_payouts")
+    kinds = {item["kind"] for item in service.store.list("validations")}
+    assert {"sponsored_yield_intent", "sponsored_yield_payout"}.issubset(kinds)

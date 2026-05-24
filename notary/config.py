@@ -90,6 +90,14 @@ class Settings(BaseModel):
     notary_executor_agent_wallet_id: str | None = None
     notary_creator_wallet: str | None = None
     usyc_provider_address: str | None = None
+    usyc_execution_enabled: bool = False
+    notary_yield_mode: str = "disabled"
+    notary_yield_reserve_private_key: str | None = None
+    notary_yield_reserve_wallet: str | None = None
+    notary_yield_target_apy_bps: int = 1000
+    notary_yield_min_idle_usdc: float = 1.0
+    notary_yield_payout_interval_seconds: int = 86400
+    notary_yield_min_payout_usdc: float = 0.000001
 
     speechmatics_demo_mode: bool = False
     speechmatics_api_base_url: str | None = "https://asr.api.speechmatics.com/v2"
@@ -169,6 +177,16 @@ class Settings(BaseModel):
             notary_executor_agent_wallet_id=_optional_str("NOTARY_EXECUTOR_AGENT_WALLET_ID"),
             notary_creator_wallet=_optional_str("NOTARY_CREATOR_WALLET"),
             usyc_provider_address=_optional_str("USYC_PROVIDER_ADDRESS"),
+            usyc_execution_enabled=_bool_env("USYC_EXECUTION_ENABLED", False),
+            notary_yield_mode=os.getenv("NOTARY_YIELD_MODE", "disabled"),
+            notary_yield_reserve_private_key=_optional_str("NOTARY_YIELD_RESERVE_PRIVATE_KEY"),
+            notary_yield_reserve_wallet=_optional_str("NOTARY_YIELD_RESERVE_WALLET"),
+            notary_yield_target_apy_bps=int(os.getenv("NOTARY_YIELD_TARGET_APY_BPS", "1000")),
+            notary_yield_min_idle_usdc=float(os.getenv("NOTARY_YIELD_MIN_IDLE_USDC", "1")),
+            notary_yield_payout_interval_seconds=int(
+                os.getenv("NOTARY_YIELD_PAYOUT_INTERVAL_SECONDS", "86400")
+            ),
+            notary_yield_min_payout_usdc=float(os.getenv("NOTARY_YIELD_MIN_PAYOUT_USDC", "0.000001")),
             speechmatics_demo_mode=_bool_env(
                 "SPEECHMATICS_DEMO_MODE",
                 _bool_env("SPEEDMATIC_DEMO_MODE", False),

@@ -21,6 +21,7 @@ from notary.models.schemas import ArcTransactionPayload, new_id
 MethodSpec = tuple[str, list[str]]
 USDC_TOKEN_ADDRESS = "0x3600000000000000000000000000000000000000"
 TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+ERC20_TRANSFER_SIGNATURE = "transfer(address,uint256)"
 
 
 METHOD_SPECS: dict[tuple[str, str], MethodSpec] = {
@@ -185,6 +186,97 @@ class ArcClient:
         if not receipt:
             raise RuntimeError("Arc transaction receipt was not found")
         return receipt
+
+    async def get_usdc_balance(self, address: str, token_address: str = USDC_TOKEN_ADDRESS) -> float:
+        if not self.enabled:
+            return 1000.0
+        clean = address.lower().removeprefix("0x")
+        if len(clean) != 40:
+            raise RuntimeError(f"Invalid EVM address: {address}")
+        data = "0x70a08231" + clean.rjust(64, "0")
+        result = await self._rpc(
+            "eth_call",
+            [
+                {
+                    "to": to_checksum_address(token_address),
+                    "data": data,
+                },
+                "latest",
+            ],
+        )
+        return int(str(result or "0x0"), 16) / 1_000_000
+
+    async def transfer_usdc_from_key(
+        self,
+        *,
+        private_key: str,
+        to_address: str,
+        amount_usdc: float,
+        token_address: str = USDC_TOKEN_ADDRESS,
+    ) -> dict[str, Any]:
+        if amount_usdc <= 0:
+            raise RuntimeError("Arc USDC transfer requires a positive amount")
+        if not self.enabled:
+            tx_hash = sha256_hex({"to": to_address, "amount": amount_usdc, "nonce": new_id("yield")})
+            return {
+                "txHash": tx_hash,
+                "status": "simulated",
+                "from": Account.from_key(private_key).address if Account is not None else "demo-reserve",
+                "to": to_address,
+                "amountUSDC": amount_usdc,
+                "demo": True,
+            }
+        if Account is None or encode is None or keccak is None or to_hex is None or to_checksum_address is None:
+            raise RuntimeError("eth-account, eth-abi, and eth-utils are required for live Arc transfers")
+
+        sender = Account.from_key(private_key).address
+        amount_units = int(round(float(amount_usdc) * 1_000_000))
+        data = to_hex(
+            keccak(text=ERC20_TRANSFER_SIGNATURE)[:4]
+            + encode(["address", "uint256"], [to_checksum_address(to_address), amount_units])
+        )
+        nonce = await self._rpc("eth_getTransactionCount", [sender, "pending"])
+        gas_price = await self._rpc("eth_gasPrice", [])
+        tx = {
+            "from": sender,
+            "to": to_checksum_address(token_address),
+            "value": "0x0",
+            "data": data,
+            "nonce": nonce,
+            "chainId": hex(self.chain_id),
+            "gasPrice": gas_price,
+        }
+        estimated_gas = await self._rpc("eth_estimateGas", [tx])
+        signed = Account.sign_transaction(
+            {
+                "from": sender,
+                "to": to_checksum_address(token_address),
+                "value": 0,
+                "data": data,
+                "nonce": int(nonce, 16),
+                "chainId": self.chain_id,
+                "gasPrice": int(gas_price, 16),
+                "gas": int(estimated_gas, 16),
+            },
+            private_key,
+        )
+        tx_hash = await self._rpc("eth_sendRawTransaction", [signed.raw_transaction.hex()])
+        verification = await self.verify_usdc_transfer(
+            tx_hash=tx_hash,
+            from_address=sender,
+            to_address=to_address,
+            amount_usdc=amount_usdc,
+            token_address=token_address,
+        )
+        return {
+            "txHash": tx_hash,
+            "status": "submitted",
+            "from": sender,
+            "to": to_address,
+            "amountUSDC": amount_usdc,
+            "verification": verification,
+            "demo": False,
+        }
 
     async def verify_usdc_transfer(
         self,

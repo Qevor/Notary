@@ -151,6 +151,18 @@ class NotaryAppService:
                 "x402": {"route": "/commerce/x402/pay-to-peek"},
                 "bridgeAppKit": {"route": "/circle/gateway/deposit"},
                 "usyc": {"route": "/treasury/usyc/intents"},
+                "sponsoredYield": {
+                    "mode": self.settings.notary_yield_mode,
+                    "route": "/treasury/yield/process",
+                    "reserveConfigured": bool(
+                        self.settings.notary_yield_reserve_private_key
+                        and self.settings.notary_yield_reserve_wallet
+                    ),
+                    "usycFallback": {
+                        "providerAddress": self.settings.usyc_provider_address,
+                        "executionEnabled": self.settings.usyc_execution_enabled,
+                    },
+                },
             },
             "notary": {
                 "multimodalObservation": self.speechmatics_status(),
@@ -794,6 +806,185 @@ class NotaryAppService:
             notary_id=notary_id,
         )
         return record
+
+    def yield_status(self) -> dict[str, Any]:
+        return {
+            "mode": self.settings.notary_yield_mode,
+            "sponsoredReserve": {
+                "configured": bool(
+                    self.settings.notary_yield_reserve_private_key
+                    and self.settings.notary_yield_reserve_wallet
+                ),
+                "wallet": self.settings.notary_yield_reserve_wallet,
+                "targetApyBps": self.settings.notary_yield_target_apy_bps,
+                "minIdleUSDC": self.settings.notary_yield_min_idle_usdc,
+                "payoutIntervalSeconds": self.settings.notary_yield_payout_interval_seconds,
+                "minPayoutUSDC": self.settings.notary_yield_min_payout_usdc,
+            },
+            "usyc": {
+                "providerAddress": self.settings.usyc_provider_address,
+                "executionEnabled": self.settings.usyc_execution_enabled,
+                "status": "ready" if self.settings.usyc_execution_enabled else "awaiting_allowlist",
+            },
+        }
+
+    async def process_sponsored_yield(
+        self,
+        *,
+        target_identity: str | None = None,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        if self.settings.notary_yield_mode != "sponsored_reserve":
+            raise RuntimeError("Sponsored yield reserve is disabled")
+        reserve_key = self.settings.notary_yield_reserve_private_key
+        reserve_wallet = self.settings.notary_yield_reserve_wallet
+        if not reserve_key or not reserve_wallet:
+            raise RuntimeError(
+                "NOTARY_YIELD_RESERVE_PRIVATE_KEY and NOTARY_YIELD_RESERVE_WALLET are required"
+            )
+
+        targets = self._yield_targets(target_identity)
+        if not targets:
+            raise RuntimeError("No yield target wallets were found")
+
+        reserve_balance = await self.arc.get_usdc_balance(reserve_wallet)
+        results = []
+        for target in targets:
+            wallet = str(target["wallet"])
+            balance = await self.arc.get_usdc_balance(wallet)
+            idle_balance = max(0.0, balance - self.settings.notary_yield_min_idle_usdc)
+            key = f"{target['type']}:{target['id']}"
+            position = self.store.get("yield_positions", key) or {}
+            now = int(time.time())
+            last_at = int(position.get("lastAccrualAt") or now)
+            elapsed = max(0, now - last_at)
+            interval = self.settings.notary_yield_payout_interval_seconds
+            payable_elapsed = elapsed if elapsed >= interval else (interval if force else 0)
+            reward = (
+                idle_balance
+                * (self.settings.notary_yield_target_apy_bps / 10_000)
+                * (payable_elapsed / 31_536_000)
+            )
+            reward = round(reward, 6)
+            status = "pending_interval"
+            payment = None
+            validation = None
+
+            if idle_balance <= 0:
+                status = "below_idle_threshold"
+            elif reward < self.settings.notary_yield_min_payout_usdc:
+                status = "below_min_payout"
+            elif reward > reserve_balance:
+                status = "insufficient_reserve_balance"
+            else:
+                payment = await self.arc.transfer_usdc_from_key(
+                    private_key=reserve_key,
+                    to_address=wallet,
+                    amount_usdc=reward,
+                )
+                reserve_balance -= reward
+                status = "paid"
+                payout_id = new_id("yield")
+                payout = {
+                    "payoutId": payout_id,
+                    "targetId": target["id"],
+                    "targetType": target["type"],
+                    "targetWallet": wallet,
+                    "reserveWallet": reserve_wallet,
+                    "source": "sponsored_reserve",
+                    "amountUSDC": reward,
+                    "idleBalanceUSDC": idle_balance,
+                    "targetApyBps": self.settings.notary_yield_target_apy_bps,
+                    "elapsedSeconds": payable_elapsed,
+                    "arcTxHash": payment.get("txHash"),
+                    "payment": payment,
+                    "createdAt": utc_now().isoformat(),
+                }
+                self.store.put("yield_payouts", payout_id, payout)
+                validation = await self._commit_validation(
+                    kind="sponsored_yield_payout",
+                    subject_id=payout_id,
+                    payload=payout,
+                    notary_id=self._default_notary_id(),
+                )
+
+            updated_position = {
+                "positionId": key,
+                "targetId": target["id"],
+                "targetType": target["type"],
+                "targetWallet": wallet,
+                "mode": "sponsored_reserve",
+                "usycStatus": "awaiting_allowlist"
+                if not self.settings.usyc_execution_enabled
+                else "usyc_ready",
+                "idleBalanceUSDC": idle_balance,
+                "walletBalanceUSDC": balance,
+                "lastAccrualAt": now if status == "paid" or force else last_at,
+                "lastStatus": status,
+                "updatedAt": utc_now().isoformat(),
+            }
+            self.store.put("yield_positions", key, updated_position)
+            await self._commit_validation(
+                kind="sponsored_yield_intent",
+                subject_id=key,
+                payload=updated_position,
+                notary_id=self._default_notary_id(),
+            )
+            results.append(
+                updated_position
+                | {
+                    "payableRewardUSDC": reward,
+                    "payment": payment,
+                    "validation": validation,
+                }
+            )
+
+        return {
+            "mode": "sponsored_reserve",
+            "reserveWallet": reserve_wallet,
+            "reserveBalanceUSDC": reserve_balance,
+            "targetsProcessed": len(results),
+            "results": results,
+            "usyc": {
+                "providerAddress": self.settings.usyc_provider_address,
+                "executionEnabled": self.settings.usyc_execution_enabled,
+                "status": "awaiting_allowlist"
+                if not self.settings.usyc_execution_enabled
+                else "ready",
+            },
+        }
+
+    def _yield_targets(self, target_identity: str | None = None) -> list[dict[str, str]]:
+        if target_identity:
+            raw = target_identity.strip()
+            normalized = raw.lower().lstrip("@")
+            profile = self.store.get("profiles", normalized)
+            if profile and profile.get("wallet"):
+                return [{"id": normalized, "type": "profile", "wallet": str(profile["wallet"])}]
+            notary = self.store.get("notaries", raw)
+            if notary and notary.get("agent_wallet"):
+                return [{"id": raw, "type": "notary", "wallet": str(notary["agent_wallet"])}]
+            if raw.startswith("0x"):
+                return [{"id": raw, "type": "wallet", "wallet": raw}]
+            raise RuntimeError(f"Could not resolve yield target: {target_identity}")
+
+        targets: list[dict[str, str]] = []
+        for notary in self.store.list("notaries"):
+            wallet = notary.get("agent_wallet") or notary.get("treasury_address")
+            if wallet:
+                targets.append(
+                    {
+                        "id": str(notary.get("notary_id") or wallet),
+                        "type": "notary",
+                        "wallet": str(wallet),
+                    }
+                )
+        for profile in self.store.list("profiles"):
+            wallet = profile.get("wallet")
+            username = profile.get("username")
+            if wallet and username:
+                targets.append({"id": str(username), "type": "profile", "wallet": str(wallet)})
+        return targets
 
     async def analyze_arbitrage(
         self,
@@ -1832,6 +2023,9 @@ class NotaryAppService:
             "usyc_intents": self.store.list("usyc_intents"),
             "arbitrage_signals": self.store.list("arbitrage_signals"),
             "x402_payments": self.store.list("x402_payments"),
+            "yield_positions": self.store.list("yield_positions"),
+            "yield_payouts": self.store.list("yield_payouts"),
+            "yield_status": self.yield_status(),
         }
 
     def swarm_roles(self) -> list[dict[str, Any]]:

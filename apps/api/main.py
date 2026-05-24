@@ -751,6 +751,22 @@ async def usyc_intent(
     )
 
 
+@app.get("/treasury/yield/status")
+async def treasury_yield_status() -> dict:
+    return get_app_service().yield_status()
+
+
+@app.post("/treasury/yield/process")
+async def treasury_yield_process(
+    target_identity: str | None = Form(default=None),
+    force: bool = Form(default=False),
+) -> dict:
+    return await get_app_service().process_sponsored_yield(
+        target_identity=target_identity or None,
+        force=force,
+    )
+
+
 @app.post("/markets/arbitrage/analyze")
 async def arbitrage_analyze(payload: dict = Body(...)) -> dict:
     return await get_app_service().analyze_arbitrage(
