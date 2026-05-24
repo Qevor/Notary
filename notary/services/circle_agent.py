@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import shutil
 from dataclasses import dataclass
@@ -77,15 +78,35 @@ class CircleAgentClient:
             }
 
         await self._ensure_authenticated()
-        existing = await self._list_agent_wallets()
-        if existing:
-            return existing[0] | {"ownerHint": owner_hint, "demo": False}
-
-        await self._run("wallet", "create", "--type", "agent")
+        before = await self._list_agent_wallets()
+        before_addresses = {str(wallet["address"]).lower() for wallet in before}
+        idempotency_key = "notary-" + hashlib.sha256(owner_hint.encode("utf-8")).hexdigest()[:32]
+        create_result = await self._run(
+            "wallet",
+            "create",
+            "--type",
+            "agent",
+            "--idempotency-key",
+            idempotency_key,
+        )
         created = await self._list_agent_wallets()
         if not created:
             raise RuntimeError("Circle CLI did not return an agent wallet after creation")
-        return created[0] | {"ownerHint": owner_hint, "demo": False}
+        new_wallets = [
+            wallet
+            for wallet in created
+            if str(wallet["address"]).lower() not in before_addresses
+        ]
+        if new_wallets:
+            wallet = new_wallets[0]
+        else:
+            created_from_response = self._normalize_wallets(create_result)
+            wallet = created_from_response[0] if created_from_response else created[-1]
+        return wallet | {
+            "ownerHint": owner_hint,
+            "idempotencyKey": idempotency_key,
+            "demo": False,
+        }
 
     async def get_unified_balance(self, wallet_id: str) -> dict[str, Any]:
         # Try to resolve or deduce the address first
@@ -246,6 +267,9 @@ class CircleAgentClient:
 
     async def _list_agent_wallets(self) -> list[dict[str, Any]]:
         payload = await self._run("wallet", "list", "--chain", self.chain, "--type", "agent")
+        return self._normalize_wallets(payload)
+
+    def _normalize_wallets(self, payload: Any) -> list[dict[str, Any]]:
         wallets = _all_mappings_with_key(payload, "address")
         normalized: list[dict[str, Any]] = []
         for wallet in wallets:
