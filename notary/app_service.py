@@ -35,7 +35,7 @@ from notary.models.schemas import (
     new_id,
     utc_now,
 )
-from notary.services.arc import ArcClient
+from notary.services.arc import ArcClient, TRANSFER_TOPIC, USDC_TOKEN_ADDRESS
 from notary.services.circle_agent import CircleAgentClient
 from notary.services.circle_wallets_api import CircleDeveloperWalletClient
 from notary.services.evidence_vault import EvidenceVault
@@ -2993,6 +2993,103 @@ class NotaryAppService:
 
         return profile
 
+    def _list_arc_usdc_transfers(self, wallet: str, *, limit: int = 20) -> list[dict[str, Any]]:
+        """Read recent Arc USDC Transfer logs for a wallet.
+
+        These rows are not app-created records. They are live ERC-20 logs, so the profile can show
+        externally funded deposits that are visible on Arc even when NOTARY did not initiate them.
+        """
+        if self.settings.arc_demo_mode or not self.settings.arc_rpc_url:
+            return []
+        clean_wallet = wallet.lower().removeprefix("0x")
+        if len(clean_wallet) != 40:
+            return []
+
+        import httpx
+
+        def rpc(method: str, params: list[Any]) -> Any:
+            response = httpx.post(
+                self.settings.arc_rpc_url,
+                json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
+                timeout=10,
+            )
+            response.raise_for_status()
+            body = response.json()
+            if body.get("error"):
+                raise RuntimeError(f"ARC RPC error for {method}: {body['error']}")
+            return body.get("result")
+
+        def topic_address(address: str) -> str:
+            return "0x" + address.lower().removeprefix("0x").rjust(64, "0")
+
+        try:
+            latest_block = int(str(rpc("eth_blockNumber", []) or "0x0"), 16)
+        except Exception:
+            return []
+
+        wallet_topic = topic_address(wallet)
+        logs: list[dict[str, Any]] = []
+        # Arc RPC providers can enforce log range limits, so try progressively smaller windows.
+        for window in (250_000, 75_000, 20_000):
+            from_block = max(0, latest_block - window)
+            base_filter = {
+                "address": USDC_TOKEN_ADDRESS,
+                "fromBlock": hex(from_block),
+                "toBlock": "latest",
+            }
+            try:
+                incoming = rpc("eth_getLogs", [base_filter | {"topics": [TRANSFER_TOPIC, None, wallet_topic]}]) or []
+                outgoing = rpc("eth_getLogs", [base_filter | {"topics": [TRANSFER_TOPIC, wallet_topic]}]) or []
+                logs = list(incoming) + list(outgoing)
+                break
+            except Exception:
+                continue
+        if not logs:
+            return []
+
+        block_timestamps: dict[str, int] = {}
+        rows: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for log in sorted(
+            logs,
+            key=lambda item: (int(str(item.get("blockNumber") or "0x0"), 16), int(str(item.get("logIndex") or "0x0"), 16)),
+            reverse=True,
+        ):
+            topics = [str(topic).lower() for topic in log.get("topics", [])]
+            if len(topics) < 3 or topics[0] != TRANSFER_TOPIC:
+                continue
+            tx_hash = str(log.get("transactionHash") or "")
+            log_index = str(log.get("logIndex") or "0x0")
+            row_id = f"{tx_hash}:{log_index}"
+            if row_id in seen:
+                continue
+            seen.add(row_id)
+
+            from_address = "0x" + topics[1][-40:]
+            to_address = "0x" + topics[2][-40:]
+            is_send = from_address.lower() == wallet.lower()
+            block_number = str(log.get("blockNumber") or "0x0")
+            if block_number not in block_timestamps:
+                try:
+                    block = rpc("eth_getBlockByNumber", [block_number, False]) or {}
+                    block_timestamps[block_number] = int(str(block.get("timestamp") or "0x0"), 16) or int(time.time())
+                except Exception:
+                    block_timestamps[block_number] = int(time.time())
+
+            rows.append({
+                "tx_id": tx_hash,
+                "type": "arc_usdc_transfer",
+                "direction": "send" if is_send else "receive",
+                "party": to_address if is_send else from_address,
+                "amount_usdc": int(str(log.get("data") or "0x0"), 16) / 1_000_000,
+                "status": "verified",
+                "description": "Arc USDC transfer sent" if is_send else "Arc USDC deposit received",
+                "timestamp": block_timestamps[block_number],
+            })
+            if len(rows) >= limit:
+                break
+        return rows
+
     def get_user_transactions(self, username: str) -> list[dict[str, Any]]:
         normalized = username.strip().lower()
         if normalized.startswith("@"):
@@ -3064,6 +3161,15 @@ class NotaryAppService:
 
         profile = self.store.get("profiles", normalized) or {}
         wallet = str(profile.get("wallet") or "").lower()
+        known_tx_ids = {str(tx.get("tx_id") or "").lower() for tx in txs}
+
+        if wallet:
+            for item in self._list_arc_usdc_transfers(wallet):
+                tx_id = str(item.get("tx_id") or "")
+                if tx_id.lower() in known_tx_ids:
+                    continue
+                known_tx_ids.add(tx_id.lower())
+                txs.append(item)
 
         for item in self.store.list("yield_payouts"):
             if wallet and str(item.get("targetWallet") or "").lower() == wallet:
