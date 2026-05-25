@@ -18,6 +18,7 @@ from notary.models.schemas import (
     NotaryIdentity,
     Observation,
     OperatingAgreement,
+    Obligation,
     OutcomeConfirmation,
     PartyType,
     PartyOperatingHistory,
@@ -2304,22 +2305,77 @@ class NotaryAppService:
         }
 
     async def _extract_obligation_with_llm(self, request: WitnessIntakeRequest):
+        errors: list[str] = []
         if self.settings.groq_api_key:
-            extractor = GroqObligationExtractor(
-                api_key=self.settings.groq_api_key,
-                model=self.settings.groq_model,
-                api_base_url=self.settings.groq_api_base_url,
-            )
-            return await extractor.extract(request)
+            try:
+                extractor = GroqObligationExtractor(
+                    api_key=self.settings.groq_api_key,
+                    model=self.settings.groq_model,
+                    api_base_url=self.settings.groq_api_base_url,
+                )
+                return await extractor.extract(request)
+            except Exception as exc:
+                errors.append(f"Groq extraction failed: {exc}")
         if self.settings.claude_api_key:
-            from notary.services.obligation_extractor import ClaudeObligationExtractor
-            extractor = ClaudeObligationExtractor(
-                api_key=self.settings.claude_api_key,
-                model=self.settings.claude_model,
-                api_base_url=self.settings.claude_api_base_url,
-            )
-            return await extractor.extract(request)
-        raise RuntimeError("GROQ_API_KEY or CLAUDE_API_KEY is required for LLM obligation extraction")
+            try:
+                from notary.services.obligation_extractor import ClaudeObligationExtractor
+
+                extractor = ClaudeObligationExtractor(
+                    api_key=self.settings.claude_api_key,
+                    model=self.settings.claude_model,
+                    api_base_url=self.settings.claude_api_base_url,
+                )
+                return await extractor.extract(request)
+            except Exception as exc:
+                errors.append(f"Claude extraction failed: {exc}")
+        return self._fallback_obligation(request, errors)
+
+    def _fallback_obligation(
+        self,
+        request: WitnessIntakeRequest,
+        extraction_errors: list[str] | None = None,
+    ) -> Obligation:
+        text = " ".join(
+            item
+            for item in [request.instruction, request.evidence_text, request.evidence_ref]
+            if item
+        )
+        questions: list[str] = []
+        if not request.payer_identity:
+            questions.append("Confirm payer identity.")
+        if not request.payee_identity:
+            questions.append("Confirm payee identity.")
+        if request.amount_usdc is None:
+            questions.append("Confirm USDC amount.")
+        if not text.strip():
+            questions.append("Submit evidence text or a verifiable evidence link.")
+        return Obligation(
+            raw_instruction=request.instruction,
+            payer_identity=request.payer_identity,
+            payee_identity=request.payee_identity,
+            approver_identity=request.approver_identity,
+            deliverable=request.instruction or "Complete the stated obligation",
+            acceptance_criterion=(
+                "Submitted evidence must show the stated work/event was completed and verifiable."
+            ),
+            authorized_approver=request.approver_identity or request.payer_identity,
+            deadline=None,
+            satisfying_evidence=[
+                "verifiable link, commit hash, signed approval, receipt, or completion record"
+            ],
+            amount_usdc=request.amount_usdc,
+            payer_type=PartyType(request.payer_type),
+            payee_type=PartyType(request.payee_type),
+            approver_type=PartyType(request.approver_type),
+            clarification_needed=bool(questions),
+            clarification_questions=questions,
+            extraction_confidence=0.62 if not extraction_errors else 0.52,
+            metadata={
+                "batch_recipients": request.batch_recipients,
+                "fallbackExtraction": True,
+                "extractionErrors": extraction_errors or [],
+            },
+        )
 
     async def _execute_payment_instruction(self, instruction: PaymentInstruction) -> dict[str, Any]:
         if instruction.action == PaymentAction.HOLD:
