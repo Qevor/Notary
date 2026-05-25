@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from apps.api.dashboard import (
     render_case_evidence,
+    render_feature_coverage,
     render_landing,
     render_public_ledger,
     render_sign_in,
@@ -592,6 +593,11 @@ async def speechmatics_status() -> dict:
 
 
 @app.get("/coverage")
+async def feature_coverage_page(request: Request) -> HTMLResponse:
+    return HTMLResponse(render_feature_coverage(await get_app_service().feature_coverage(), _read_session(request)))
+
+
+@app.get("/api/coverage")
 async def feature_coverage() -> dict:
     return await get_app_service().feature_coverage()
 

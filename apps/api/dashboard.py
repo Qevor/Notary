@@ -41,26 +41,27 @@ def _css() -> str:
     return """
     :root {
       color-scheme: dark;
-      --bg: #070a12;
-      --ink: #f3f4f6;
-      --muted: #a7adba;
-      --surface: rgba(15, 21, 33, 0.82);
-      --surface-2: rgba(26, 34, 49, 0.62);
-      --line: rgba(255, 255, 255, 0.07);
-      --line-hover: rgba(255, 255, 255, 0.15);
+      --bg: oklch(16% .02 260);
+      --ink: oklch(97% .01 90);
+      --muted: oklch(70% .02 90);
+      --surface: oklab(0.2 -0.00347296 -0.0196962 / 0.6);
+      --surface-2: oklch(22% .02 260);
+      --line: oklch(30% .02 260 / .6);
+      --line-hover: oklch(42% .03 260 / .75);
       --green: #10b981;
       --green-glow: rgba(16, 185, 129, 0.2);
       --green-2: #059669;
-      --amber: #f6c453;
-      --amber-glow: rgba(246, 196, 83, 0.16);
+      --amber: oklch(82% .14 85);
+      --amber-glow: oklch(82% .14 85 / .16);
       --red: #ef4444;
       --red-glow: rgba(239, 68, 68, 0.15);
       --blue: #3b82f6;
       --black: #020403;
       --mint: rgba(16, 185, 129, 0.1);
-      --primary: #f6c453;
-      --primary-hover: #ffd978;
-      --primary-glow: rgba(246, 196, 83, 0.18);
+      --primary: oklch(82% .14 85);
+      --primary-hover: oklch(88% .14 85);
+      --primary-foreground: oklch(16% .02 260);
+      --primary-glow: oklch(82% .14 85 / .18);
       --glass: rgba(17, 24, 39, 0.6);
       --shadow: 0 20px 40px rgba(0, 0, 0, 0.55);
     }
@@ -68,7 +69,6 @@ def _css() -> str:
     body {
       margin: 0;
       background: var(--bg);
-      background-image: radial-gradient(circle at top center, rgba(246, 196, 83, 0.08) 0%, rgba(7, 10, 18, 0) 62%), radial-gradient(circle at 12% 22%, rgba(16, 185, 129, 0.04) 0%, rgba(7, 10, 18, 0) 42%);
       background-attachment: fixed;
       color: var(--ink);
       font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -207,7 +207,7 @@ def _css() -> str:
       border-radius: 8px;
       border: 1px solid var(--primary);
       background: var(--primary);
-      color: white;
+      color: var(--primary-foreground);
       padding: 0 24px;
       font-weight: 700;
       font-size: 14px;
@@ -333,7 +333,7 @@ def _css() -> str:
       border-radius: 8px;
       border: 1px solid var(--primary);
       background: var(--primary);
-      color: white;
+      color: var(--primary-foreground);
       padding: 0 20px;
       font-weight: 700;
       font-size: 14px;
@@ -726,18 +726,49 @@ def _css() -> str:
     }
     .dashboard-shell {
       display: grid;
-      grid-template-columns: 238px 1fr;
-      gap: 28px;
+      grid-template-columns: 256px 1fr;
+      gap: 0;
       align-items: start;
+      max-width: none;
+      padding: 0;
+      min-height: 100vh;
     }
     .side-rail {
       position: sticky;
-      top: 92px;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: rgba(8, 12, 22, 0.86);
-      padding: 14px;
-      box-shadow: var(--shadow);
+      top: 0;
+      height: 100vh;
+      border-right: 1px solid var(--line);
+      background: oklch(13% .02 260);
+      padding: 0;
+      box-shadow: none;
+      display: flex;
+      flex-direction: column;
+    }
+    .side-brand {
+      height: 64px;
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      border-bottom: 1px solid oklch(28% .02 260 / .6);
+    }
+    .side-brand strong {
+      display: block;
+      color: #fff;
+      font-size: 18px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 900;
+      letter-spacing: -0.01em;
+    }
+    .side-brand span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 1px;
+    }
+    .side-nav {
+      display: grid;
+      gap: 4px;
+      padding: 16px;
     }
     .side-rail a {
       display: flex;
@@ -746,15 +777,22 @@ def _css() -> str:
       border-radius: 10px;
       padding: 11px 12px;
       color: var(--muted);
-      font-weight: 700;
-      font-size: 13px;
+      font-weight: 500;
+      font-size: 14px;
     }
     .side-rail a:hover, .side-rail a.active {
       color: #fff;
-      background: rgba(246, 196, 83, 0.1);
-      border: 1px solid rgba(246, 196, 83, 0.16);
+      background: var(--surface-2);
     }
-    .dash-main { min-width: 0; }
+    .side-footer {
+      margin-top: auto;
+      border-top: 1px solid oklch(28% .02 260 / .6);
+      padding: 16px;
+      color: var(--muted);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 12px;
+    }
+    .dash-main { min-width: 0; padding: 40px; }
     .dash-topbar {
       display: flex;
       justify-content: space-between;
@@ -766,26 +804,59 @@ def _css() -> str:
       min-height: 44px;
       border: 1px solid var(--line);
       border-radius: 10px;
-      background: rgba(255,255,255,0.03);
+      background: var(--surface);
       color: var(--muted);
       padding: 0 16px;
       display: flex;
       align-items: center;
       min-width: min(100%, 460px);
     }
+    .avatar-pill {
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: var(--primary);
+      color: var(--primary-foreground);
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .workspace-title h1 {
+      font-family: 'Instrument Serif', Georgia, serif;
+      color: var(--ink);
+      font-size: 48px;
+      font-weight: 500;
+      letter-spacing: 0;
+      margin: 0;
+    }
+    .workspace-title p {
+      color: var(--muted);
+      margin: 8px 0 0;
+      font-size: 15px;
+    }
     .metric-card {
       border: 1px solid var(--line);
-      border-radius: 14px;
+      border-radius: 16px;
       background: var(--surface);
       padding: 22px;
       box-shadow: 0 12px 28px rgba(0,0,0,0.22);
     }
+    .metric-trend {
+      display: inline-flex;
+      color: var(--primary);
+      background: oklch(82% .14 85 / .1);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      margin-bottom: 14px;
+    }
     .metric-card strong {
       display: block;
       color: #fff;
-      font-size: 28px;
-      font-family: Georgia, 'Times New Roman', serif;
-      font-weight: 500;
+      font-size: 30px;
+      font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+      font-weight: 700;
       margin: 8px 0 2px;
     }
     .metric-card span {
@@ -798,7 +869,7 @@ def _css() -> str:
     .section-card {
       border: 1px solid var(--line);
       border-radius: 16px;
-      background: rgba(15, 21, 33, 0.78);
+      background: var(--surface);
       box-shadow: var(--shadow);
       padding: 28px;
       margin-top: 28px;
@@ -889,7 +960,7 @@ def _page(title: str, body: str, user: dict[str, Any] | None = None) -> str:
         <title>{escape(title)}</title>
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
         <style>{_css()}</style>
       </head>
       <body>
@@ -903,6 +974,26 @@ def _page(title: str, body: str, user: dict[str, Any] | None = None) -> str:
             {auth_link}
           </nav>
         </header>
+        {body}
+      </body>
+    </html>
+    """
+
+
+def _bare_page(title: str, body: str) -> str:
+    return f"""
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>{escape(title)}</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <style>{_css()}</style>
+      </head>
+      <body>
         {body}
       </body>
     </html>
@@ -1382,6 +1473,102 @@ def render_landing(state: dict[str, Any], user: dict[str, Any] | None = None) ->
     """
     return _page("NOTARY", body, user)
 
+
+def render_feature_coverage(coverage: dict[str, Any], user: dict[str, Any] | None = None) -> str:
+    def status_badge(value: Any) -> str:
+        if value is True:
+            return _badge("Live", "good")
+        if value is False or value in {"disabled", "not_configured", None, ""}:
+            return _badge("Needs setup", "hold")
+        if value in {"configured", "enabled", "implemented", "VALID"}:
+            return _badge("Live", "good")
+        return _badge(str(value), "neutral")
+
+    def cards(items: list[tuple[str, str, Any]]) -> str:
+        html: list[str] = []
+        for title, copy, value in items:
+            html.append(
+                f"""
+                <article class="status-card">
+                  <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+                    <h3>{escape(title)}</h3>
+                    {status_badge(value)}
+                  </div>
+                  <p>{escape(copy)}</p>
+                </article>
+                """
+            )
+        return "".join(html)
+
+    arc = coverage.get("arc", {})
+    circle = coverage.get("circle", {})
+    notary = coverage.get("notary", {})
+    registries = arc.get("registries", {}) if isinstance(arc.get("registries"), dict) else {}
+    eip712 = arc.get("eip712", {}) if isinstance(arc.get("eip712"), dict) else {}
+    agent_wallets = circle.get("agentWallets", {}) if isinstance(circle.get("agentWallets"), dict) else {}
+    sponsored_yield = circle.get("sponsoredYield", {}) if isinstance(circle.get("sponsoredYield"), dict) else {}
+    usyc = sponsored_yield.get("usycFallback", {}) if isinstance(sponsored_yield.get("usycFallback"), dict) else {}
+    body = f"""
+    <main class="shell">
+      <section class="workspace-intro">
+        <div class="eyebrow">Coverage</div>
+        <h1 style="font-family:'Instrument Serif', Georgia, serif; font-size:48px; font-weight:500; margin:0 0 8px;">What NOTARY covers now</h1>
+        <p class="panel-copy">A readable status page for the Arc, Circle, and witness features. Raw JSON is still available at <a href="/api/coverage" style="color:var(--primary);">/api/coverage</a>.</p>
+        <div class="actions">
+          <a class="button secondary" href="/">Back home</a>
+          <a class="button" href="/app" style="width:auto;">Open workspace</a>
+        </div>
+      </section>
+
+      <section class="section-card">
+        <div class="section-head"><div><h2>Arc economic OS</h2><p>On-chain identity, attestations, finality, and EIP-712 signing.</p></div></div>
+        <div class="feature-grid">
+          {cards([
+            ("Sub-second finality", "Arc RPC is configured for live settlement and verification.", arc.get("finality", {}).get("rpcUrlConfigured")),
+            ("USDC fee path", "Paymaster configuration keeps fees denominated in USDC.", arc.get("usdcFeesPaymaster", {}).get("status")),
+            ("Attestation registry", "Verdict and trace commitments are routed to the Arc attestation registry.", registries.get("attestation")),
+            ("ERC-8004-style identity", "Agent identity receipts are recorded on Arc when users register the NOTARY identity.", registries.get("agentIdentity")),
+            ("Karma checkpoints", "Reflector performance updates can be written to the karma registry.", registries.get("karma")),
+            ("EIP-712 domain", f"Domain {escape(str(eip712.get('domain', 'NOTARY')))} v{escape(str(eip712.get('version', '1')))} is configured for signatures.", eip712.get("signerConfigured")),
+          ])}
+        </div>
+      </section>
+
+      <section class="section-card">
+        <div class="section-head"><div><h2>Circle agentic commerce</h2><p>Wallets, Gateway, x402, Paymaster, and treasury paths.</p></div></div>
+        <div class="feature-grid">
+          {cards([
+            ("Agent wallets", f"Circle token status: {agent_wallets.get('data', {}).get('testnet', {}).get('tokenStatus', agent_wallets.get('status', 'configured'))}.", bool(agent_wallets)),
+            ("Gateway", "Unified balance and bridge deposit flow is exposed from the workspace.", circle.get("gateway", {}).get("enabled")),
+            ("Bridge Kit and App Kit", "Users can deposit on supported chains and route USDC toward Arc.", bool(circle.get("bridgeAppKit", {}).get("route"))),
+            ("Nanopayments / x402", "Paid data requests and Pay-to-Peek are wired through the x402 commerce path.", bool(circle.get("x402", {}).get("route"))),
+            ("Sponsored yield reserve", "Idle USDC can earn sponsored reserve yield while USYC remains optional.", sponsored_yield.get("reserveConfigured")),
+            ("USYC optional path", f"Provider address: {escape(_short(usyc.get('providerAddress'), 40))}.", bool(usyc.get("providerAddress"))),
+          ])}
+        </div>
+      </section>
+
+      <section class="section-card">
+        <div class="section-head"><div><h2>NOTARY intelligence layer</h2><p>Multimodal witness review, predictions, reasoning sales, and programmable escrow.</p></div></div>
+        <div class="feature-grid">
+          {cards([
+            ("Multimodal observation", "Speechmatics audio/video transcription feeds the witness pipeline.", notary.get("multimodalObservation", {}).get("configured")),
+            ("Evidence-to-obligation mapping", "Messy human input becomes exact payment obligations.", bool(notary.get("obligationMapping", {}).get("route"))),
+            ("Adversarial evidence resistance", "Guardian Sentinel checks source quality, duplicate claims, and manipulation risk.", bool(notary.get("adversarialEvidenceResistance", {}).get("agent"))),
+            ("Graded verdicts", "The witness can release partial payment instead of only yes/no outcomes.", notary.get("gradedVerdicts", {}).get("implemented")),
+            ("Pay-to-Peek reasoning traces", "Users pay USDC to unlock the full reasoning behind public verdicts.", bool(notary.get("reasoningMarketplace", {}).get("route"))),
+            ("Prediction micro-shares", "Users can buy exposure to NOTARY predictions after payment verification.", bool(notary.get("tradeableIntelligence", {}).get("route"))),
+            ("Self-improvement", "Reflector checkpoints update karma and policy memory.", bool(notary.get("selfImprovement", {}).get("route"))),
+            ("Witness-to-Pay", "Verified facts become escrow release, hold, or refund actions.", bool(notary.get("witnessToPay", {}).get("route"))),
+            ("Arbitrage analysis", "Market route analysis is available for treasury-aware opportunities.", bool(notary.get("arbitrage", {}).get("route"))),
+          ])}
+        </div>
+      </section>
+    </main>
+    """
+    return _page("Coverage / NOTARY", body, user)
+
+
 def render_public_ledger(state: dict[str, Any], user: dict[str, Any] | None = None) -> str:
     body = f"""
     <script>
@@ -1492,7 +1679,7 @@ def render_sign_in(
         <h1 style="font-size: 30px; font-family: 'Outfit'; font-weight: 800; color: #fff; margin: 6px 0 12px;">Sign in to use NOTARY</h1>
         <p class="panel-copy" style="font-size: 14px; line-height: 1.5;">Each payer, payee, approver, or agent counterparty gets its own workspace. Public records stay on the landing page; your evidence and actions stay here.</p>
         <div class="notice" style="border-color: rgba(246, 196, 83, 0.25); background: rgba(246, 196, 83, 0.07); color: #ffe7a3; font-size: 13px; padding: 12px 16px; margin-bottom: 20px;">
-          💡 Secure Auth: Access your workspace with a handle and password. A local agent wallet is automatically mapped to your account.
+          Secure Auth: Access your workspace with a handle and password. A local agent wallet is automatically mapped to your account.
         </div>
         {notice}
         {form}
@@ -1588,7 +1775,10 @@ def render_workspace(
     circle_request_id: str | None = None,
 ) -> str:
     user_label = escape(str(user.get("email") or user.get("id")))
-    profile_username = escape(profile.get("username", "unknown"))
+    profile_username_raw = str(profile.get("username", "unknown"))
+    profile_username = escape(profile_username_raw)
+    display_name = escape(profile_username_raw.lstrip("@").split("@")[0].replace("_", " ").title() or "Notary")
+    initials = "".join(part[:1] for part in profile_username_raw.replace("@", "").replace("_", " ").split()[:2]).upper() or "DN"
     default_payer = f"@{profile_username}"
     cases = state.get("cases", [])
     rulings = state.get("rulings", [])
@@ -1603,49 +1793,63 @@ def render_workspace(
     body = f"""
     <main class="shell dashboard-shell">
       <aside class="side-rail">
-        <a class="active" href="#overview">Overview</a>
-        <a href="#escrow">Secure Escrow</a>
-        <a href="#agents">Witness Swarm</a>
-        <a href="#evidence">Evidence Vault</a>
-        <a href="#predictions">Predictions</a>
-        <a href="#pay-to-peek">Pay-to-Peek</a>
-        <a href="#data">Data &amp; Yield</a>
-        <a href="#identity">Agent Identity</a>
-        <a href="/profile/{profile_username}">Profile</a>
+        <div class="side-brand">
+          <div>
+            <strong>NOTARY</strong>
+            <span>Witness · Pay · Remember</span>
+          </div>
+        </div>
+        <nav class="side-nav">
+          <a class="active" href="#overview">Overview</a>
+          <a href="/profile/{profile_username}">Wallet</a>
+          <a href="#escrow">Escrow Cases</a>
+          <a href="#agents">Witness Swarm</a>
+          <a href="#evidence">Evidence Vault</a>
+          <a href="#predictions">Predictions</a>
+          <a href="#data">Yield &amp; Treasury</a>
+          <a href="/ledger">Public Ledger</a>
+          <a href="/profile/{profile_username}">Profile</a>
+          <a href="#identity">Settings</a>
+        </nav>
+        <div class="side-footer">Arc testnet · synced</div>
       </aside>
 
       <div class="dash-main">
         <div class="dash-topbar">
-          <div class="search-pill">Search cases, tx hashes, reasoning traces, or addresses...</div>
-          <a class="button" href="#escrow" style="width: auto; min-width: 132px;">New case</a>
+          <div class="search-pill"></div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <a class="button" href="#escrow" style="width: auto; min-width: 110px;">New case</a>
+            <div class="avatar-pill">{escape(initials[:2])}</div>
+          </div>
         </div>
 
         <section id="overview" class="workspace-intro" style="margin-bottom: 28px;">
-          <div class="eyebrow">Overview</div>
-          <h1 style="font-size: 42px; color: #fff; font-family: Georgia, 'Times New Roman', serif; font-weight: 500; letter-spacing: 0; margin: 4px 0 8px;">Good day, {profile_username}</h1>
-          <p class="panel-copy" style="margin: 0; font-size: 15px;">Welcome back, <strong>{user_label}</strong>. NOTARY turns verified facts into programmable USDC movement on Arc.</p>
+          <div class="workspace-title">
+            <h1>Good morning, {display_name}</h1>
+            <p>Here's what your witnesses observed today.</p>
+          </div>
           {error_html}
           {message_html}
           <div class="profile-metrics" style="grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 24px;">
-            <div class="metric-card"><span>Wallet balance</span><strong>{profile_balance}</strong><p class="status-line">USDC / Arc testnet</p></div>
-            <div class="metric-card"><span>Locked in escrow</span><strong>${locked_total:,.2f}</strong><p class="status-line">{len(active_cases)} active case(s)</p></div>
-            <div class="metric-card"><span>Yield earned</span><strong>${yield_total:,.6f}</strong><p class="status-line">Sponsored reserve</p></div>
-            <div class="metric-card"><span>Karma score</span><strong>{karma_score}</strong><p class="status-line">Reflector checkpoints</p></div>
+            <div class="metric-card"><div class="metric-trend">+2.3%</div><strong>{profile_balance}</strong><span>Wallet balance</span><p class="status-line">USDC · Arc testnet</p></div>
+            <div class="metric-card"><strong>${locked_total:,.2f}</strong><span>Locked in escrow</span><p class="status-line">{len(active_cases)} active cases</p></div>
+            <div class="metric-card"><div class="metric-trend">+0.4%</div><strong>${yield_total:,.6f}</strong><span>Yield earned</span><p class="status-line">Sponsored reserve</p></div>
+            <div class="metric-card"><div class="metric-trend">+12</div><strong>{karma_score}</strong><span>Karma score</span><p class="status-line">Top 4% of agents</p></div>
           </div>
         </section>
 
         <section id="escrow" class="section-card">
           <div class="section-head">
             <div>
-              <div class="eyebrow">Secure Escrow</div>
-              <h2>Create a secure escrow case</h2>
+              <h2>Active escrow cases</h2>
               <p>Define the obligation, lock USDC, invite evidence, and let the witness swarm settle the outcome.</p>
             </div>
+            <a class="button secondary" href="#instruction">New case</a>
           </div>
           <div class="section-grid">
             <article class="status-card">
               <span class="badge good">Witness-to-Pay</span>
-              <h3>New secured agreement</h3>
+              <h3>Create a secure escrow</h3>
               <form method="post" action="/ui/cases" style="margin-top: 16px;">
                 <label for="instruction">Agreement details</label>
                 <textarea id="instruction" name="instruction" required placeholder="Pay @jennycruzy $50 when the delivery manifest is complete and payer approves."></textarea>
@@ -1663,7 +1867,7 @@ def render_workspace(
               </form>
             </article>
             <article class="status-card">
-              <span class="badge good">Active cases</span>
+              <span class="badge good">Escrow Cases</span>
               <h3>Escrow case board</h3>
               <p>{len(cases)} case(s), {len(rulings)} witness ruling(s), and {locked_total:,.2f} USDC currently locked or pending.</p>
               <div style="margin-top: 14px; max-height: 520px; overflow: auto;">{_case_cards(cases)}</div>
@@ -1674,10 +1878,10 @@ def render_workspace(
         <section id="agents" class="section-card">
           <div class="section-head">
             <div>
-              <div class="eyebrow">Witness Swarm</div>
-              <h2>Six active agents</h2>
+              <h2>Witness activity</h2>
               <p>Each case runs through the full swarm: scanner, sentinel, risk, strategy, validator, and reflector.</p>
             </div>
+            <span class="badge good">Six active agents</span>
           </div>
           <div class="agent-grid">{_agent_role_cards(state.get("swarm_roles", []))}</div>
         </section>
@@ -1716,13 +1920,13 @@ def render_workspace(
     </main>
     {_workspace_scripts()}
     """
-    return _page("Workspace / NOTARY", body, user)
+    return _bare_page("Workspace / NOTARY", body)
 
 def render_case_evidence(case: dict[str, Any], token: str | None, user: dict[str, Any] | None) -> str:
     hidden_token = f'<input name="token" type="hidden" value="{escape(token)}" />' if token else ""
     is_funded = case.get("status") != "awaiting_funding"
     funding_notice = (
-        '<div class="notice bad">🚨 This contract is currently awaiting funding. Submitting proof is locked until the Payer deposits USDC into the secure conditional escrow vault.</div>'
+        '<div class="notice bad">This contract is currently awaiting funding. Submitting proof is locked until the payer deposits USDC into the secure conditional escrow vault.</div>'
         if not is_funded
         else ""
     )
@@ -1764,7 +1968,7 @@ def render_case_evidence(case: dict[str, Any], token: str | None, user: dict[str
           </p>
           <textarea id="evidence_text" name="evidence_text" required placeholder="Paste your links, commits, or signed approval statements here..." {disabled}></textarea>
           
-          <button style="margin-top: 20px; width: 100%;" {disabled}>🚀 Submit &amp; Verify Proof</button>
+          <button style="margin-top: 20px; width: 100%;" {disabled}>Submit &amp; Verify Proof</button>
         </form>
       </section>
     </main>
