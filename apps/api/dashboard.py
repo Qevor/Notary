@@ -973,6 +973,185 @@ def _agent_role_cards(items: list[dict[str, Any]]) -> str:
     return "".join(cards)
 
 
+def _commerce_panels(state: dict[str, Any], profile_username: str) -> str:
+    predictions = list(reversed(state.get("predictions", [])))
+    shares = list(reversed(state.get("micro_shares", [])))
+    rulings = list(reversed(state.get("rulings", [])))
+    peeks = list(reversed(state.get("reasoning_market", [])))
+    x402_payments = list(reversed(state.get("x402_payments", [])))
+    yield_payouts = list(reversed(state.get("yield_payouts", [])))
+    yield_status = state.get("yield_status", {}) if isinstance(state.get("yield_status"), dict) else {}
+    notaries = list(reversed(state.get("notaries", [])))
+    latest_notary = notaries[0] if notaries else {}
+    default_buyer = f"@{profile_username}"
+    latest_prediction_id = str((predictions[0] or {}).get("predictionId") or "") if predictions else ""
+    latest_ruling_id = str((rulings[0] or {}).get("ruling_id") or (rulings[0] or {}).get("rulingId") or "") if rulings else ""
+    latest_notary_id = str(latest_notary.get("notary_id") or latest_notary.get("notaryId") or "")
+    prediction_options = "".join(
+        f'<option value="{escape(str(item.get("predictionId")))}">{_text(item.get("question"))}</option>'
+        for item in predictions[:8]
+    )
+    ruling_options = "".join(
+        f'<option value="{escape(str(item.get("ruling_id") or item.get("rulingId")))}">{_text(item.get("obligationSummary") or item.get("verdict") or item.get("ruling_id"))}</option>'
+        for item in rulings[:8]
+    )
+    latest_share = shares[0] if shares else {}
+    latest_peek = peeks[0] if peeks else {}
+    latest_x402 = x402_payments[0] if x402_payments else {}
+    latest_yield = yield_payouts[0] if yield_payouts else {}
+    reserve = yield_status.get("sponsoredReserve", {}) if isinstance(yield_status.get("sponsoredReserve"), dict) else {}
+    usyc = yield_status.get("usyc", {}) if isinstance(yield_status.get("usyc"), dict) else {}
+    return f"""
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">Agentic Commerce</div>
+          <h2>Buy intelligence, unlock reasoning, and route idle capital</h2>
+          <p>These are live product controls for NOTARY's market layer, not hidden API-only features.</p>
+        </div>
+      </div>
+      <div class="commerce-grid">
+        <article class="status-card">
+          <span class="badge good">Predictions</span>
+          <h3>Create a market signal</h3>
+          <p>Publish a probability commitment that users can buy micro-shares in.</p>
+          <form method="post" action="/ui/markets/predictions" style="margin-top: 16px;">
+            <input name="notary_id" type="hidden" value="{escape(latest_notary_id)}" />
+            <label for="prediction_question">Question</label>
+            <textarea id="prediction_question" name="question" required placeholder="Will this escrow be released within 24 hours?"></textarea>
+            <div class="split">
+              <div>
+                <label for="probability_bps">Probability bps</label>
+                <input id="probability_bps" name="probability_bps" type="number" min="0" max="10000" value="7200" required />
+              </div>
+              <div>
+                <label for="horizon">Horizon</label>
+                <input id="horizon" name="horizon" value="24h" required />
+              </div>
+            </div>
+            <label for="prediction_rationale">Rationale</label>
+            <textarea id="prediction_rationale" name="rationale" required placeholder="Evidence quality, prior behavior, and confidence gates..."></textarea>
+            <button style="width: 100%; margin-top: 12px;">Commit prediction on Arc</button>
+          </form>
+        </article>
+
+        <article class="status-card">
+          <span class="badge good">Micro-shares</span>
+          <h3>Buy a share in the next signal</h3>
+          <p>Users pay verified USDC to buy exposure to NOTARY's prediction output.</p>
+          <form method="post" action="/ui/commerce/micro-shares" style="margin-top: 16px;">
+            <label for="prediction_id">Prediction ID</label>
+            <input id="prediction_id" name="prediction_id" list="prediction_ids" value="{escape(latest_prediction_id)}" required placeholder="Create or paste a prediction ID" />
+            <datalist id="prediction_ids">{prediction_options}</datalist>
+            <label for="share_buyer">Buyer identity</label>
+            <input id="share_buyer" name="buyer_identity" value="{escape(default_buyer)}" required />
+            <div class="split">
+              <div>
+                <label for="share_amount">USDC amount</label>
+                <input id="share_amount" name="amount_usdc" type="number" min="0.000001" step="0.000001" value="0.01" required />
+              </div>
+              <div>
+                <label for="share_tx">Arc tx hash</label>
+                <input id="share_tx" name="tx_hash" placeholder="optional if wallet can auto-pay" />
+              </div>
+            </div>
+            <button style="width: 100%; margin-top: 12px;">Buy micro-share</button>
+          </form>
+          <p class="status-line" style="margin-top: 10px;">Latest share: {escape(_short(latest_share.get("shareId") or "none yet", 34))}</p>
+        </article>
+
+        <article class="status-card">
+          <span class="badge good">Pay-to-Peek</span>
+          <h3>Unlock reasoning traces</h3>
+          <p>Pay USDC to reveal the full reasoning trace behind a public ruling.</p>
+          <form method="post" action="/ui/commerce/pay-to-peek" style="margin-top: 16px;">
+            <label for="ruling_id">Ruling ID</label>
+            <input id="ruling_id" name="ruling_id" list="ruling_ids" value="{escape(latest_ruling_id)}" required placeholder="Paste a ruling ID" />
+            <datalist id="ruling_ids">{ruling_options}</datalist>
+            <label for="peek_buyer">Buyer identity</label>
+            <input id="peek_buyer" name="buyer_identity" value="{escape(default_buyer)}" required />
+            <div class="split">
+              <div>
+                <label for="peek_amount">USDC amount</label>
+                <input id="peek_amount" name="amount_usdc" type="number" min="0.000001" step="0.000001" value="0.005" required />
+              </div>
+              <div>
+                <label for="peek_tx">Arc tx hash</label>
+                <input id="peek_tx" name="tx_hash" placeholder="optional if wallet can auto-pay" />
+              </div>
+            </div>
+            <button style="width: 100%; margin-top: 12px;">Pay to peek</button>
+          </form>
+          <p class="status-line" style="margin-top: 10px;">Latest access: {escape(_short(latest_peek.get("accessId") or "none yet", 34))}</p>
+        </article>
+
+        <article class="status-card">
+          <span class="badge warn">x402</span>
+          <h3>Paid data request</h3>
+          <p>Use Circle's paid-service flow for external intelligence sources.</p>
+          <form method="post" action="/ui/commerce/x402/data" style="margin-top: 16px;">
+            <label for="x402_description">Request description</label>
+            <input id="x402_description" name="description" value="Market intelligence request" required />
+            <label for="service_url">x402 service URL</label>
+            <input id="service_url" name="service_url" placeholder="https://seller.example/x402/feed" required />
+            <div class="split">
+              <div>
+                <label for="x402_max">Max USDC</label>
+                <input id="x402_max" name="max_usdc" type="number" min="0.000001" step="0.000001" value="0.01" required />
+              </div>
+              <div>
+                <label for="x402_method">Method</label>
+                <select id="x402_method" name="method"><option>GET</option><option>POST</option></select>
+              </div>
+            </div>
+            <label for="request_body">Body / headers JSON</label>
+            <textarea id="request_body" name="request_body" placeholder='{{"topic":"arbitrage"}}'></textarea>
+            <button style="width: 100%; margin-top: 12px;">Pay x402 service</button>
+          </form>
+          <p class="status-line" style="margin-top: 10px;">Latest request: {escape(_short(latest_x402.get("paymentId") or "none yet", 34))}</p>
+        </article>
+
+        <article class="status-card">
+          <span class="badge good">Yield</span>
+          <h3>Idle balance rewards</h3>
+          <p>Sponsored reserve is active while USYC allocation waits for allowlist/provider execution.</p>
+          <div class="facts" style="grid-template-columns: 1fr; margin: 14px 0;">
+            <div class="fact"><span>Reserve</span><code>{escape(_short(reserve.get("wallet"), 34))}</code></div>
+            <div class="fact"><span>Target APY</span><strong>{escape(str((reserve.get("targetApyBps") or 0) / 100))}%</strong></div>
+            <div class="fact"><span>USYC</span><strong>{escape(str(usyc.get("status", "awaiting_allowlist")))}</strong></div>
+          </div>
+          <form method="post" action="/ui/treasury/yield/process">
+            <label for="yield_target">Target username / notary ID</label>
+            <input id="yield_target" name="target_identity" value="{escape(default_buyer)}" />
+            <label style="display: flex; gap: 8px; align-items: center; margin-top: 10px;"><input name="force" type="checkbox" value="true" /> Force payout check</label>
+            <button style="width: 100%; margin-top: 12px;">Process yield</button>
+          </form>
+          <p class="status-line" style="margin-top: 10px;">Latest payout: {escape(_short(latest_yield.get("arcTxHash") or "none yet", 34))}</p>
+        </article>
+
+        <article class="status-card">
+          <span class="badge good">Agent identity</span>
+          <h3>Register and replicate agents</h3>
+          <p>Expose ERC-8004-style service identity and policy DNA controls.</p>
+          <form method="post" action="/ui/agents/identity/erc8004" style="margin-top: 16px;">
+            <label for="agent_notary_id">Notary ID</label>
+            <input id="agent_notary_id" name="notary_id" value="{escape(latest_notary_id)}" required />
+            <label for="service_endpoint">Service endpoint</label>
+            <input id="service_endpoint" name="service_endpoint" value="http://38.49.209.149/agents" required />
+            <button style="width: 100%; margin-top: 12px;">Register agent identity</button>
+          </form>
+          <form method="post" action="/ui/agents/replicate" style="margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 14px;">
+            <input name="parent_notary_id" type="hidden" value="{escape(latest_notary_id)}" />
+            <label for="mutation_prompt">Replication policy DNA</label>
+            <textarea id="mutation_prompt" name="mutation_prompt" placeholder="Specialize in invoice disputes and release only after payer approval." required></textarea>
+            <button style="width: 100%; margin-top: 12px;">Spawn child Notary</button>
+          </form>
+        </article>
+      </div>
+    </section>
+    """
+
+
 def _ops_panels(state: dict[str, Any], circle_request_id: str | None = None) -> str:
     notaries = list(reversed(state.get("notaries", [])))
     receipts = list(reversed(state.get("arc_receipts", [])))
@@ -1389,6 +1568,19 @@ def render_workspace(
         </div>
       </section>
       
+      {_commerce_panels(state, profile_username)}
+
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <div class="eyebrow">Visible Agent Swarm</div>
+            <h2>Your six NOTARY agents</h2>
+            <p>The same agents that power escrow rulings also feed predictions, Pay-to-Peek traces, x402 requests, and yield decisions.</p>
+          </div>
+        </div>
+        <div class="agent-grid">{_agent_role_cards(state.get("swarm_roles", []))}</div>
+      </section>
+
       <section class="workspace" style="display: grid; grid-template-columns: 380px 1fr; gap: 36px; align-items: start;">
         <aside style="position: sticky; top: 100px;">
           <div class="panel" style="border: 1px solid var(--line); border-radius: 16px; background: var(--surface); padding: 32px; box-shadow: var(--shadow);">
@@ -1504,11 +1696,10 @@ def render_workspace(
         <div class="section-head" style="margin-top:18px">
           <div>
             <div class="eyebrow" style="color: var(--primary);">6-Agent Autonomous Swarm</div>
-            <h2>Decision Roles</h2>
-            <p>Every case triggers our orchestrated pipeline, split into six specialized consensus agents:</p>
+            <h2>Operator Diagnostics</h2>
+            <p>Technical controls and receipts for builders running the agent stack.</p>
           </div>
         </div>
-        <div class="agent-grid">{_agent_role_cards(state.get("swarm_roles", []))}</div>
       </details>
     </main>
     {_workspace_scripts()}

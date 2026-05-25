@@ -650,6 +650,42 @@ async def x402_paid_data(
     )
 
 
+@app.post("/ui/commerce/x402/data")
+async def ui_x402_paid_data(
+    request: Request,
+    description: str = Form(...),
+    service_url: str = Form(...),
+    max_usdc: float = Form(default=0.01),
+    wallet_id: str | None = Form(default=None),
+    method: str = Form(default="GET"),
+    request_body: str | None = Form(default=None),
+    headers_json: str | None = Form(default=None),
+) -> RedirectResponse:
+    _require_ui_user(request)
+    try:
+        headers: list[str] = []
+        if headers_json:
+            decoded = json.loads(headers_json)
+            if isinstance(decoded, dict):
+                headers = [f"{key}: {value}" for key, value in decoded.items()]
+            elif isinstance(decoded, list) and all(isinstance(item, str) for item in decoded):
+                headers = decoded
+            else:
+                raise ValueError("Headers must be a JSON object or string array")
+        await get_app_service().paid_data_service_request(
+            description=description,
+            service_url=service_url,
+            max_usdc=max_usdc,
+            wallet_id=wallet_id or None,
+            method=method,
+            request_body=request_body or None,
+            headers=headers,
+        )
+    except Exception as exc:
+        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
+    return RedirectResponse("/app?message=x402%20paid%20data%20request%20recorded", status_code=303)
+
+
 @app.post("/commerce/reasoning/pay-to-peek")
 async def reasoning_pay_to_peek(
     ruling_id: str = Form(...),
@@ -663,6 +699,27 @@ async def reasoning_pay_to_peek(
         amount_usdc=amount_usdc,
         tx_hash=tx_hash or None,
     )
+
+
+@app.post("/ui/commerce/pay-to-peek")
+async def ui_reasoning_pay_to_peek(
+    request: Request,
+    ruling_id: str = Form(...),
+    buyer_identity: str = Form(...),
+    amount_usdc: float = Form(...),
+    tx_hash: str | None = Form(default=None),
+) -> RedirectResponse:
+    _require_ui_user(request)
+    try:
+        await get_app_service().create_reasoning_pay_to_peek(
+            ruling_id=ruling_id,
+            buyer_identity=buyer_identity,
+            amount_usdc=amount_usdc,
+            tx_hash=tx_hash or None,
+        )
+    except Exception as exc:
+        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
+    return RedirectResponse("/app?message=Pay-to-Peek%20access%20recorded", status_code=303)
 
 
 @app.post("/markets/predictions")
@@ -682,6 +739,29 @@ async def create_prediction(
     )
 
 
+@app.post("/ui/markets/predictions")
+async def ui_create_prediction(
+    request: Request,
+    question: str = Form(...),
+    probability_bps: int = Form(...),
+    horizon: str = Form(...),
+    rationale: str = Form(...),
+    notary_id: str | None = Form(default=None),
+) -> RedirectResponse:
+    _require_ui_user(request)
+    try:
+        await get_app_service().create_prediction(
+            question=question,
+            probability_bps=probability_bps,
+            horizon=horizon,
+            rationale=rationale,
+            notary_id=notary_id or None,
+        )
+    except Exception as exc:
+        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
+    return RedirectResponse("/app?message=Prediction%20committed%20on%20Arc", status_code=303)
+
+
 @app.post("/commerce/micro-shares")
 async def buy_micro_share(
     prediction_id: str = Form(...),
@@ -695,6 +775,27 @@ async def buy_micro_share(
         amount_usdc=amount_usdc,
         tx_hash=tx_hash or None,
     )
+
+
+@app.post("/ui/commerce/micro-shares")
+async def ui_buy_micro_share(
+    request: Request,
+    prediction_id: str = Form(...),
+    buyer_identity: str = Form(...),
+    amount_usdc: float = Form(...),
+    tx_hash: str | None = Form(default=None),
+) -> RedirectResponse:
+    _require_ui_user(request)
+    try:
+        await get_app_service().buy_micro_share(
+            prediction_id=prediction_id,
+            buyer_identity=buyer_identity,
+            amount_usdc=amount_usdc,
+            tx_hash=tx_hash or None,
+        )
+    except Exception as exc:
+        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
+    return RedirectResponse("/app?message=Micro-share%20purchase%20recorded", status_code=303)
 
 
 @app.post("/agents/karma/checkpoint")
@@ -725,6 +826,25 @@ async def erc8004_identity(
     )
 
 
+@app.post("/ui/agents/identity/erc8004")
+async def ui_erc8004_identity(
+    request: Request,
+    notary_id: str = Form(...),
+    service_endpoint: str = Form(...),
+    metadata_uri: str | None = Form(default=None),
+) -> RedirectResponse:
+    _require_ui_user(request)
+    try:
+        await get_app_service().register_agent_identity_erc8004(
+            notary_id=notary_id,
+            service_endpoint=service_endpoint,
+            metadata_uri=metadata_uri or None,
+        )
+    except Exception as exc:
+        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
+    return RedirectResponse("/app?message=Agent%20identity%20registered", status_code=303)
+
+
 @app.post("/agents/replicate")
 async def replicate_notary(
     parent_notary_id: str = Form(...),
@@ -736,6 +856,25 @@ async def replicate_notary(
         mutation_prompt=mutation_prompt,
         min_karma=min_karma,
     )
+
+
+@app.post("/ui/agents/replicate")
+async def ui_replicate_notary(
+    request: Request,
+    parent_notary_id: str = Form(...),
+    mutation_prompt: str = Form(...),
+    min_karma: int = Form(default=0),
+) -> RedirectResponse:
+    _require_ui_user(request)
+    try:
+        await get_app_service().replicate_notary(
+            parent_notary_id=parent_notary_id,
+            mutation_prompt=mutation_prompt,
+            min_karma=min_karma,
+        )
+    except Exception as exc:
+        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
+    return RedirectResponse("/app?message=Child%20NOTARY%20replication%20recorded", status_code=303)
 
 
 @app.post("/treasury/usyc/intents")
@@ -765,6 +904,23 @@ async def treasury_yield_process(
         target_identity=target_identity or None,
         force=force,
     )
+
+
+@app.post("/ui/treasury/yield/process")
+async def ui_treasury_yield_process(
+    request: Request,
+    target_identity: str | None = Form(default=None),
+    force: bool = Form(default=False),
+) -> RedirectResponse:
+    _require_ui_user(request)
+    try:
+        await get_app_service().process_sponsored_yield(
+            target_identity=target_identity or None,
+            force=force,
+        )
+    except Exception as exc:
+        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
+    return RedirectResponse("/app?message=Yield%20process%20completed", status_code=303)
 
 
 @app.post("/markets/arbitrage/analyze")
