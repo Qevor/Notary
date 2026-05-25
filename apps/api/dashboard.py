@@ -2231,6 +2231,13 @@ def render_user_profile(
             prefix = "-" if is_send else "+"
             arrow = "OUT" if is_send else "IN"
             amount_display = f'<strong style="color: {color}; font-family: \'Outfit\'; font-size: 16px;">{prefix}{tx.get("amount_usdc")} USDC</strong>'
+            tx_id_raw = str(tx.get("tx_id") or "")
+            tx_id_json = escape(json.dumps(tx_id_raw))
+            copy_button = (
+                f'<button type="button" class="button secondary" style="min-height: 32px; padding: 0 12px; font-size: 12px; margin-top: 8px;" onclick="copyTxHash({tx_id_json}, this)">Copy tx hash</button>'
+                if tx_id_raw
+                else ""
+            )
             
             try:
                 date_str = datetime.fromtimestamp(tx.get("timestamp", 0)).strftime("%Y-%m-%d %H:%M:%S")
@@ -2244,7 +2251,8 @@ def render_user_profile(
                   <div>
                     <strong style="font-size: 16px; color: #fff; font-family: 'Outfit';">{escape(tx.get("description", ""))}</strong>
                     <span style="display: block; font-size: 12px; color: var(--muted); margin-top: 4px;">{escape(str(tx.get("type", "transaction")).replace("_", " ").title())} / Party: {escape(tx.get("party", ""))} / {date_str}</span>
-                    <code>{escape(_short(tx.get("tx_id"), 48))}</code>
+                    <code title="{escape(tx_id_raw)}">{escape(_short(tx_id_raw, 48))}</code>
+                    {copy_button}
                   </div>
                   <div style="text-align: right;">
                     {amount_display}
@@ -2341,6 +2349,31 @@ def render_user_profile(
           }}
         }} catch (error) {{
           if (status) status.textContent = 'Select the address text and copy manually';
+        }}
+      }}
+      async function copyTxHash(txHash, button) {{
+        const originalText = button ? button.textContent : '';
+        try {{
+          if (navigator.clipboard && window.isSecureContext) {{
+            await navigator.clipboard.writeText(txHash);
+          }} else {{
+            const textArea = document.createElement('textarea');
+            textArea.value = txHash;
+            textArea.setAttribute('readonly', '');
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+          }}
+          if (button) {{
+            button.textContent = 'Copied';
+            setTimeout(() => button.textContent = originalText || 'Copy tx hash', 2200);
+          }}
+        }} catch (error) {{
+          if (button) button.textContent = 'Select hash';
         }}
       }}
     </script>
