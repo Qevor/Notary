@@ -41,26 +41,26 @@ def _css() -> str:
     return """
     :root {
       color-scheme: dark;
-      --bg: #090d16;
+      --bg: #070a12;
       --ink: #f3f4f6;
-      --muted: #9ca3af;
-      --surface: rgba(17, 24, 39, 0.7);
-      --surface-2: rgba(31, 41, 55, 0.45);
+      --muted: #a7adba;
+      --surface: rgba(15, 21, 33, 0.82);
+      --surface-2: rgba(26, 34, 49, 0.62);
       --line: rgba(255, 255, 255, 0.07);
       --line-hover: rgba(255, 255, 255, 0.15);
       --green: #10b981;
       --green-glow: rgba(16, 185, 129, 0.2);
       --green-2: #059669;
-      --amber: #f59e0b;
-      --amber-glow: rgba(245, 158, 11, 0.15);
+      --amber: #f6c453;
+      --amber-glow: rgba(246, 196, 83, 0.16);
       --red: #ef4444;
       --red-glow: rgba(239, 68, 68, 0.15);
       --blue: #3b82f6;
       --black: #020403;
       --mint: rgba(16, 185, 129, 0.1);
-      --primary: #6366f1;
-      --primary-hover: #4f46e5;
-      --primary-glow: rgba(99, 102, 241, 0.2);
+      --primary: #f6c453;
+      --primary-hover: #ffd978;
+      --primary-glow: rgba(246, 196, 83, 0.18);
       --glass: rgba(17, 24, 39, 0.6);
       --shadow: 0 20px 40px rgba(0, 0, 0, 0.55);
     }
@@ -68,7 +68,7 @@ def _css() -> str:
     body {
       margin: 0;
       background: var(--bg);
-      background-image: radial-gradient(circle at top center, rgba(99, 102, 241, 0.12) 0%, rgba(9, 13, 22, 0) 65%), radial-gradient(circle at 10% 20%, rgba(16, 185, 129, 0.02) 0%, rgba(9, 13, 22, 0) 40%);
+      background-image: radial-gradient(circle at top center, rgba(246, 196, 83, 0.08) 0%, rgba(7, 10, 18, 0) 62%), radial-gradient(circle at 12% 22%, rgba(16, 185, 129, 0.04) 0%, rgba(7, 10, 18, 0) 42%);
       background-attachment: fixed;
       color: var(--ink);
       font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -106,7 +106,7 @@ def _css() -> str:
       font-weight: 900;
       letter-spacing: -0.02em;
       color: #fff;
-      text-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
+      text-shadow: 0 0 10px rgba(246, 196, 83, 0.18);
     }
     .brand span {
       color: var(--muted);
@@ -132,7 +132,7 @@ def _css() -> str:
     }
     .nav-link.primary {
       background: var(--primary);
-      color: #fff;
+      color: #13100a;
       border-color: var(--primary);
       font-weight: 700;
       box-shadow: 0 4px 12px var(--primary-glow);
@@ -220,7 +220,7 @@ def _css() -> str:
       background: var(--primary-hover);
       border-color: var(--primary-hover);
       transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35);
+      box-shadow: 0 6px 16px rgba(246, 196, 83, 0.28);
     }
     .button.secondary {
       background: var(--surface-2);
@@ -249,7 +249,7 @@ def _css() -> str:
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .metric:hover {
-      border-color: rgba(99, 102, 241, 0.3);
+      border-color: rgba(246, 196, 83, 0.32);
       background: rgba(255, 255, 255, 0.05);
       transform: translateY(-2px);
       box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
@@ -436,7 +436,7 @@ def _css() -> str:
       justify-content: space-between;
     }
     .card:hover {
-      border-color: rgba(99, 102, 241, 0.35);
+      border-color: rgba(246, 196, 83, 0.35);
       transform: translateY(-2px);
       box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
     }
@@ -724,6 +724,91 @@ def _css() -> str:
       grid-template-columns: repeat(3, 1fr);
       gap: 16px;
     }
+    .dashboard-shell {
+      display: grid;
+      grid-template-columns: 238px 1fr;
+      gap: 28px;
+      align-items: start;
+    }
+    .side-rail {
+      position: sticky;
+      top: 92px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(8, 12, 22, 0.86);
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+    .side-rail a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-radius: 10px;
+      padding: 11px 12px;
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .side-rail a:hover, .side-rail a.active {
+      color: #fff;
+      background: rgba(246, 196, 83, 0.1);
+      border: 1px solid rgba(246, 196, 83, 0.16);
+    }
+    .dash-main { min-width: 0; }
+    .dash-topbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 28px;
+    }
+    .search-pill {
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.03);
+      color: var(--muted);
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      min-width: min(100%, 460px);
+    }
+    .metric-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+      padding: 22px;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.22);
+    }
+    .metric-card strong {
+      display: block;
+      color: #fff;
+      font-size: 28px;
+      font-family: Georgia, 'Times New Roman', serif;
+      font-weight: 500;
+      margin: 8px 0 2px;
+    }
+    .metric-card span {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .section-card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(15, 21, 33, 0.78);
+      box-shadow: var(--shadow);
+      padding: 28px;
+      margin-top: 28px;
+    }
+    .section-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
     .feature-card, .status-card {
       border: 1px solid var(--line);
       border-radius: 12px;
@@ -771,10 +856,12 @@ def _css() -> str:
     @media (max-width: 980px) {
       header { align-items: flex-start; flex-direction: column; padding: 16px 20px; }
       .shell { padding: 24px 16px; }
-      .hero, .workspace, .ops-grid, .feature-grid, .profile-metrics, .commerce-grid, .grid, .grid.two, .facts {
+      .hero, .workspace, .ops-grid, .feature-grid, .profile-metrics, .commerce-grid, .grid, .grid.two, .facts, .dashboard-shell, .section-grid {
         grid-template-columns: 1fr !important;
       }
-      aside { position: static !important; }
+      aside, .side-rail { position: static !important; }
+      .side-rail { display: none; }
+      .dash-topbar { align-items: flex-start; flex-direction: column; }
       .hero h1 { font-size: 34px; }
       .section-head { align-items: flex-start; flex-direction: column; }
       .tx-row { grid-template-columns: 1fr; }
@@ -1002,15 +1089,15 @@ def _commerce_panels(state: dict[str, Any], profile_username: str) -> str:
     reserve = yield_status.get("sponsoredReserve", {}) if isinstance(yield_status.get("sponsoredReserve"), dict) else {}
     usyc = yield_status.get("usyc", {}) if isinstance(yield_status.get("usyc"), dict) else {}
     return f"""
-    <section class="section">
+    <section id="predictions" class="section-card">
       <div class="section-head">
         <div>
-          <div class="eyebrow">Agentic Commerce</div>
-          <h2>Buy intelligence, unlock reasoning, and route idle capital</h2>
-          <p>These are live product controls for NOTARY's market layer, not hidden API-only features.</p>
+          <div class="eyebrow">Predictions &amp; Micro-Shares</div>
+          <h2>Create a market signal, then let users buy a share</h2>
+          <p>Prediction commitments and micro-share purchases are separate actions so users understand the market flow.</p>
         </div>
       </div>
-      <div class="commerce-grid">
+      <div class="section-grid">
         <article class="status-card">
           <span class="badge good">Predictions</span>
           <h3>Create a market signal</h3>
@@ -1020,25 +1107,18 @@ def _commerce_panels(state: dict[str, Any], profile_username: str) -> str:
             <label for="prediction_question">Question</label>
             <textarea id="prediction_question" name="question" required placeholder="Will this escrow be released within 24 hours?"></textarea>
             <div class="split">
-              <div>
-                <label for="probability_bps">Probability bps</label>
-                <input id="probability_bps" name="probability_bps" type="number" min="0" max="10000" value="7200" required />
-              </div>
-              <div>
-                <label for="horizon">Horizon</label>
-                <input id="horizon" name="horizon" value="24h" required />
-              </div>
+              <div><label for="probability_bps">Probability bps</label><input id="probability_bps" name="probability_bps" type="number" min="0" max="10000" value="7200" required /></div>
+              <div><label for="horizon">Horizon</label><input id="horizon" name="horizon" value="24h" required /></div>
             </div>
             <label for="prediction_rationale">Rationale</label>
             <textarea id="prediction_rationale" name="rationale" required placeholder="Evidence quality, prior behavior, and confidence gates..."></textarea>
             <button style="width: 100%; margin-top: 12px;">Commit prediction on Arc</button>
           </form>
         </article>
-
         <article class="status-card">
           <span class="badge good">Micro-shares</span>
-          <h3>Buy a share in the next signal</h3>
-          <p>Users pay verified USDC to buy exposure to NOTARY's prediction output.</p>
+          <h3>Buy into a prediction</h3>
+          <p>Pay verified USDC to buy exposure to a NOTARY prediction output.</p>
           <form method="post" action="/ui/commerce/micro-shares" style="margin-top: 16px;">
             <label for="prediction_id">Prediction ID</label>
             <input id="prediction_id" name="prediction_id" list="prediction_ids" value="{escape(latest_prediction_id)}" required placeholder="Create or paste a prediction ID" />
@@ -1046,24 +1126,28 @@ def _commerce_panels(state: dict[str, Any], profile_username: str) -> str:
             <label for="share_buyer">Buyer identity</label>
             <input id="share_buyer" name="buyer_identity" value="{escape(default_buyer)}" required />
             <div class="split">
-              <div>
-                <label for="share_amount">USDC amount</label>
-                <input id="share_amount" name="amount_usdc" type="number" min="0.000001" step="0.000001" value="0.01" required />
-              </div>
-              <div>
-                <label for="share_tx">Arc tx hash</label>
-                <input id="share_tx" name="tx_hash" placeholder="optional if wallet can auto-pay" />
-              </div>
+              <div><label for="share_amount">USDC amount</label><input id="share_amount" name="amount_usdc" type="number" min="0.000001" step="0.000001" value="0.01" required /></div>
+              <div><label for="share_tx">Arc tx hash</label><input id="share_tx" name="tx_hash" placeholder="optional if wallet can auto-pay" /></div>
             </div>
             <button style="width: 100%; margin-top: 12px;">Buy micro-share</button>
           </form>
           <p class="status-line" style="margin-top: 10px;">Latest share: {escape(_short(latest_share.get("shareId") or "none yet", 34))}</p>
         </article>
+      </div>
+    </section>
 
+    <section id="pay-to-peek" class="section-card">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">Reasoning Marketplace</div>
+          <h2>Pay-to-Peek reasoning traces</h2>
+          <p>Public verdicts show what NOTARY decided. Pay-to-Peek unlocks why it decided.</p>
+        </div>
+      </div>
+      <div class="section-grid">
         <article class="status-card">
           <span class="badge good">Pay-to-Peek</span>
-          <h3>Unlock reasoning traces</h3>
-          <p>Pay USDC to reveal the full reasoning trace behind a public ruling.</p>
+          <h3>Unlock a trace</h3>
           <form method="post" action="/ui/commerce/pay-to-peek" style="margin-top: 16px;">
             <label for="ruling_id">Ruling ID</label>
             <input id="ruling_id" name="ruling_id" list="ruling_ids" value="{escape(latest_ruling_id)}" required placeholder="Paste a ruling ID" />
@@ -1071,86 +1155,56 @@ def _commerce_panels(state: dict[str, Any], profile_username: str) -> str:
             <label for="peek_buyer">Buyer identity</label>
             <input id="peek_buyer" name="buyer_identity" value="{escape(default_buyer)}" required />
             <div class="split">
-              <div>
-                <label for="peek_amount">USDC amount</label>
-                <input id="peek_amount" name="amount_usdc" type="number" min="0.000001" step="0.000001" value="0.005" required />
-              </div>
-              <div>
-                <label for="peek_tx">Arc tx hash</label>
-                <input id="peek_tx" name="tx_hash" placeholder="optional if wallet can auto-pay" />
-              </div>
+              <div><label for="peek_amount">USDC amount</label><input id="peek_amount" name="amount_usdc" type="number" min="0.000001" step="0.000001" value="0.005" required /></div>
+              <div><label for="peek_tx">Arc tx hash</label><input id="peek_tx" name="tx_hash" placeholder="optional if wallet can auto-pay" /></div>
             </div>
             <button style="width: 100%; margin-top: 12px;">Pay to peek</button>
           </form>
-          <p class="status-line" style="margin-top: 10px;">Latest access: {escape(_short(latest_peek.get("accessId") or "none yet", 34))}</p>
         </article>
-
         <article class="status-card">
-          <span class="badge warn">x402</span>
-          <h3>Paid data request</h3>
-          <p>Use Circle's paid-service flow for external intelligence sources.</p>
+          <span class="badge good">Access record</span>
+          <h3>Latest reasoning access</h3>
+          <p>Every unlock records buyer, trace hash, amount, and payment proof.</p>
+          <div class="facts" style="grid-template-columns: 1fr; margin-top: 14px;">
+            <div class="fact"><span>Access ID</span><code>{escape(_short(latest_peek.get("accessId") or "none yet", 34))}</code></div>
+            <div class="fact"><span>Trace hash</span><code>{escape(_short(latest_peek.get("reasoningTraceHash") or "awaiting unlock", 34))}</code></div>
+            <div class="fact"><span>Payment</span><strong>{escape(str(latest_peek.get("amountUSDC") or 0))} USDC</strong></div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="data" class="section-card">
+      <div class="section-head"><div><div class="eyebrow">Paid Data &amp; Treasury</div><h2>x402 intelligence and yield controls</h2><p>External data purchases and idle capital rewards are displayed as their own operating rails.</p></div></div>
+      <div class="section-grid">
+        <article class="status-card">
+          <span class="badge warn">x402</span><h3>Paid data request</h3><p>Use Circle's paid-service flow for external intelligence sources.</p>
           <form method="post" action="/ui/commerce/x402/data" style="margin-top: 16px;">
-            <label for="x402_description">Request description</label>
-            <input id="x402_description" name="description" value="Market intelligence request" required />
-            <label for="service_url">x402 service URL</label>
-            <input id="service_url" name="service_url" placeholder="https://seller.example/x402/feed" required />
-            <div class="split">
-              <div>
-                <label for="x402_max">Max USDC</label>
-                <input id="x402_max" name="max_usdc" type="number" min="0.000001" step="0.000001" value="0.01" required />
-              </div>
-              <div>
-                <label for="x402_method">Method</label>
-                <select id="x402_method" name="method"><option>GET</option><option>POST</option></select>
-              </div>
-            </div>
-            <label for="request_body">Body / headers JSON</label>
-            <textarea id="request_body" name="request_body" placeholder='{{"topic":"arbitrage"}}'></textarea>
+            <label for="x402_description">Request description</label><input id="x402_description" name="description" value="Market intelligence request" required />
+            <label for="service_url">x402 service URL</label><input id="service_url" name="service_url" placeholder="https://seller.example/x402/feed" required />
+            <div class="split"><div><label for="x402_max">Max USDC</label><input id="x402_max" name="max_usdc" type="number" min="0.000001" step="0.000001" value="0.01" required /></div><div><label for="x402_method">Method</label><select id="x402_method" name="method"><option>GET</option><option>POST</option></select></div></div>
+            <label for="request_body">Body / headers JSON</label><textarea id="request_body" name="request_body" placeholder='{{"topic":"arbitrage"}}'></textarea>
             <button style="width: 100%; margin-top: 12px;">Pay x402 service</button>
           </form>
           <p class="status-line" style="margin-top: 10px;">Latest request: {escape(_short(latest_x402.get("paymentId") or "none yet", 34))}</p>
         </article>
-
         <article class="status-card">
-          <span class="badge good">Yield</span>
-          <h3>Idle balance rewards</h3>
-          <p>Sponsored reserve is active while USYC allocation waits for allowlist/provider execution.</p>
-          <div class="facts" style="grid-template-columns: 1fr; margin: 14px 0;">
-            <div class="fact"><span>Reserve</span><code>{escape(_short(reserve.get("wallet"), 34))}</code></div>
-            <div class="fact"><span>Target APY</span><strong>{escape(str((reserve.get("targetApyBps") or 0) / 100))}%</strong></div>
-            <div class="fact"><span>USYC</span><strong>{escape(str(usyc.get("status", "awaiting_allowlist")))}</strong></div>
-          </div>
-          <form method="post" action="/ui/treasury/yield/process">
-            <label for="yield_target">Target username / notary ID</label>
-            <input id="yield_target" name="target_identity" value="{escape(default_buyer)}" />
-            <label style="display: flex; gap: 8px; align-items: center; margin-top: 10px;"><input name="force" type="checkbox" value="true" /> Force payout check</label>
-            <button style="width: 100%; margin-top: 12px;">Process yield</button>
-          </form>
+          <span class="badge good">Yield</span><h3>Idle balance rewards</h3><p>Sponsored reserve stays live while USYC allocation waits for allowlist/provider execution.</p>
+          <div class="facts" style="grid-template-columns: 1fr; margin: 14px 0;"><div class="fact"><span>Reserve</span><code>{escape(_short(reserve.get("wallet"), 34))}</code></div><div class="fact"><span>Target APY</span><strong>{escape(str((reserve.get("targetApyBps") or 0) / 100))}%</strong></div><div class="fact"><span>USYC</span><strong>{escape(str(usyc.get("status", "awaiting_allowlist")))}</strong></div></div>
+          <form method="post" action="/ui/treasury/yield/process"><label for="yield_target">Target username / notary ID</label><input id="yield_target" name="target_identity" value="{escape(default_buyer)}" /><label style="display: flex; gap: 8px; align-items: center; margin-top: 10px;"><input name="force" type="checkbox" value="true" /> Force payout check</label><button style="width: 100%; margin-top: 12px;">Process yield</button></form>
           <p class="status-line" style="margin-top: 10px;">Latest payout: {escape(_short(latest_yield.get("arcTxHash") or "none yet", 34))}</p>
-        </article>
-
-        <article class="status-card">
-          <span class="badge good">Agent identity</span>
-          <h3>Register and replicate agents</h3>
-          <p>Expose ERC-8004-style service identity and policy DNA controls.</p>
-          <form method="post" action="/ui/agents/identity/erc8004" style="margin-top: 16px;">
-            <label for="agent_notary_id">Notary ID</label>
-            <input id="agent_notary_id" name="notary_id" value="{escape(latest_notary_id)}" required />
-            <label for="service_endpoint">Service endpoint</label>
-            <input id="service_endpoint" name="service_endpoint" value="http://38.49.209.149/agents" required />
-            <button style="width: 100%; margin-top: 12px;">Register agent identity</button>
-          </form>
-          <form method="post" action="/ui/agents/replicate" style="margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 14px;">
-            <input name="parent_notary_id" type="hidden" value="{escape(latest_notary_id)}" />
-            <label for="mutation_prompt">Replication policy DNA</label>
-            <textarea id="mutation_prompt" name="mutation_prompt" placeholder="Specialize in invoice disputes and release only after payer approval." required></textarea>
-            <button style="width: 100%; margin-top: 12px;">Spawn child Notary</button>
-          </form>
         </article>
       </div>
     </section>
-    """
 
+    <section id="identity" class="section-card">
+      <div class="section-head"><div><div class="eyebrow">Agent Identity &amp; Replication</div><h2>On-chain agent identity and policy DNA</h2><p>Register NOTARY as an ERC-8004-style service agent, then spawn child agents with mutated rules.</p></div></div>
+      <div class="section-grid">
+        <article class="status-card"><span class="badge good">Identity</span><h3>Register agent identity</h3><form method="post" action="/ui/agents/identity/erc8004" style="margin-top: 16px;"><label for="agent_notary_id">Notary ID</label><input id="agent_notary_id" name="notary_id" value="{escape(latest_notary_id)}" required /><label for="service_endpoint">Service endpoint</label><input id="service_endpoint" name="service_endpoint" value="http://38.49.209.149/agents" required /><button style="width: 100%; margin-top: 12px;">Register agent identity</button></form></article>
+        <article class="status-card"><span class="badge good">Replication</span><h3>Spawn child Notary</h3><form method="post" action="/ui/agents/replicate" style="margin-top: 16px;"><input name="parent_notary_id" type="hidden" value="{escape(latest_notary_id)}" /><label for="mutation_prompt">Replication policy DNA</label><textarea id="mutation_prompt" name="mutation_prompt" placeholder="Specialize in invoice disputes and release only after payer approval." required></textarea><button style="width: 100%; margin-top: 12px;">Spawn child Notary</button></form></article>
+      </div>
+    </section>
+    """
 
 def _ops_panels(state: dict[str, Any], circle_request_id: str | None = None) -> str:
     notaries = list(reversed(state.get("notaries", [])))
@@ -1437,7 +1491,7 @@ def render_sign_in(
         <div class="eyebrow" style="color: var(--primary);">Private workspace</div>
         <h1 style="font-size: 30px; font-family: 'Outfit'; font-weight: 800; color: #fff; margin: 6px 0 12px;">Sign in to use NOTARY</h1>
         <p class="panel-copy" style="font-size: 14px; line-height: 1.5;">Each payer, payee, approver, or agent counterparty gets its own workspace. Public records stay on the landing page; your evidence and actions stay here.</p>
-        <div class="notice" style="border-color: rgba(99, 102, 241, 0.25); background: rgba(99, 102, 241, 0.05); color: #c7d2fe; font-size: 13px; padding: 12px 16px; margin-bottom: 20px;">
+        <div class="notice" style="border-color: rgba(246, 196, 83, 0.25); background: rgba(246, 196, 83, 0.07); color: #ffe7a3; font-size: 13px; padding: 12px 16px; margin-bottom: 20px;">
           💡 Secure Auth: Access your workspace with a handle and password. A local agent wallet is automatically mapped to your account.
         </div>
         {notice}
@@ -1535,177 +1589,134 @@ def render_workspace(
 ) -> str:
     user_label = escape(str(user.get("email") or user.get("id")))
     profile_username = escape(profile.get("username", "unknown"))
-    
     default_payer = f"@{profile_username}"
+    cases = state.get("cases", [])
+    rulings = state.get("rulings", [])
+    active_cases = [item for item in cases if item.get("status") not in {"released", "refunded"}]
+    locked_total = sum(float(item.get("amount_usdc") or 0) for item in active_cases)
+    yield_total = sum(float(item.get("amountUSDC") or 0) for item in state.get("yield_payouts", []))
+    karma_score = sum(int(item.get("delta") or 0) for item in state.get("karma_checkpoints", []))
+    profile_balance = escape(str(profile.get("balance", "0.00")))
     error_html = f'<div class="notice bad" style="border-radius: 8px;">{escape(error)}</div>' if error else ""
     message_html = f'<div class="notice" style="border-radius: 8px;">{escape(message)}</div>' if message else ""
-    
+
     body = f"""
-    <main class="shell">
-      <section class="workspace-intro" style="margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid var(--line);">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 20px;">
-          <div>
-            <div class="eyebrow" style="color: var(--primary);">Interactive Console</div>
-            <h2 style="font-size: 36px; color: #fff; font-family: 'Outfit'; font-weight: 900; letter-spacing: -0.02em; margin: 4px 0 8px;">Autonomous AI Witness Portal</h2>
-            <p class="panel-copy" style="margin: 0; font-size: 15px;">Welcome back, <strong>{user_label}</strong>. NOTARY turns real-world proof into signed AI attestations that trigger programmable USDC escrow payments on Arc.</p>
-          </div>
-        </div>
-        {error_html}
-        {message_html}
-        <div class="steps" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 28px;">
-          <div class="step">
-            <strong>1. Define Secured Agreement</strong>
-            <span>Write the payment condition in plain English (e.g., who pays, who gets paid, and what deliverables are required).</span>
-          </div>
-          <div class="step">
-            <strong>2. Fund the Escrow Reserve</strong>
-            <span>The payer moves funds into a secure conditional vault. Evidence submission unlocks only after funding is confirmed.</span>
-          </div>
-          <div class="step">
-            <strong>3. Submit Proof & Settle</strong>
-            <span>Provide a PR merge hash, file link, or payer approval. NOTARY's AI witness runs instant verification and releases the USDC!</span>
-          </div>
-        </div>
-      </section>
-      
-      {_commerce_panels(state, profile_username)}
+    <main class="shell dashboard-shell">
+      <aside class="side-rail">
+        <a class="active" href="#overview">Overview</a>
+        <a href="#escrow">Secure Escrow</a>
+        <a href="#agents">Witness Swarm</a>
+        <a href="#evidence">Evidence Vault</a>
+        <a href="#predictions">Predictions</a>
+        <a href="#pay-to-peek">Pay-to-Peek</a>
+        <a href="#data">Data &amp; Yield</a>
+        <a href="#identity">Agent Identity</a>
+        <a href="/profile/{profile_username}">Profile</a>
+      </aside>
 
-      <section class="section">
-        <div class="section-head">
-          <div>
-            <div class="eyebrow">Visible Agent Swarm</div>
-            <h2>Your six NOTARY agents</h2>
-            <p>The same agents that power escrow rulings also feed predictions, Pay-to-Peek traces, x402 requests, and yield decisions.</p>
-          </div>
+      <div class="dash-main">
+        <div class="dash-topbar">
+          <div class="search-pill">Search cases, tx hashes, reasoning traces, or addresses...</div>
+          <a class="button" href="#escrow" style="width: auto; min-width: 132px;">New case</a>
         </div>
-        <div class="agent-grid">{_agent_role_cards(state.get("swarm_roles", []))}</div>
-      </section>
 
-      <section class="workspace" style="display: grid; grid-template-columns: 380px 1fr; gap: 36px; align-items: start;">
-        <aside style="position: sticky; top: 100px;">
-          <div class="panel" style="border: 1px solid var(--line); border-radius: 16px; background: var(--surface); padding: 32px; box-shadow: var(--shadow);">
-            <h2>Create New Secure Escrow</h2>
-            <p class="panel-copy">Draft a natural-language contract. The system automatically extracts obligations and generates secure webhook links.</p>
-            
-            <form method="post" action="/ui/cases">
-              <label for="instruction">Agreement Details (Obligation)</label>
-              <p class="panel-copy" style="margin-top: -4px; margin-bottom: 8px; font-size: 12px; color: var(--primary);">Include the payee username and exact deliverables (e.g., "Pay @jennycruzy $50 when delivery manifest is complete and payer approves").</p>
-              <textarea id="instruction" name="instruction" required placeholder="Type your natural language payment agreement here..."></textarea>
-              
-              <div class="split" style="margin-top: 8px;">
-                <div>
-                  <label for="payer_identity">Payer Username</label>
-                  <input id="payer_identity" name="payer_identity" value="{default_payer}" required placeholder="e.g. @yourhandle" />
-                </div>
-                <div>
-                  <label for="payer_type">Payer Type</label>
-                  <select id="payer_type" name="payer_type">
-                    <option value="human">Human Participant</option>
-                    <option value="agent">Autonomous AI Agent</option>
-                  </select>
-                </div>
-              </div>
-              
-              <div class="split">
-                <div>
-                  <label for="payee_identity">Payee Username</label>
-                  <input id="payee_identity" name="payee_identity" value="@jennycruzy" required placeholder="e.g. @jennycruzy" />
-                </div>
-                <div>
-                  <label for="payee_type">Payee Type</label>
-                  <select id="payee_type" name="payee_type">
-                    <option value="human">Human Participant</option>
-                    <option value="agent">Autonomous AI Agent</option>
-                  </select>
-                </div>
-              </div>
-              
-              <label for="amount_usdc">USDC Amount to Lock</label>
-              <input id="amount_usdc" name="amount_usdc" type="number" min="0.01" step="0.01" value="50" required placeholder="e.g. 50" />
-              
-              <button style="margin-top: 18px; width: 100%;">Create Secured Agreement</button>
-            </form>
+        <section id="overview" class="workspace-intro" style="margin-bottom: 28px;">
+          <div class="eyebrow">Overview</div>
+          <h1 style="font-size: 42px; color: #fff; font-family: Georgia, 'Times New Roman', serif; font-weight: 500; letter-spacing: 0; margin: 4px 0 8px;">Good day, {profile_username}</h1>
+          <p class="panel-copy" style="margin: 0; font-size: 15px;">Welcome back, <strong>{user_label}</strong>. NOTARY turns verified facts into programmable USDC movement on Arc.</p>
+          {error_html}
+          {message_html}
+          <div class="profile-metrics" style="margin-top: 24px;">
+            <div class="metric-card"><span>Wallet balance</span><strong>{profile_balance}</strong><p class="status-line">USDC / Arc testnet</p></div>
+            <div class="metric-card"><span>Locked in escrow</span><strong>${locked_total:,.2f}</strong><p class="status-line">{len(active_cases)} active case(s)</p></div>
+            <div class="metric-card"><span>Yield earned</span><strong>${yield_total:,.6f}</strong><p class="status-line">Sponsored reserve</p></div>
+            <div class="metric-card"><span>Karma score</span><strong>{karma_score}</strong><p class="status-line">Reflector checkpoints</p></div>
           </div>
-          
-          <div class="panel">
-            <h2>Capture Voice Proof</h2>
-            <p class="panel-copy">Speak into your microphone or upload a voice note describing work completion. Speechmatics automatically generates transcription logs for NOTARY to judge.</p>
-            <label for="record_privacy_mode">Privacy Shielding</label>
-            <select id="record_privacy_mode">
-              <option value="protected">Protected (Only counterparties & arbitrators see details)</option>
-              <option value="private">Private (Completely encrypted, zero public exposure)</option>
-              <option value="public">Public (Fully discoverable on public ledger)</option>
-            </select>
-            <div class="button-row">
-              <button id="start_recording" type="button">🎙️ Start Recording</button>
-              <button id="stop_recording" class="danger" type="button" disabled>⏹️ Stop & Transcribe</button>
-            </div>
-            <p id="recording_status" class="status-line">Microphone is ready.</p>
-            
-            <form method="post" action="/ui/media" enctype="multipart/form-data" style="border-top: 1px dashed var(--line); margin-top: 16px; padding-top: 16px;">
-              <label for="file">Upload Audio/Video Recording</label>
-              <input id="file" name="file" type="file" accept="audio/*,video/*" />
-              <input name="privacy_mode" type="hidden" value="protected" />
-              
-              <label for="media_transcript_text">Or, Paste Pre-Recorded Transcript</label>
-              <textarea id="media_transcript_text" name="transcript_text" placeholder="Copy/paste transcript text if you already have it..."></textarea>
-              
-              <button style="margin-top: 12px; width: 100%;">Process Upload & Run Witness</button>
-            </form>
-          </div>
-          
-          <div class="panel">
-            <h2>Quick Written Proof</h2>
-            <p class="panel-copy">Manually submit a text summary, signed authorization, or commit record to trigger instant witness analysis.</p>
-            <form method="post" action="/ui/attest">
-              <label for="privacy_mode">Privacy Shielding</label>
-              <select id="privacy_mode" name="privacy_mode">
-                <option value="protected">Protected (Default)</option>
-                <option value="private">Private (Encrypted)</option>
-                <option value="public">Public (Unrestricted)</option>
-              </select>
-              <label for="transcript_text">Written Evidence</label>
-              <textarea id="transcript_text" name="transcript_text" placeholder="Include clear confirmation markers (e.g. 'I, @yourhandle, approve release of $50 because the pull request #5 is complete and merged')."></textarea>
-              <button style="width: 100%;">Submit Evidence</button>
-            </form>
-          </div>
-        </aside>
-        
-        <section>
+        </section>
+
+        <section id="escrow" class="section-card">
           <div class="section-head">
             <div>
-              <h2>My Active Escrow Cases</h2>
-              <p>{len(state.get("cases", []))} conditional payment case(s) active on this account.</p>
+              <div class="eyebrow">Secure Escrow</div>
+              <h2>Create a secure escrow case</h2>
+              <p>Define the obligation, lock USDC, invite evidence, and let the witness swarm settle the outcome.</p>
             </div>
           </div>
-          <div class="grid">{_case_cards(state.get("cases", []))}</div>
-          
-          <div class="section-head" style="margin-top:28px">
-            <div>
-              <h2>My Witness Rulings</h2>
-              <p>{len(state.get("rulings", []))} automated witness ruling(s) committed.</p>
-            </div>
+          <div class="section-grid">
+            <article class="status-card">
+              <span class="badge good">Witness-to-Pay</span>
+              <h3>New secured agreement</h3>
+              <form method="post" action="/ui/cases" style="margin-top: 16px;">
+                <label for="instruction">Agreement details</label>
+                <textarea id="instruction" name="instruction" required placeholder="Pay @jennycruzy $50 when the delivery manifest is complete and payer approves."></textarea>
+                <div class="split" style="margin-top: 8px;">
+                  <div><label for="payer_identity">Payer username</label><input id="payer_identity" name="payer_identity" value="{default_payer}" required /></div>
+                  <div><label for="payer_type">Payer type</label><select id="payer_type" name="payer_type"><option value="human">Human</option><option value="agent">Agent</option></select></div>
+                </div>
+                <div class="split">
+                  <div><label for="payee_identity">Payee username</label><input id="payee_identity" name="payee_identity" value="@jennycruzy" required /></div>
+                  <div><label for="payee_type">Payee type</label><select id="payee_type" name="payee_type"><option value="human">Human</option><option value="agent">Agent</option></select></div>
+                </div>
+                <label for="amount_usdc">USDC amount to lock</label>
+                <input id="amount_usdc" name="amount_usdc" type="number" min="0.01" step="0.01" value="50" required />
+                <button style="margin-top: 18px; width: 100%;">Create secure escrow</button>
+              </form>
+            </article>
+            <article class="status-card">
+              <span class="badge good">Active cases</span>
+              <h3>Escrow case board</h3>
+              <p>{len(cases)} case(s), {len(rulings)} witness ruling(s), and {locked_total:,.2f} USDC currently locked or pending.</p>
+              <div style="margin-top: 14px; max-height: 520px; overflow: auto;">{_case_cards(cases)}</div>
+            </article>
           </div>
-          <div class="grid">{_record_cards(state.get("rulings", []))}</div>
         </section>
-      </section>
-      
-      <details class="advanced-stack">
-        <summary>Advanced Dev Swarm, Arc, & Operator Controls</summary>
-        {_ops_panels(state, circle_request_id)}
-        <div class="section-head" style="margin-top:18px">
-          <div>
-            <div class="eyebrow" style="color: var(--primary);">6-Agent Autonomous Swarm</div>
-            <h2>Operator Diagnostics</h2>
-            <p>Technical controls and receipts for builders running the agent stack.</p>
+
+        <section id="agents" class="section-card">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Witness Swarm</div>
+              <h2>Six active agents</h2>
+              <p>Each case runs through the full swarm: scanner, sentinel, risk, strategy, validator, and reflector.</p>
+            </div>
           </div>
-        </div>
-      </details>
+          <div class="agent-grid">{_agent_role_cards(state.get("swarm_roles", []))}</div>
+        </section>
+
+        <section id="evidence" class="section-card">
+          <div class="section-head"><div><div class="eyebrow">Evidence Vault</div><h2>Submit proof by voice, media, or text</h2><p>Evidence feeds the same witness pipeline used for escrow, Pay-to-Peek, predictions, and disputes.</p></div></div>
+          <div class="section-grid">
+            <article class="status-card">
+              <span class="badge good">Speechmatics</span><h3>Capture voice proof</h3>
+              <p>Record or upload audio/video evidence, then transcribe it for witness analysis.</p>
+              <label for="record_privacy_mode">Privacy mode</label><select id="record_privacy_mode"><option value="protected">Protected</option><option value="private">Private</option><option value="public">Public</option></select>
+              <div class="button-row"><button id="start_recording" type="button">Start recording</button><button id="stop_recording" class="danger" type="button" disabled>Stop and transcribe</button></div>
+              <p id="recording_status" class="status-line">Microphone is ready.</p>
+              <form method="post" action="/ui/media" enctype="multipart/form-data" style="border-top: 1px dashed var(--line); margin-top: 16px; padding-top: 16px;"><label for="file">Upload audio/video recording</label><input id="file" name="file" type="file" accept="audio/*,video/*" /><input name="privacy_mode" type="hidden" value="protected" /><label for="media_transcript_text">Or paste transcript</label><textarea id="media_transcript_text" name="transcript_text" placeholder="Copy/paste transcript text if you already have it..."></textarea><button style="margin-top: 12px; width: 100%;">Process upload</button></form>
+            </article>
+            <article class="status-card">
+              <span class="badge good">Written proof</span><h3>Quick evidence submission</h3>
+              <p>Submit signed approval, a commit record, a file link, or a work summary.</p>
+              <form method="post" action="/ui/attest"><label for="privacy_mode">Privacy mode</label><select id="privacy_mode" name="privacy_mode"><option value="protected">Protected</option><option value="private">Private</option><option value="public">Public</option></select><label for="transcript_text">Written evidence</label><textarea id="transcript_text" name="transcript_text" placeholder="I approve release of $50 because pull request #5 is complete and merged."></textarea><button style="width: 100%;">Submit evidence</button></form>
+            </article>
+          </div>
+        </section>
+
+        {_commerce_panels(state, profile_username)}
+
+        <section class="section-card">
+          <div class="section-head"><div><div class="eyebrow">Witness Rulings</div><h2>Recent rulings</h2><p>Rulings are summarized publicly while protected evidence remains private.</p></div></div>
+          <div class="grid">{_record_cards(rulings)}</div>
+        </section>
+
+        <details class="advanced-stack">
+          <summary>Advanced Arc, Circle, and operator controls</summary>
+          {_ops_panels(state, circle_request_id)}
+        </details>
+      </div>
     </main>
     {_workspace_scripts()}
     """
-    return _page("Workspace · NOTARY", body, user)
-
+    return _page("Workspace / NOTARY", body, user)
 
 def render_case_evidence(case: dict[str, Any], token: str | None, user: dict[str, Any] | None) -> str:
     hidden_token = f'<input name="token" type="hidden" value="{escape(token)}" />' if token else ""
@@ -1749,7 +1760,7 @@ def render_case_evidence(case: dict[str, Any], token: str | None, user: dict[str
           <label for="evidence_text" style="margin-top: 14px;">Evidence / Verifiable Proof</label>
           <p class="panel-copy" style="margin-top: -4px; margin-bottom: 8px; font-size: 12px; color: var(--green);">
             Provide objective proof (e.g. commit hashes, PR merge links, file paths). 
-            Include positive action terms like <strong>"completed"</strong>, <strong>"delivered"</strong>, or <strong>"approved"</strong> to guarantee instant payment release!
+            Include positive action terms like <strong>"completed"</strong>, <strong>"delivered"</strong>, or <strong>"approved"</strong> to help NOTARY assess whether release is justified.
           </p>
           <textarea id="evidence_text" name="evidence_text" required placeholder="Paste your links, commits, or signed approval statements here..." {disabled}></textarea>
           
@@ -1828,7 +1839,7 @@ def render_user_profile(
     message_html = f'<div class="notice" style="margin-bottom: 20px; border-radius: 8px;">{escape(message)}</div>' if message else ""
     
     wallet_card = f"""
-    <div class="panel" style="border: 1px solid rgba(99, 102, 241, 0.2); background: var(--surface); border-radius: 12px; padding: 24px; box-shadow: var(--shadow); margin-bottom: 24px;">
+    <div class="panel" style="border: 1px solid rgba(246, 196, 83, 0.2); background: var(--surface); border-radius: 12px; padding: 24px; box-shadow: var(--shadow); margin-bottom: 24px;">
       <div class="eyebrow" style="color: var(--primary);">Secure Wallet</div>
       <h2 style="margin: 6px 0 2px; color: #fff; font-size: 28px; font-family: 'Outfit'; font-weight: 800;">{profile_balance} USDC</h2>
       <p style="margin: 0 0 16px; font-size: 12px; color: var(--muted);">ARC-TESTNET</p>
