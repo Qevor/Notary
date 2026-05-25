@@ -174,13 +174,13 @@ def _css() -> str:
     .shell { padding: 36px; max-width: 1400px; margin: 0 auto; }
     
     /* Readability logic: Elements on milk/green background are dark. Panels/Cards stay light. */
-    .shell h1, .shell h2, .workspace-intro h2, .section-head h2, .workspace-title h1, .dash-main h1, .dash-main > div > h1, .dash-main h2 { color: #000000 !important; }
-    .shell p, .workspace-intro p, .section-head p, .workspace-title p, .dash-main > p, .dash-main > div > p { color: #0A1C12 !important; font-weight: 500; }
+    .shell h1, .shell h2, .workspace-intro h2, .section-head h2, .workspace-title h1, .dash-main h1, .dash-main > div > h1, .dash-main h2, main > h1, main > h2, .section-head > div > h2 { color: #000000 !important; }
+    .shell p, .workspace-intro p, .section-head p, .workspace-title p, .dash-main > p, .dash-main > div > p, main > p, .section-head > div > p { color: #0A1C12 !important; font-weight: 500; }
     
     /* Strong contrast for text inside explicit panels/cards */
-    .panel, .card, .record, .hero-copy, .agent-card, .step, .record-head h3, .metric-card { color: #FFFFFF !important; }
-    .panel p, .card p, .record p, .hero-copy p, .agent-card p, .step span, .metric-card span, .metric-card p { color: #E5E7EB !important; }
-    .panel h2, .card h2, .card-title, .record h3, .hero h1, .agent-card h3, .step strong, .metric-card strong, .metric-card div { color: #FFFFFF !important; }
+    .panel, .card, .record, .hero-copy, .agent-card, .step, .record-head h3, .metric-card, .feature-card, .status-card { color: #FFFFFF !important; }
+    .panel p, .card p, .record p, .hero-copy p, .agent-card p, .step span, .metric-card span, .metric-card p, .feature-card p, .status-card p { color: #E5E7EB !important; }
+    .panel h2, .card h2, .card-title, .record h3, .hero h1, .agent-card h3, .step strong, .metric-card strong, .metric-card div, .feature-card h3, .status-card h3 { color: #FFFFFF !important; }
     .hero {
       min-height: 480px;
       display: grid;
