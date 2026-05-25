@@ -233,8 +233,10 @@ async def own_profile_redirect(request: Request) -> RedirectResponse:
 
 
 @app.get("/app", response_class=HTMLResponse)
+@app.get("/app/{view}", response_class=HTMLResponse)
 async def workspace(
     request: Request,
+    view: str = "overview",
     error: str | None = None,
     message: str | None = None,
     circle_request_id: str | None = None,
@@ -261,6 +263,7 @@ async def workspace(
             error=display_error,
             message=message,
             circle_request_id=circle_request_id,
+            view=view,
         )
     )
 

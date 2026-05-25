@@ -65,15 +65,32 @@ def _css() -> str:
       --glass: rgba(17, 24, 39, 0.6);
       --shadow: 0 20px 40px rgba(0, 0, 0, 0.55);
     }
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f8f3e6;
+      --ink: #121417;
+      --muted: #756b58;
+      --surface: rgba(255, 252, 244, 0.84);
+      --surface-2: #efe5d1;
+      --line: rgba(44, 34, 18, 0.16);
+      --line-hover: rgba(44, 34, 18, 0.28);
+      --primary: #d99b1c;
+      --primary-hover: #f3bd35;
+      --primary-foreground: #15100a;
+      --primary-glow: rgba(217, 155, 28, 0.3);
+      --shadow: 0 22px 50px rgba(82, 58, 18, 0.16);
+    }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
       background: var(--bg);
       background-attachment: fixed;
       color: var(--ink);
       font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-      font-size: 15px;
-      line-height: 1.5;
+      font-size: 16px;
+      line-height: 1.55;
+      transition: background 0.25s ease, color 0.25s ease;
     }
     a { color: inherit; text-decoration: none; }
     header {
@@ -131,11 +148,11 @@ def _css() -> str:
       color: #fff;
     }
     .nav-link.primary {
-      background: var(--primary);
+      background: linear-gradient(135deg, var(--primary), var(--primary-hover));
       color: #13100a;
       border-color: var(--primary);
       font-weight: 700;
-      box-shadow: 0 4px 12px var(--primary-glow);
+      box-shadow: 0 12px 30px var(--primary-glow), inset 0 1px 0 rgba(255,255,255,0.38);
     }
     .nav-link.primary:hover {
       background: var(--primary-hover);
@@ -206,14 +223,14 @@ def _css() -> str:
       min-height: 46px;
       border-radius: 8px;
       border: 1px solid var(--primary);
-      background: var(--primary);
+      background: linear-gradient(135deg, var(--primary), var(--primary-hover));
       color: var(--primary-foreground);
       padding: 0 24px;
       font-weight: 700;
-      font-size: 14px;
+      font-size: 15px;
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       cursor: pointer;
-      box-shadow: 0 4px 12px var(--primary-glow);
+      box-shadow: 0 12px 30px var(--primary-glow), inset 0 1px 0 rgba(255,255,255,0.38);
       width: 100%;
     }
     .button:hover {
@@ -332,14 +349,14 @@ def _css() -> str:
       min-height: 42px;
       border-radius: 8px;
       border: 1px solid var(--primary);
-      background: var(--primary);
+      background: linear-gradient(135deg, var(--primary), var(--primary-hover));
       color: var(--primary-foreground);
       padding: 0 20px;
       font-weight: 700;
-      font-size: 14px;
+      font-size: 15px;
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       cursor: pointer;
-      box-shadow: 0 4px 12px var(--primary-glow);
+      box-shadow: 0 12px 30px var(--primary-glow), inset 0 1px 0 rgba(255,255,255,0.38);
     }
     button:hover {
       background: var(--primary-hover);
@@ -478,14 +495,14 @@ def _css() -> str:
     }
     .fact { display: flex; flex-direction: column; gap: 2px; }
     .fact span { font-size: 10px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em; }
-    .fact strong { font-size: 14px; color: #fff; font-family: 'Outfit', sans-serif; }
+    .fact strong { font-size: 15px; color: #fff; font-family: 'Outfit', sans-serif; }
     .notice {
       border: 1px solid rgba(16, 185, 129, 0.3);
       background: rgba(16, 185, 129, 0.05);
       color: #a7f3d0;
       padding: 14px 20px;
       border-radius: 8px;
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 500;
       margin-bottom: 24px;
     }
@@ -608,7 +625,7 @@ def _css() -> str:
       color: var(--muted);
       line-height: 1.5;
       margin-bottom: 0;
-      font-size: 14px;
+      font-size: 15px;
     }
     .badge {
       display: inline-flex;
@@ -744,6 +761,7 @@ def _css() -> str:
       display: flex;
       flex-direction: column;
     }
+    :root[data-theme="light"] .side-rail { background: #fbf7ec; }
     .side-brand {
       height: 64px;
       display: flex;
@@ -754,7 +772,7 @@ def _css() -> str:
     .side-brand strong {
       display: block;
       color: #fff;
-      font-size: 18px;
+      font-size: 20px;
       font-family: 'Outfit', sans-serif;
       font-weight: 900;
       letter-spacing: -0.01em;
@@ -762,7 +780,7 @@ def _css() -> str:
     .side-brand span {
       display: block;
       color: var(--muted);
-      font-size: 11px;
+      font-size: 12px;
       margin-top: 1px;
     }
     .side-nav {
@@ -778,7 +796,7 @@ def _css() -> str:
       padding: 11px 12px;
       color: var(--muted);
       font-weight: 500;
-      font-size: 14px;
+      font-size: 16px;
     }
     .side-rail a:hover, .side-rail a.active {
       color: #fff;
@@ -792,7 +810,11 @@ def _css() -> str:
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       font-size: 12px;
     }
-    .dash-main { min-width: 0; padding: 40px; }
+    .dash-main { min-width: 0; padding: 40px; animation: pageIn 420ms ease both; }
+    @keyframes pageIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
     .dash-topbar {
       display: flex;
       justify-content: space-between;
@@ -817,15 +839,27 @@ def _css() -> str:
       border-radius: 999px;
       display: grid;
       place-items: center;
-      background: var(--primary);
+      background: linear-gradient(135deg, var(--primary), var(--primary-hover));
       color: var(--primary-foreground);
       font-size: 13px;
       font-weight: 800;
     }
+    .theme-toggle {
+      width: 42px;
+      min-width: 42px;
+      height: 38px;
+      min-height: 38px;
+      border-radius: 10px;
+      padding: 0;
+      background: var(--surface);
+      border-color: var(--line);
+      color: var(--ink);
+      box-shadow: none;
+    }
     .workspace-title h1 {
       font-family: 'Instrument Serif', Georgia, serif;
       color: var(--ink);
-      font-size: 48px;
+      font-size: clamp(48px, 6vw, 72px);
       font-weight: 500;
       letter-spacing: 0;
       margin: 0;
@@ -833,7 +867,7 @@ def _css() -> str:
     .workspace-title p {
       color: var(--muted);
       margin: 8px 0 0;
-      font-size: 15px;
+      font-size: 18px;
     }
     .metric-card {
       border: 1px solid var(--line);
@@ -841,6 +875,11 @@ def _css() -> str:
       background: var(--surface);
       padding: 22px;
       box-shadow: 0 12px 28px rgba(0,0,0,0.22);
+      animation: cardIn 480ms ease both;
+    }
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(8px) scale(0.99); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
     }
     .metric-trend {
       display: inline-flex;
@@ -854,7 +893,7 @@ def _css() -> str:
     .metric-card strong {
       display: block;
       color: #fff;
-      font-size: 30px;
+      font-size: 34px;
       font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
       font-weight: 700;
       margin: 8px 0 2px;
@@ -871,8 +910,9 @@ def _css() -> str:
       border-radius: 16px;
       background: var(--surface);
       box-shadow: var(--shadow);
-      padding: 28px;
+      padding: 32px;
       margin-top: 28px;
+      animation: pageIn 420ms ease both;
     }
     .section-grid {
       display: grid;
@@ -884,19 +924,35 @@ def _css() -> str:
       border: 1px solid var(--line);
       border-radius: 12px;
       background: var(--surface);
-      padding: 22px;
+      padding: 24px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.22);
     }
     .feature-card h3, .status-card h3 {
       margin: 6px 0 8px;
       color: #fff;
-      font-size: 18px;
+      font-size: 20px;
     }
     .feature-card p, .status-card p {
       color: var(--muted);
       margin: 0;
-      font-size: 13px;
+      font-size: 15px;
       line-height: 1.5;
+    }
+    :root[data-theme="light"] .section-head h2,
+    :root[data-theme="light"] .feature-card h3,
+    :root[data-theme="light"] .status-card h3,
+    :root[data-theme="light"] .metric-card strong,
+    :root[data-theme="light"] .agent-card h3,
+    :root[data-theme="light"] .record h3,
+    :root[data-theme="light"] .brand strong,
+    :root[data-theme="light"] .side-brand strong {
+      color: var(--ink) !important;
+    }
+    :root[data-theme="light"] input,
+    :root[data-theme="light"] textarea,
+    :root[data-theme="light"] select {
+      background: rgba(255,255,255,0.58);
+      color: var(--ink);
     }
     .status-card code, .tx-row code {
       color: var(--green);
@@ -961,6 +1017,7 @@ def _page(title: str, body: str, user: dict[str, Any] | None = None) -> str:
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <script>document.documentElement.dataset.theme = localStorage.getItem("notary-theme") || "dark";</script>
         <style>{_css()}</style>
       </head>
       <body>
@@ -991,6 +1048,7 @@ def _bare_page(title: str, body: str) -> str:
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <script>document.documentElement.dataset.theme = localStorage.getItem("notary-theme") || "dark";</script>
         <style>{_css()}</style>
       </head>
       <body>
@@ -1180,7 +1238,7 @@ def _commerce_panels(state: dict[str, Any], profile_username: str) -> str:
     reserve = yield_status.get("sponsoredReserve", {}) if isinstance(yield_status.get("sponsoredReserve"), dict) else {}
     usyc = yield_status.get("usyc", {}) if isinstance(yield_status.get("usyc"), dict) else {}
     return f"""
-    <section id="predictions" class="section-card">
+    <section id="predictions" class="section-card app-view">
       <div class="section-head">
         <div>
           <div class="eyebrow">Predictions &amp; Micro-Shares</div>
@@ -1227,7 +1285,7 @@ def _commerce_panels(state: dict[str, Any], profile_username: str) -> str:
       </div>
     </section>
 
-    <section id="pay-to-peek" class="section-card">
+    <section id="pay-to-peek" class="section-card app-view">
       <div class="section-head">
         <div>
           <div class="eyebrow">Reasoning Marketplace</div>
@@ -1265,7 +1323,7 @@ def _commerce_panels(state: dict[str, Any], profile_username: str) -> str:
       </div>
     </section>
 
-    <section id="data" class="section-card">
+    <section id="data" class="section-card app-view">
       <div class="section-head"><div><div class="eyebrow">Paid Data &amp; Treasury</div><h2>x402 intelligence and yield controls</h2><p>External data purchases and idle capital rewards are displayed as their own operating rails.</p></div></div>
       <div class="section-grid">
         <article class="status-card">
@@ -1288,7 +1346,7 @@ def _commerce_panels(state: dict[str, Any], profile_username: str) -> str:
       </div>
     </section>
 
-    <section id="identity" class="section-card">
+    <section id="identity" class="section-card app-view">
       <div class="section-head"><div><div class="eyebrow">Agent Identity &amp; Replication</div><h2>On-chain agent identity and policy DNA</h2><p>Register NOTARY as an ERC-8004-style service agent, then spawn child agents with mutated rules.</p></div></div>
       <div class="section-grid">
         <article class="status-card"><span class="badge good">Identity</span><h3>Register agent identity</h3><form method="post" action="/ui/agents/identity/erc8004" style="margin-top: 16px;"><label for="agent_notary_id">Notary ID</label><input id="agent_notary_id" name="notary_id" value="{escape(latest_notary_id)}" required /><label for="service_endpoint">Service endpoint</label><input id="service_endpoint" name="service_endpoint" value="http://38.49.209.149/agents" required /><button style="width: 100%; margin-top: 12px;">Register agent identity</button></form></article>
@@ -1677,7 +1735,7 @@ def render_sign_in(
       <section class="panel signin-card" style="border-radius: 16px; border: 1px solid var(--line); background: var(--surface); padding: 40px; box-shadow: var(--shadow);">
         <div class="eyebrow" style="color: var(--primary);">Private workspace</div>
         <h1 style="font-size: 30px; font-family: 'Outfit'; font-weight: 800; color: #fff; margin: 6px 0 12px;">Sign in to use NOTARY</h1>
-        <p class="panel-copy" style="font-size: 14px; line-height: 1.5;">Each payer, payee, approver, or agent counterparty gets its own workspace. Public records stay on the landing page; your evidence and actions stay here.</p>
+        <p class="panel-copy" style="font-size: 15px; line-height: 1.5;">Each payer, payee, approver, or agent counterparty gets its own workspace. Public records stay on the landing page; your evidence and actions stay here.</p>
         <div class="notice" style="border-color: rgba(246, 196, 83, 0.25); background: rgba(246, 196, 83, 0.07); color: #ffe7a3; font-size: 13px; padding: 12px 16px; margin-bottom: 20px;">
           Secure Auth: Access your workspace with a handle and password. A local agent wallet is automatically mapped to your account.
         </div>
@@ -1762,6 +1820,43 @@ def _workspace_scripts() -> str:
           stopButton.disabled = true;
         }
       });
+      function applyNotaryTheme(theme) {
+        const next = theme === "light" ? "light" : "dark";
+        document.documentElement.dataset.theme = next;
+        localStorage.setItem("notary-theme", next);
+        document.querySelectorAll(".theme-toggle").forEach(button => {
+          button.textContent = next === "light" ? "Dark" : "Light";
+        });
+      }
+      window.toggleNotaryTheme = function () {
+        applyNotaryTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
+      };
+      applyNotaryTheme(localStorage.getItem("notary-theme") || "dark");
+      window.copyWorkspaceWalletAddress = async function (address) {
+        const status = document.getElementById("workspace-wallet-copy-status");
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(address);
+          } else {
+            const textArea = document.createElement("textarea");
+            textArea.value = address;
+            textArea.setAttribute("readonly", "");
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textArea);
+          }
+          if (status) {
+            status.textContent = "Address copied";
+            setTimeout(() => status.textContent = "", 2200);
+          }
+        } catch (error) {
+          if (status) status.textContent = "Select the address text and copy manually";
+        }
+      };
     </script>
     """
 
@@ -1773,6 +1868,7 @@ def render_workspace(
     error: str | None = None,
     message: str | None = None,
     circle_request_id: str | None = None,
+    view: str = "overview",
 ) -> str:
     user_label = escape(str(user.get("email") or user.get("id")))
     profile_username_raw = str(profile.get("username", "unknown"))
@@ -1789,41 +1885,61 @@ def render_workspace(
     profile_balance = escape(str(profile.get("balance", "0.00")))
     error_html = f'<div class="notice bad" style="border-radius: 8px;">{escape(error)}</div>' if error else ""
     message_html = f'<div class="notice" style="border-radius: 8px;">{escape(message)}</div>' if message else ""
+    valid_views = {"overview", "wallet", "escrow", "swarm", "evidence", "predictions", "yield", "settings"}
+    view_key = view if view in valid_views else "overview"
+    active = lambda key: "active" if view_key == key else ""
+    wallet_raw = str(profile.get("wallet") or "0x0000000000000000000000000000000000000000")
+    wallet = escape(wallet_raw)
+    wallet_js = escape(json.dumps(wallet_raw))
 
     body = f"""
-    <main class="shell dashboard-shell">
+    <style>
+      .app-view {{ display: none; }}
+      .dashboard-shell[data-view="overview"] #overview,
+      .dashboard-shell[data-view="wallet"] #wallet,
+      .dashboard-shell[data-view="escrow"] #escrow,
+      .dashboard-shell[data-view="swarm"] #agents,
+      .dashboard-shell[data-view="evidence"] #evidence,
+      .dashboard-shell[data-view="predictions"] #predictions,
+      .dashboard-shell[data-view="predictions"] #pay-to-peek,
+      .dashboard-shell[data-view="yield"] #data,
+      .dashboard-shell[data-view="settings"] #identity,
+      .dashboard-shell[data-view="settings"] #settings-advanced {{ display: block; }}
+    </style>
+    <main class="shell dashboard-shell" data-view="{escape(view_key)}">
       <aside class="side-rail">
         <div class="side-brand">
           <div>
             <strong>NOTARY</strong>
-            <span>Witness · Pay · Remember</span>
+            <span>Witness &middot; Pay &middot; Remember</span>
           </div>
         </div>
         <nav class="side-nav">
-          <a class="active" href="#overview">Overview</a>
-          <a href="/profile/{profile_username}">Wallet</a>
-          <a href="#escrow">Escrow Cases</a>
-          <a href="#agents">Witness Swarm</a>
-          <a href="#evidence">Evidence Vault</a>
-          <a href="#predictions">Predictions</a>
-          <a href="#data">Yield &amp; Treasury</a>
+          <a class="{active('overview')}" href="/app">Overview</a>
+          <a class="{active('wallet')}" href="/app/wallet">Wallet</a>
+          <a class="{active('escrow')}" href="/app/escrow">Escrow Cases</a>
+          <a class="{active('swarm')}" href="/app/swarm">Witness Swarm</a>
+          <a class="{active('evidence')}" href="/app/evidence">Evidence Vault</a>
+          <a class="{active('predictions')}" href="/app/predictions">Predictions</a>
+          <a class="{active('yield')}" href="/app/yield">Yield &amp; Treasury</a>
           <a href="/ledger">Public Ledger</a>
           <a href="/profile/{profile_username}">Profile</a>
-          <a href="#identity">Settings</a>
+          <a class="{active('settings')}" href="/app/settings">Settings</a>
         </nav>
-        <div class="side-footer">Arc testnet · synced</div>
+        <div class="side-footer">Arc testnet &middot; synced</div>
       </aside>
 
       <div class="dash-main">
         <div class="dash-topbar">
           <div class="search-pill"></div>
           <div style="display: flex; align-items: center; gap: 12px;">
-            <a class="button" href="#escrow" style="width: auto; min-width: 110px;">New case</a>
+            <a class="button" href="/app/escrow" style="width: auto; min-width: 110px;">New case</a>
+            <button type="button" class="theme-toggle" onclick="toggleNotaryTheme()" aria-label="Toggle theme">Light</button>
             <div class="avatar-pill">{escape(initials[:2])}</div>
           </div>
         </div>
 
-        <section id="overview" class="workspace-intro" style="margin-bottom: 28px;">
+        <section id="overview" class="workspace-intro app-view" style="margin-bottom: 28px;">
           <div class="workspace-title">
             <h1>Good morning, {display_name}</h1>
             <p>Here's what your witnesses observed today.</p>
@@ -1838,7 +1954,40 @@ def render_workspace(
           </div>
         </section>
 
-        <section id="escrow" class="section-card">
+        <section id="wallet" class="section-card app-view">
+          <div class="section-head">
+            <div>
+              <h2>Wallet</h2>
+              <p>Your NOTARY account wallet, Arc testnet balance, copyable address, and direct USDC transfer controls.</p>
+            </div>
+          </div>
+          <div class="section-grid">
+            <article class="status-card">
+              <span class="badge good">Wallet</span>
+              <h3>{profile_balance} USDC</h3>
+              <p>USDC &middot; Arc testnet</p>
+              <div class="facts" style="grid-template-columns: 1fr; margin-top: 18px;">
+                <div class="fact"><span>EVM address</span><code id="workspace-wallet-address">{wallet}</code></div>
+              </div>
+              <button type="button" class="button secondary" style="width: 100%; margin-top: 16px;" onclick="copyWorkspaceWalletAddress({wallet_js})">Copy address</button>
+              <p id="workspace-wallet-copy-status" class="status-line" style="margin-top: 10px;"></p>
+            </article>
+            <article class="status-card">
+              <span class="badge good">Send</span>
+              <h3>Send USDC Funds</h3>
+              <p>Transfer USDC from your agent wallet to any recipient handle or raw address.</p>
+              <form method="post" action="/ui/wallet/send" style="margin-top: 16px;">
+                <label for="wallet_recipient">Recipient handle or EVM address</label>
+                <input id="wallet_recipient" name="recipient" required placeholder="e.g. @jennycruzy or 0x..." />
+                <label for="wallet_amount">Amount in USDC</label>
+                <input id="wallet_amount" name="amount" type="number" min="0.01" step="0.01" value="10" required />
+                <button style="width: 100%; margin-top: 12px;">Send USDC Transfer</button>
+              </form>
+            </article>
+          </div>
+        </section>
+
+        <section id="escrow" class="section-card app-view">
           <div class="section-head">
             <div>
               <h2>Active escrow cases</h2>
@@ -1875,7 +2024,7 @@ def render_workspace(
           </div>
         </section>
 
-        <section id="agents" class="section-card">
+        <section id="agents" class="section-card app-view">
           <div class="section-head">
             <div>
               <h2>Witness activity</h2>
@@ -1886,7 +2035,7 @@ def render_workspace(
           <div class="agent-grid">{_agent_role_cards(state.get("swarm_roles", []))}</div>
         </section>
 
-        <section id="evidence" class="section-card">
+        <section id="evidence" class="section-card app-view">
           <div class="section-head"><div><div class="eyebrow">Evidence Vault</div><h2>Submit proof by voice, media, or text</h2><p>Evidence feeds the same witness pipeline used for escrow, Pay-to-Peek, predictions, and disputes.</p></div></div>
           <div class="section-grid">
             <article class="status-card">
@@ -1907,12 +2056,12 @@ def render_workspace(
 
         {_commerce_panels(state, profile_username)}
 
-        <section class="section-card">
+        <section id="rulings" class="section-card app-view">
           <div class="section-head"><div><div class="eyebrow">Witness Rulings</div><h2>Recent rulings</h2><p>Rulings are summarized publicly while protected evidence remains private.</p></div></div>
           <div class="grid">{_record_cards(rulings)}</div>
         </section>
 
-        <details class="advanced-stack">
+        <details id="settings-advanced" class="advanced-stack app-view" open>
           <summary>Advanced Arc, Circle, and operator controls</summary>
           {_ops_panels(state, circle_request_id)}
         </details>
@@ -2162,7 +2311,7 @@ def render_user_profile(
           <div class="section-head" style="margin-bottom: 24px; border-bottom: 1px solid var(--line); padding-bottom: 16px;">
             <div>
               <h2 style="font-size: 24px; color: #fff; margin: 0;">Verified Transaction Ledger</h2>
-              <p style="margin: 6px 0 0; font-size: 14px; color: var(--muted);">Direct USDC transfers, case deposits, and escrow releases verified by NOTARY.</p>
+              <p style="margin: 6px 0 0; font-size: 15px; color: var(--muted);">Direct USDC transfers, case deposits, and escrow releases verified by NOTARY.</p>
             </div>
           </div>
           <div>
@@ -2173,3 +2322,9 @@ def render_user_profile(
     </main>
     """
     return _page(f"@{profile_username}'s Profile · NOTARY", body, viewer)
+
+
+
+
+
+
