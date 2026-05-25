@@ -42,12 +42,12 @@ def _css() -> str:
     :root {
       color-scheme: dark;
       --bg: linear-gradient(135deg, #FDFFF5 0%, #D4EED7 40%, #152A1A 80%, #000000 100%);
-      --ink: oklch(97% .01 90);
-      --muted: oklch(70% .02 90);
-      --surface: oklab(0.2 -0.00347296 -0.0196962 / 0.6);
-      --surface-2: oklch(22% .02 260);
-      --line: oklch(30% .02 260 / .6);
-      --line-hover: oklch(42% .03 260 / .75);
+      --ink: #FFFFFF;
+      --muted: #A3B3A9;
+      --surface: rgba(15, 23, 20, 0.75);
+      --surface-2: rgba(30, 41, 35, 0.8);
+      --line: rgba(255, 255, 255, 0.1);
+      --line-hover: rgba(255, 255, 255, 0.2);
       --green: #10b981;
       --green-glow: rgba(16, 185, 129, 0.2);
       --green-2: #059669;
@@ -58,12 +58,12 @@ def _css() -> str:
       --blue: #3b82f6;
       --black: #020403;
       --mint: rgba(16, 185, 129, 0.1);
-      --primary: oklch(82% .14 85);
-      --primary-hover: oklch(88% .14 85);
-      --primary-foreground: oklch(16% .02 260);
-      --primary-glow: oklch(82% .14 85 / .18);
-      --glass: rgba(17, 24, 39, 0.6);
-      --shadow: 0 20px 40px rgba(0, 0, 0, 0.55);
+      --primary: #F6C453;
+      --primary-hover: #F8D481;
+      --primary-foreground: #101814;
+      --primary-glow: rgba(246, 196, 83, 0.2);
+      --glass: rgba(15, 23, 20, 0.7);
+      --shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
     }
     :root[data-theme="light"] {
       color-scheme: light;
@@ -100,7 +100,7 @@ def _css() -> str:
       gap: 20px;
       padding: 16px 36px;
       border-bottom: 1px solid var(--line);
-      background: rgba(9, 13, 22, 0.85);
+      background: rgba(10, 15, 13, 0.85);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       position: sticky;
@@ -173,9 +173,14 @@ def _css() -> str:
     }
     .shell { padding: 36px; max-width: 1400px; margin: 0 auto; }
     
-    /* Readability overrides for texts sitting directly on the milk background */
-    .hero h1, .workspace-intro h2, .section-head h2, .workspace-title h1 { color: #000000 !important; }
-    .hero p, .workspace-intro p, .section-head p, .workspace-title p { color: #0A1C12 !important; }
+    /* Readability logic: Top-level elements on milk/green background are dark. Panels stay light. */
+    main > h1, main > h2, main > p, .workspace-intro > h2, .section-head > h2, .workspace-title > h1 { color: #101814; }
+    main > p, .workspace-intro > p, .section-head > p, .workspace-title > p { color: #1E2D25; }
+    
+    /* Ensure any text inside explicit panels/cards is high-contrast light */
+    .panel, .card, .record, .hero-copy, .agent-card, .step { color: #FFFFFF; }
+    .panel p, .card p, .record p, .hero-copy p, .agent-card p, .step span { color: #CBD5CE; }
+    .panel h2, .card h2, .card-title, .record h3, .hero h1, .agent-card h3, .step strong { color: #FFFFFF; }
     .hero {
       min-height: 480px;
       display: grid;
