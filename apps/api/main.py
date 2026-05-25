@@ -323,8 +323,8 @@ async def ui_create_case(
             amount_usdc=amount_usdc,
         )
     except Exception as exc:
-        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
-    return RedirectResponse("/app", status_code=303)
+        return RedirectResponse(f"/app/escrow?error={quote(_ui_error(exc))}", status_code=303)
+    return RedirectResponse("/app/escrow?message=Escrow%20case%20created", status_code=303)
 
 
 @app.get("/cases/{case_id}/evidence", response_class=HTMLResponse)
@@ -1344,7 +1344,7 @@ async def local_payment_page(reference: str, error: str | None = None) -> HTMLRe
                 <button type="submit">Verify Arc Funding</button>
               </form>
               
-              <a href="/app" class="cancel-link">Return to Console</a>
+              <a href="/app/escrow" class="cancel-link">Return to Escrow Console</a>
             </main>
           </body>
         </html>
@@ -1366,7 +1366,7 @@ async def local_payment_submit(
             f"/request/{quote(reference)}?error={quote(_ui_error(exc))}",
             status_code=303,
         )
-    return RedirectResponse("/app?message=Arc%20funding%20verified%20successfully!", status_code=303)
+    return RedirectResponse("/app/escrow?message=Arc%20funding%20verified%20successfully!", status_code=303)
 
 
 @app.post("/media/transcribe")
