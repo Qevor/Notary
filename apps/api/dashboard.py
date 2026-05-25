@@ -2139,12 +2139,22 @@ def render_workspace(
     """
     return _bare_page("Workspace / NOTARY", body)
 
-def render_case_evidence(case: dict[str, Any], token: str | None, user: dict[str, Any] | None) -> str:
+def render_case_evidence(
+    case: dict[str, Any],
+    token: str | None,
+    user: dict[str, Any] | None,
+    error: str | None = None,
+) -> str:
     hidden_token = f'<input name="token" type="hidden" value="{escape(token)}" />' if token else ""
     is_funded = case.get("status") != "awaiting_funding"
     funding_notice = (
         '<div class="notice bad">This contract is currently awaiting funding. Submitting proof is locked until the payer deposits USDC into the secure conditional escrow vault.</div>'
         if not is_funded
+        else ""
+    )
+    error_notice = (
+        f'<div class="notice bad">Evidence submission failed: {escape(error)}</div>'
+        if error
         else ""
     )
     disabled = "" if is_funded else "disabled"
@@ -2165,6 +2175,7 @@ def render_case_evidence(case: dict[str, Any], token: str | None, user: dict[str
         </div>
         
         {funding_notice}
+        {error_notice}
         
         <form method="post" action="/cases/{escape(case.get("case_id"))}/evidence" style="border-top: 1px dashed var(--line); padding-top: 20px;">
           {hidden_token}

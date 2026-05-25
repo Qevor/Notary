@@ -332,11 +332,12 @@ async def case_evidence_page(
     request: Request,
     case_id: str,
     token: str | None = None,
+    error: str | None = None,
 ) -> HTMLResponse:
     case = get_app_service().store.get("cases", case_id)
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
-    return HTMLResponse(render_case_evidence(case, token, _read_session(request)))
+    return HTMLResponse(render_case_evidence(case, token, _read_session(request), error=error))
 
 
 @app.post("/cases/{case_id}/evidence")
