@@ -297,6 +297,81 @@ async def test_live_commerce_primitives_auto_pay_with_circle(tmp_path, monkeypat
 
 
 @pytest.mark.anyio
+async def test_direct_user_send_prefers_circle_wallets_api(tmp_path, monkeypatch):
+    settings = Settings(
+        notary_db_path=tmp_path / "notary.sqlite3",
+        notary_env="development",
+        circle_api_key="TEST_API_KEY:abc:def",
+        circle_entity_secret="1" * 64,
+        circle_wallet_set_id="wallet-set-1",
+    )
+    service = NotaryAppService(settings)
+    service.store.put(
+        "profiles",
+        "payer",
+        {
+            "username": "payer",
+            "wallet": "0x" + "a" * 40,
+            "circle_wallet_id": "circle-dev-wallet-payer",
+        },
+    )
+    service.store.put(
+        "profiles",
+        "payee",
+        {
+            "username": "payee",
+            "wallet": "0x" + "b" * 40,
+            "circle_wallet_id": "circle-dev-wallet-payee",
+        },
+    )
+
+    calls = []
+
+    def fake_wallets_api_transfer_usdc(
+        self,
+        *,
+        wallet_id,
+        wallet_address,
+        to_address,
+        amount_usdc,
+        ref_id=None,
+    ):
+        calls.append(
+            {
+                "wallet_id": wallet_id,
+                "wallet_address": wallet_address,
+                "to_address": to_address,
+                "amount_usdc": amount_usdc,
+                "ref_id": ref_id,
+            }
+        )
+        return {
+            "txHash": "0x" + "8" * 64,
+            "status": "complete",
+            "provider": "circle_developer_wallets",
+            "demo": False,
+        }
+
+    async def fail_cli_transfer(*args, **kwargs):
+        raise AssertionError("Circle CLI should not move developer-controlled user wallets")
+
+    monkeypatch.setattr(CircleDeveloperWalletClient, "transfer_usdc", fake_wallets_api_transfer_usdc)
+    monkeypatch.setattr(CircleAgentClient, "transfer_usdc", fail_cli_transfer)
+
+    result = await service.send_user_funds(
+        sender_email_or_id="payer",
+        to_identity="payee",
+        amount_usdc=3,
+    )
+
+    assert result["status"] == "completed"
+    assert calls[0]["wallet_id"] == "circle-dev-wallet-payer"
+    assert calls[0]["wallet_address"] == "0x" + "a" * 40
+    assert calls[0]["to_address"] == "0x" + "b" * 40
+    assert calls[0]["amount_usdc"] == 3
+
+
+@pytest.mark.anyio
 async def test_sponsored_yield_pays_from_reserve_and_records_arc_validation(tmp_path, monkeypatch):
     settings = Settings(
         notary_db_path=tmp_path / "notary_yield.sqlite3",

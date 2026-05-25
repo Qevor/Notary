@@ -2759,24 +2759,41 @@ class NotaryAppService:
         if not target_wallet:
             raise RuntimeError(f"Could not resolve recipient identity: {to_identity}")
 
-        # Attempt real Circle transfer
+        # Attempt real Circle transfer. User profiles are usually Circle Developer
+        # Wallets, while the CLI only controls operator/agent wallets.
         circle_result: dict[str, Any] = {}
         try:
-            agent_wallet_id = None
-            if self.settings.notary_supabase_url and self.settings.notary_supabase_service_role_key:
-                rows = await self.escrow._supabase_select(
-                    "agent_wallets",
-                    select="id",
-                    filters={"profile_wallet": f"eq.{sender_wallet}"},
-                    limit=1,
-                )
-                if rows:
-                    agent_wallet_id = rows[0].get("id")
-            circle_result = await self.circle.transfer_usdc(
-                from_wallet_id=agent_wallet_id or sender_wallet,
-                to_address=target_wallet,
-                amount=amount_usdc,
+            sender_wallet_id = str(sender_profile.get("circle_wallet_id") or "")
+            uses_developer_wallet = (
+                self.circle_wallets.configured
+                and sender_wallet_id
+                and not sender_wallet_id.startswith("local_")
+                and not sender_wallet_id.startswith("0x")
             )
+            if uses_developer_wallet:
+                circle_result = self.circle_wallets.transfer_usdc(
+                    wallet_id=sender_wallet_id,
+                    wallet_address=str(sender_wallet),
+                    to_address=target_wallet,
+                    amount_usdc=amount_usdc,
+                    ref_id=f"notary_direct_transfer_{sender_username}_{int(time.time())}",
+                )
+            else:
+                agent_wallet_id = None
+                if self.settings.notary_supabase_url and self.settings.notary_supabase_service_role_key:
+                    rows = await self.escrow._supabase_select(
+                        "agent_wallets",
+                        select="id",
+                        filters={"profile_wallet": f"eq.{sender_wallet}"},
+                        limit=1,
+                    )
+                    if rows:
+                        agent_wallet_id = rows[0].get("id")
+                circle_result = await self.circle.transfer_usdc(
+                    from_wallet_id=agent_wallet_id or sender_wallet,
+                    to_address=target_wallet,
+                    amount=amount_usdc,
+                )
         except Exception as exc:
             if not self.settings.notary_demo_mode:
                 raise RuntimeError("Circle transfer failed; no USDC movement was recorded") from exc
