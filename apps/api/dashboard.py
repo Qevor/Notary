@@ -599,6 +599,38 @@ def _css() -> str:
       line-height: 1.4;
     }
     .flow-step-copy strong { color: #fff; display: block; margin-bottom: 2px; }
+    .case-step {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.035);
+      padding: 14px;
+      min-width: 0;
+    }
+    .case-step strong {
+      display: block;
+      font-family: 'Outfit', sans-serif;
+      font-size: 15px;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .case-step p {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+      margin: 0 0 12px;
+    }
+    .case-step.active {
+      border-color: rgba(246, 196, 83, 0.34);
+      background: rgba(246, 196, 83, 0.07);
+    }
+    .case-step.complete {
+      border-color: rgba(16, 185, 129, 0.3);
+      background: rgba(16, 185, 129, 0.06);
+    }
+    .case-step.locked {
+      border-style: dashed;
+      opacity: 0.9;
+    }
     .tabs-header {
       display: flex;
       border-bottom: 1px solid var(--line);
@@ -992,7 +1024,7 @@ def _css() -> str:
     @media (max-width: 980px) {
       header { align-items: flex-start; flex-direction: column; padding: 16px 20px; }
       .shell { padding: 24px 16px; }
-      .hero, .workspace, .ops-grid, .feature-grid, .profile-metrics, .commerce-grid, .grid, .grid.two, .facts, .dashboard-shell, .section-grid {
+      .hero, .workspace, .ops-grid, .feature-grid, .profile-metrics, .commerce-grid, .grid, .grid.two, .facts, .dashboard-shell, .section-grid, .case-flow {
         grid-template-columns: 1fr !important;
       }
       aside, .side-rail { position: static !important; }
@@ -1161,21 +1193,45 @@ def _case_cards(items: list[dict[str, Any]]) -> str:
     for item in reversed(items):
         upload = item.get("metadata", {}).get("evidenceUploadPath")
         funding_url = item.get("escrow_payment_url")
+        is_awaiting_funding = item.get("status") == "awaiting_funding"
         funding_link = (
-            f'<a class="button secondary" href="{escape(str(funding_url))}">Fund conditional payment</a>'
-            if funding_url and item.get("status") == "awaiting_funding"
+            f'<a class="button secondary" href="{escape(str(funding_url))}">Fund escrow with Arc tx</a>'
+            if funding_url and is_awaiting_funding
             else ""
         )
-        upload_link = (
-            f'<a class="button secondary" href="{escape(upload)}">Evidence link</a>'
-            if upload and item.get("status") != "awaiting_funding"
-            else ""
+        funding_state = (
+            """
+            <div class="case-step active">
+              <strong>1. Payer funds escrow</strong>
+              <p>Open the funding page, send the exact USDC amount on Arc to the reserve wallet, then paste the transaction hash for verification.</p>
+            </div>
+            """
+            if is_awaiting_funding
+            else """
+            <div class="case-step complete">
+              <strong>1. Escrow funded</strong>
+              <p>The USDC lock has been verified. The payee can now submit proof for the witness swarm.</p>
+            </div>
+            """
         )
-        guarded_note = (
-            '<p class="panel-copy">Evidence is locked until the NOTARY escrow is funded.</p>'
-            if item.get("status") == "awaiting_funding"
-            else ""
+        evidence_action = (
+            f"""
+            <div class="case-step active">
+              <strong>2. Payee submits evidence</strong>
+              <p>The evidence portal is open for the payee or their agent. Submit links, files, commits, or signed completion proof.</p>
+              <a class="button secondary" href="{escape(upload)}">Submit evidence</a>
+            </div>
+            """
+            if upload and not is_awaiting_funding
+            else """
+            <div class="case-step locked">
+              <strong>2. Payee submits evidence</strong>
+              <p>Locked until funding is verified. Once funded, this card will show the payee's evidence portal.</p>
+              <span class="button secondary" aria-disabled="true" style="opacity:.55; pointer-events:none;">Evidence locked</span>
+            </div>
+            """
         )
+        funding_actions = f'<div class="actions" style="margin-top:16px; display: flex; gap: 8px; flex-wrap: wrap;">{funding_link}</div>' if funding_link else ""
         cards.append(
             f"""
             <article class="record" style="border: 1px solid var(--line); border-radius: 16px; padding: 28px; transition: all 0.22s ease;">
@@ -1192,8 +1248,11 @@ def _case_cards(items: list[dict[str, Any]]) -> str:
                 <div class="fact"><span>Escrow ref</span><code>{escape(_short(item.get("escrow_payment_reference"), 28))}</code></div>
                 <div class="fact"><span>Latest ruling</span><code>{escape(_short(item.get("latest_ruling_id"), 28))}</code></div>
               </div>
-              {guarded_note}
-              <div class="actions" style="margin-top:16px; display: flex; gap: 8px;">{funding_link}{upload_link}</div>
+              <div class="case-flow" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 18px;">
+                {funding_state}
+                {evidence_action}
+              </div>
+              {funding_actions}
             </article>
             """
         )
