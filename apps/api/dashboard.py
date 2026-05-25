@@ -1626,7 +1626,7 @@ def render_workspace(
           <p class="panel-copy" style="margin: 0; font-size: 15px;">Welcome back, <strong>{user_label}</strong>. NOTARY turns verified facts into programmable USDC movement on Arc.</p>
           {error_html}
           {message_html}
-          <div class="profile-metrics" style="margin-top: 24px;">
+          <div class="profile-metrics" style="grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 24px;">
             <div class="metric-card"><span>Wallet balance</span><strong>{profile_balance}</strong><p class="status-line">USDC / Arc testnet</p></div>
             <div class="metric-card"><span>Locked in escrow</span><strong>${locked_total:,.2f}</strong><p class="status-line">{len(active_cases)} active case(s)</p></div>
             <div class="metric-card"><span>Yield earned</span><strong>${yield_total:,.6f}</strong><p class="status-line">Sponsored reserve</p></div>
