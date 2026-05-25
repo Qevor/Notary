@@ -41,7 +41,7 @@ def _css() -> str:
     return """
     :root {
       color-scheme: dark;
-      --bg: oklch(16% .02 260);
+      --bg: linear-gradient(135deg, #FDFFF5 0%, #D4EED7 40%, #152A1A 80%, #000000 100%);
       --ink: oklch(97% .01 90);
       --muted: oklch(70% .02 90);
       --surface: oklab(0.2 -0.00347296 -0.0196962 / 0.6);
@@ -171,7 +171,17 @@ def _css() -> str:
       border-color: #ef4444;
       color: #fff;
     }
-    .shell { padding: 36px; max-width: 1400px; margin: 0 auto; }
+    .shell {
+      padding: 40px; 
+      max-width: 1400px; 
+      margin: 40px auto;
+      background: rgba(8, 12, 10, 0.6);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    }
     .hero {
       min-height: 480px;
       display: grid;
@@ -810,7 +820,12 @@ def _css() -> str:
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       font-size: 12px;
     }
-    .dash-main { min-width: 0; padding: 40px; animation: pageIn 420ms ease both; }
+    .dash-main { 
+      min-width: 0; padding: 40px; animation: pageIn 420ms ease both;
+      background: rgba(8, 12, 10, 0.65);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+    }
     @keyframes pageIn {
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
