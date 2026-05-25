@@ -195,6 +195,21 @@ def test_matching_precedent_is_cited_in_reasoning_trace() -> None:
     assert "Matched precedent records consulted" in verdict.reasoning_trace
 
 
+def test_precedent_skips_malformed_non_ruling_records(tmp_path) -> None:
+    settings = Settings(notary_db_path=tmp_path / "notary.sqlite3")
+    service = NotaryAppService(settings)
+    service.store.put(
+        "rulings",
+        "pay_to_peek_legacy_record",
+        {
+            "attestation": {"reasoning_trace_hash": "0x" + "1" * 64},
+            "accessId": "pay_to_peek_legacy_record",
+        },
+    )
+
+    assert service._precedent() == []
+
+
 def test_dashboard_state_does_not_auto_seed_demo_records(tmp_path) -> None:
     settings = Settings(notary_db_path=tmp_path / "notary.sqlite3")
     service = NotaryAppService(settings)

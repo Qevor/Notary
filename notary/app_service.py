@@ -2131,11 +2131,18 @@ class NotaryAppService:
             )
 
     def _precedent(self, exclude_ruling_id: str | None = None) -> list[Ruling]:
-        return [
-            Ruling.model_validate(item)
-            for item in self.store.list("rulings")
-            if item.get("ruling_id") != exclude_ruling_id
-        ]
+        precedent: list[Ruling] = []
+        for item in self.store.list("rulings"):
+            if item.get("ruling_id") == exclude_ruling_id or self._is_debug_ruling(item):
+                continue
+            try:
+                precedent.append(Ruling.model_validate(item))
+            except Exception as exc:
+                print(
+                    "[Precedent] Skipping malformed ruling record "
+                    f"{item.get('ruling_id') or item.get('id') or item.get('subjectId') or 'unknown'}: {exc}"
+                )
+        return precedent
 
     def _witness_pipeline(self, notary_id: str | None = None) -> WitnessPipeline:
         return WitnessPipeline(
