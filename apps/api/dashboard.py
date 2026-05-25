@@ -171,17 +171,11 @@ def _css() -> str:
       border-color: #ef4444;
       color: #fff;
     }
-    .shell {
-      padding: 40px; 
-      max-width: 1400px; 
-      margin: 40px auto;
-      background: rgba(8, 12, 10, 0.6);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-      border-radius: 24px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-    }
+    .shell { padding: 36px; max-width: 1400px; margin: 0 auto; }
+    
+    /* Readability overrides for texts sitting directly on the milk background */
+    .hero h1, .workspace-intro h2, .section-head h2, .workspace-title h1 { color: #000000 !important; }
+    .hero p, .workspace-intro p, .section-head p, .workspace-title p { color: #0A1C12 !important; }
     .hero {
       min-height: 480px;
       display: grid;
@@ -820,12 +814,7 @@ def _css() -> str:
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       font-size: 12px;
     }
-    .dash-main { 
-      min-width: 0; padding: 40px; animation: pageIn 420ms ease both;
-      background: rgba(8, 12, 10, 0.65);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-    }
+    .dash-main { min-width: 0; padding: 40px; animation: pageIn 420ms ease both; }
     @keyframes pageIn {
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
