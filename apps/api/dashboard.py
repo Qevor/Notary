@@ -173,14 +173,14 @@ def _css() -> str:
     }
     .shell { padding: 36px; max-width: 1400px; margin: 0 auto; }
     
-    /* Readability logic: Top-level elements on milk/green background are dark. Panels stay light. */
-    main > h1, main > h2, main > p, .workspace-intro > h2, .section-head > h2, .workspace-title > h1 { color: #101814; }
-    main > p, .workspace-intro > p, .section-head > p, .workspace-title > p { color: #1E2D25; }
+    /* Readability logic: Elements on milk/green background are dark. Panels/Cards stay light. */
+    .shell h1, .shell h2, .workspace-intro h2, .section-head h2, .workspace-title h1 { color: #000000 !important; }
+    .shell p, .workspace-intro p, .section-head p, .workspace-title p { color: #0A1C12 !important; font-weight: 500; }
     
-    /* Ensure any text inside explicit panels/cards is high-contrast light */
-    .panel, .card, .record, .hero-copy, .agent-card, .step { color: #FFFFFF; }
-    .panel p, .card p, .record p, .hero-copy p, .agent-card p, .step span { color: #CBD5CE; }
-    .panel h2, .card h2, .card-title, .record h3, .hero h1, .agent-card h3, .step strong { color: #FFFFFF; }
+    /* Strong contrast for text inside explicit panels/cards */
+    .panel, .card, .record, .hero-copy, .agent-card, .step, .record-head h3 { color: #FFFFFF !important; }
+    .panel p, .card p, .record p, .hero-copy p, .agent-card p, .step span, .dash-main p { color: #E5E7EB !important; }
+    .panel h2, .card h2, .card-title, .record h3, .hero h1, .agent-card h3, .step strong, .dash-main h1 { color: #FFFFFF !important; }
     .hero {
       min-height: 480px;
       display: grid;
