@@ -84,6 +84,8 @@ class Settings(BaseModel):
     notary_escrow_refund_path: str | None = None
     notary_escrow_status_path_template: str | None = None
     notary_escrow_webhook_header: str = "x-signature"
+    notary_escrow_reserve_wallet: str | None = None
+    notary_escrow_reserve_wallet_id: str | None = None
     notary_supabase_url: str | None = None
     notary_supabase_anon_key: str | None = None
     notary_supabase_service_role_key: str | None = None
@@ -165,6 +167,8 @@ class Settings(BaseModel):
             notary_escrow_refund_path=_optional_str("NOTARY_ESCROW_REFUND_PATH"),
             notary_escrow_status_path_template=_optional_str("NOTARY_ESCROW_STATUS_PATH_TEMPLATE"),
             notary_escrow_webhook_header=os.getenv("NOTARY_ESCROW_WEBHOOK_HEADER", "x-signature"),
+            notary_escrow_reserve_wallet=_optional_str("NOTARY_ESCROW_RESERVE_WALLET"),
+            notary_escrow_reserve_wallet_id=_optional_str("NOTARY_ESCROW_RESERVE_WALLET_ID"),
             notary_supabase_url=_optional_str("NOTARY_SUPABASE_URL") or _optional_str("SUPABASE_URL"),
             notary_supabase_anon_key=(
                 _optional_str("NOTARY_SUPABASE_ANON_KEY")

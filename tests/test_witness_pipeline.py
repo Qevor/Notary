@@ -311,6 +311,7 @@ async def test_registered_users_can_create_local_checkout_case_without_supabase(
         notary_db_path=tmp_path / "notary.sqlite3",
         notary_env="development",
         notary_escrow_demo_mode=False,
+        notary_escrow_reserve_wallet="0x0000000000000000000000000000000000000c33",
     )
     service = NotaryAppService(settings)
 
@@ -328,7 +329,7 @@ async def test_registered_users_can_create_local_checkout_case_without_supabase(
 
     executor_wallet = await service.escrow.resolve_executor_agent_wallet(payer["wallet"])
     assert executor_wallet is not None
-    assert executor_wallet["escrow_address"] == payer["wallet"]
+    assert executor_wallet["escrow_address"] == "0x0000000000000000000000000000000000000c33"
 
     case = await service.create_conditional_case(
         created_by_identity="localpayer",
@@ -349,6 +350,7 @@ async def test_registered_users_can_create_local_checkout_case_without_supabase(
     assert case["escrow_provider"] == "notary_arc_manual_request"
     assert case["metadata"]["payerWallet"] == payer["wallet"]
     assert case["metadata"]["payeeWallet"] == payee["wallet"]
+    assert case["metadata"]["executorEscrowAddress"] == "0x0000000000000000000000000000000000000c33"
 
 
 async def test_arc_funding_must_verify_before_case_unlocks(tmp_path) -> None:
@@ -356,6 +358,7 @@ async def test_arc_funding_must_verify_before_case_unlocks(tmp_path) -> None:
         notary_db_path=tmp_path / "notary.sqlite3",
         notary_env="development",
         notary_escrow_demo_mode=False,
+        notary_escrow_reserve_wallet="0x0000000000000000000000000000000000000c33",
     )
     service = NotaryAppService(settings)
 

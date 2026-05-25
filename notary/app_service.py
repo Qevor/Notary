@@ -1203,11 +1203,26 @@ class NotaryAppService:
         executor_wallet = await self.escrow.resolve_executor_agent_wallet(
             payer_resolution.get("wallet")
         )
+        if self.settings.notary_escrow_reserve_wallet:
+            executor_wallet = dict(executor_wallet or {})
+            executor_wallet["escrow_address"] = self.settings.notary_escrow_reserve_wallet
+            executor_wallet["id"] = (
+                self.settings.notary_escrow_reserve_wallet_id
+                or executor_wallet.get("id")
+                or self.settings.notary_escrow_reserve_wallet
+            )
         if not executor_wallet or not executor_wallet.get("escrow_address"):
             raise RuntimeError(
-                "Payer must have an enrolled NOTARY Arc Testnet agent wallet with an escrow address "
-                "before creating a protected NOTARY conditional payment"
+                "NOTARY needs a dedicated escrow reserve wallet before creating protected conditional payments. "
+                "Set NOTARY_ESCROW_RESERVE_WALLET to a NOTARY-controlled Arc wallet address."
             )
+        reserve_address = str(executor_wallet.get("escrow_address"))
+        payer_wallet = str(payer_resolution.get("wallet") or "")
+        payee_wallet = str(payee_resolution.get("wallet") or "")
+        if payer_wallet and reserve_address.lower() == payer_wallet.lower():
+            raise RuntimeError("Escrow reserve wallet cannot be the payer wallet")
+        if payee_wallet and reserve_address.lower() == payee_wallet.lower():
+            raise RuntimeError("Escrow reserve wallet cannot be the payee wallet")
         token = new_id("invite")
         case = NotaryCase(
             created_by_identity=created_by_identity,
@@ -1226,13 +1241,13 @@ class NotaryAppService:
         case.metadata.update(
             {
                 "payerUsername": payer_resolution.get("username"),
-                "payerWallet": payer_resolution.get("wallet"),
+                "payerWallet": payer_wallet,
                 "payeeUsername": payee_resolution.get("username"),
-                "payeeWallet": payee_resolution.get("wallet"),
+                "payeeWallet": payee_wallet,
                 "approverUsername": approver_resolution.get("username") if approver_resolution else None,
                 "approverWallet": approver_resolution.get("wallet") if approver_resolution else None,
                 "executorAgentWalletId": executor_wallet.get("id") if executor_wallet else None,
-                "executorEscrowAddress": executor_wallet.get("escrow_address") if executor_wallet else None,
+                "executorEscrowAddress": reserve_address,
                 "fundingRequired": True,
                 "fundingStatus": "awaiting_funding",
                 "pendingEvidenceInviteToken": token,
@@ -1244,10 +1259,10 @@ class NotaryAppService:
                 amount_usdc=amount_usdc,
                 payer_identity=payer_identity,
                 payee_identity=payee_identity,
-                payer_wallet=payer_resolution.get("wallet"),
-                payee_wallet=payee_resolution.get("wallet"),
+                payer_wallet=payer_wallet,
+                payee_wallet=payee_wallet,
                 executor_agent_wallet_id=executor_wallet.get("id"),
-                reserve_wallet=executor_wallet.get("escrow_address"),
+                reserve_wallet=reserve_address,
                 notary_case_id=case.case_id,
                 instruction=instruction,
                 metadata={
@@ -2572,7 +2587,7 @@ class NotaryAppService:
                 "label": f"Agent Wallet for @{username}",
                 "status": "active",
                 "executor_mode": "escrow",
-                "escrow_address": wallet_address,
+                "escrow_address": self.settings.notary_escrow_reserve_wallet,
                 "attestation_mode": "attest",
             },
         )
@@ -2703,7 +2718,7 @@ class NotaryAppService:
                         "label": f"Agent Wallet for @{username}",
                         "status": "active",
                         "executor_mode": "escrow",
-                        "escrow_address": wallet_address,
+                        "escrow_address": self.settings.notary_escrow_reserve_wallet,
                         "attestation_mode": "attest",
                     },
                 )
