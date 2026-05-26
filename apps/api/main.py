@@ -87,6 +87,15 @@ def _user_state(state: dict, user: dict) -> dict:
         for value in (user.get("email"), user.get("id"))
         if value
     }
+    usernames = set()
+    for value in (user.get("email"), user.get("id")):
+        if not value:
+            continue
+        raw = str(value).strip()
+        username = raw[1:].lower() if raw.startswith("@") else raw.split("@")[0].lower()
+        if username:
+            usernames.add(username)
+    case_identities = identities | usernames
 
     def related_ruling(item: dict) -> bool:
         parties = item.get("partyIdentities", {}) or {}
@@ -109,13 +118,17 @@ def _user_state(state: dict, user: dict) -> dict:
         return any(str(value).lower() in identities for value in candidates if value)
 
     def related_case(item: dict) -> bool:
+        meta = item.get("metadata", {}) or {}
         candidates = [
             item.get("created_by_identity"),
             item.get("payer_identity"),
             item.get("payee_identity"),
             item.get("approver_identity"),
+            meta.get("payerUsername"),
+            meta.get("payeeUsername"),
+            meta.get("approverUsername"),
         ]
-        return any(str(value).lower() in identities for value in candidates if value)
+        return any(str(value).lower() in case_identities for value in candidates if value)
 
     scoped = dict(state)
     scoped["cases"] = [item for item in state.get("cases", []) if related_case(item)]

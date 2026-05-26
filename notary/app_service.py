@@ -1388,7 +1388,30 @@ class NotaryAppService:
             }
         if token and sha256_hex(token) != case.evidence_invite_token_hash:
             return {"error": "invalid_invite_token", "caseId": case_id}
-        if submitter_identity not in {case.payee_identity, case.payer_identity, case.approver_identity}:
+
+        def _to_username(value: Any) -> str:
+            raw = str(value or "").strip()
+            if raw.startswith("@"):
+                return raw[1:].lower()
+            if "@" in raw:
+                return raw.split("@")[0].lower()
+            return raw.lower()
+
+        authorized = {
+            value
+            for value in (
+                case.payee_identity,
+                case.payer_identity,
+                case.approver_identity,
+                case.metadata.get("payeeUsername"),
+                case.metadata.get("payerUsername"),
+                case.metadata.get("approverUsername"),
+            )
+            if value
+        }
+        authorized_usernames = {_to_username(value) for value in authorized}
+        submitter_keys = {submitter_identity, _to_username(submitter_identity)}
+        if not (submitter_keys & (authorized | authorized_usernames)):
             if not token:
                 return {"error": "submitter_not_authorized", "caseId": case_id}
 
