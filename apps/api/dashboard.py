@@ -2110,7 +2110,7 @@ def render_workspace(
                   <div><label for="payee_type">Payee type</label><select id="payee_type" name="payee_type"><option value="human">Human</option><option value="agent">Agent</option></select></div>
                 </div>
                 <label for="amount_usdc">USDC amount to lock</label>
-                <input id="amount_usdc" name="amount_usdc" type="number" min="0.01" step="0.01" value="50" required />
+                <input id="amount_usdc" name="amount_usdc" type="number" min="0.01" step="0.01" placeholder="Amount in USDC" required />
                 <button style="margin-top: 18px; width: 100%;">Create secure escrow</button>
               </form>
             </article>
