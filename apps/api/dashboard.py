@@ -1050,17 +1050,40 @@ def _css() -> str:
       font-weight: 800;
     }
     @media (max-width: 980px) {
+      html, body { overflow-x: hidden; }
       header { align-items: flex-start; flex-direction: column; padding: 16px 20px; }
       .shell { padding: 24px 16px; }
       .hero, .workspace, .ops-grid, .feature-grid, .profile-metrics, .commerce-grid, .grid, .grid.two, .facts, .dashboard-shell, .section-grid, .case-flow {
         grid-template-columns: 1fr !important;
       }
+      [style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
       aside, .side-rail { position: static !important; }
-      .side-rail { display: none; }
+      .side-rail {
+        display: flex; flex-direction: column; height: auto;
+        border-right: none; border-bottom: 1px solid var(--line);
+      }
+      .side-brand, .side-footer { display: none; }
+      .side-nav {
+        display: flex; flex-direction: row; flex-wrap: nowrap;
+        gap: 8px; padding: 12px 16px; overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .side-rail a { white-space: nowrap; flex: 0 0 auto; padding: 9px 14px; font-size: 14px; }
+      .dash-main { padding: 24px 16px; }
       .dash-topbar { align-items: flex-start; flex-direction: column; }
       .hero h1 { font-size: 34px; }
       .section-head { align-items: flex-start; flex-direction: column; }
       .tx-row { grid-template-columns: 1fr; }
+      img, video, pre, table { max-width: 100%; height: auto; }
+    }
+    @media (max-width: 600px) {
+      h1 { font-size: 26px; }
+      h2 { font-size: 22px; }
+      .hero h1 { font-size: 28px; }
+      .shell { padding: 18px 12px; }
+      .dash-main { padding: 18px 12px; }
+      .dash-topbar .button { width: 100%; }
+      .metric-card strong { font-size: 22px; }
     }
     """
 
