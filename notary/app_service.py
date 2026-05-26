@@ -40,6 +40,7 @@ from notary.services.arc import ArcClient, TRANSFER_TOPIC, USDC_TOKEN_ADDRESS
 from notary.services.circle_agent import CircleAgentClient
 from notary.services.circle_wallets_api import CircleDeveloperWalletClient
 from notary.services.evidence_vault import EvidenceVault
+from notary.services.image_scanner import ClaudeImageScanner
 from notary.services.obligation_extractor import GroqObligationExtractor
 from notary.services.escrow import NotaryEscrowClient
 from notary.services.speechmatics import SpeechmaticsClient
@@ -122,6 +123,15 @@ class NotaryAppService:
         self.vault = EvidenceVault(
             root=settings.evidence_vault_local_dir,
             passphrase=settings.evidence_vault_passphrase,
+        )
+        self.image_scanner = (
+            ClaudeImageScanner(
+                api_key=settings.claude_api_key,
+                model=settings.claude_model,
+                api_base_url=settings.claude_api_base_url,
+            )
+            if settings.claude_api_key
+            else None
         )
 
     async def feature_coverage(self) -> dict[str, Any]:
@@ -1375,6 +1385,8 @@ class NotaryAppService:
         submitter_type: str = "human",
         evidence_ref: str | None = None,
         privacy_mode: PrivacyMode = PrivacyMode.PROTECTED,
+        image_path: Path | None = None,
+        image_content_type: str | None = None,
     ) -> dict[str, Any]:
         case_data = self.store.get("cases", case_id)
         if not case_data:
@@ -1415,6 +1427,42 @@ class NotaryAppService:
             if not token:
                 return {"error": "submitter_not_authorized", "caseId": case_id}
 
+        evidence_type = "case_evidence"
+        image_metadata: dict[str, Any] = {}
+        if image_path is not None:
+            if self.image_scanner is None:
+                return {
+                    "error": "image_scanning_unavailable",
+                    "caseId": case_id,
+                    "message": "Set CLAUDE_API_KEY to enable image evidence scanning.",
+                }
+            try:
+                scan = await self.image_scanner.scan(
+                    file_path=image_path,
+                    media_type=image_content_type or "image/png",
+                    instruction=case.instruction,
+                )
+            except Exception as exc:
+                return {"error": "image_scan_failed", "caseId": case_id, "message": str(exc)}
+            stored_image = self.vault.store_file(image_path, privacy_mode)
+            self.store.put("vault_records", stored_image["evidenceId"], stored_image)
+            evidence_type = "case_evidence_image"
+            evidence_ref = evidence_ref or stored_image["encryptedUri"]
+            image_metadata = {
+                "imageScanModel": scan.get("model"),
+                "imageVaultEvidenceId": stored_image["evidenceId"],
+                "imageHash": stored_image.get("rawHash"),
+            }
+            scan_block = f"[NOTARY image scan]\n{scan.get('description', '').strip()}"
+            evidence_text = "\n\n".join(part for part in [evidence_text.strip(), scan_block] if part)
+
+        if not evidence_text.strip():
+            return {
+                "error": "missing_evidence",
+                "caseId": case_id,
+                "message": "Provide evidence text or upload an image for the agent to scan.",
+            }
+
         case.status = "under_review"
         case.updated_at = utc_now()
         self.store.put("cases", case.case_id, case.model_dump(mode="json"))
@@ -1423,7 +1471,7 @@ class NotaryAppService:
             instruction=case.instruction,
             evidence_text=evidence_text,
             evidence_ref=evidence_ref,
-            evidence_type="case_evidence",
+            evidence_type=evidence_type,
             payer_identity=case.payer_identity,
             payee_identity=case.payee_identity,
             approver_identity=case.approver_identity,
@@ -1449,6 +1497,7 @@ class NotaryAppService:
                 "approverUsername": case.metadata.get("approverUsername"),
                 "creator_wallet": case.metadata.get("payerWallet"),
                 "executor_agent_wallet_id": case.metadata.get("executorAgentWalletId"),
+                **image_metadata,
             },
         )
         try:

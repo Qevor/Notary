@@ -2208,7 +2208,7 @@ def render_case_evidence(
         {funding_notice}
         {error_notice}
         
-        <form method="post" action="/cases/{escape(case.get("case_id"))}/evidence" style="border-top: 1px dashed var(--line); padding-top: 20px;">
+        <form method="post" action="/cases/{escape(case.get("case_id"))}/evidence" enctype="multipart/form-data" style="border-top: 1px dashed var(--line); padding-top: 20px;">
           {hidden_token}
           <label for="submitter_identity">Your Username</label>
           <p class="panel-copy" style="margin-top: -4px; margin-bottom: 8px; font-size: 12px;">Confirm your NOTARY identity (e.g. <i>@jennycruzy</i> or <i>@yourhandle</i>).</p>
@@ -2225,8 +2225,14 @@ def render_case_evidence(
             Provide objective proof (e.g. commit hashes, PR merge links, file paths). 
             Include positive action terms like <strong>"completed"</strong>, <strong>"delivered"</strong>, or <strong>"approved"</strong> to help NOTARY assess whether release is justified.
           </p>
-          <textarea id="evidence_text" name="evidence_text" required placeholder="Paste your links, commits, or signed approval statements here..." {disabled}></textarea>
-          
+          <textarea id="evidence_text" name="evidence_text" placeholder="Paste your links, commits, or signed approval statements here..." {disabled}></textarea>
+
+          <label for="evidence_image" style="margin-top: 14px;">Image evidence (optional)</label>
+          <p class="panel-copy" style="margin-top: -4px; margin-bottom: 8px; font-size: 12px; color: var(--green);">
+            Upload a photo or screenshot (receipt, delivery proof, completed work). NOTARY scans the image and folds the result into its ruling. Provide text, an image, or both.
+          </p>
+          <input id="evidence_image" name="image" type="file" accept="image/png,image/jpeg,image/gif,image/webp" {disabled} />
+
           <button style="margin-top: 20px; width: 100%;" {disabled}>Submit &amp; Verify Proof</button>
         </form>
       </section>

@@ -359,8 +359,17 @@ async def submit_case_evidence_ui(
     token: str | None = Form(default=None),
     submitter_identity: str = Form(...),
     submitter_type: str = Form(default="human"),
-    evidence_text: str = Form(...),
+    evidence_text: str = Form(default=""),
+    image: UploadFile | None = File(default=None),
 ) -> RedirectResponse:
+    image_path: Path | None = None
+    image_content_type: str | None = None
+    if image is not None and image.filename:
+        upload_dir = Path("media/uploads")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        image_path = upload_dir / image.filename
+        image_path.write_bytes(await image.read())
+        image_content_type = image.content_type or "image/png"
     try:
         result = await get_app_service().submit_case_evidence(
             case_id=case_id,
@@ -368,6 +377,8 @@ async def submit_case_evidence_ui(
             evidence_text=evidence_text,
             submitter_identity=submitter_identity,
             submitter_type=submitter_type,
+            image_path=image_path,
+            image_content_type=image_content_type,
         )
     except Exception as exc:
         return RedirectResponse(
