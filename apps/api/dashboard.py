@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from html import escape
 import json
+import os
 from typing import Any
+from urllib.parse import quote
 
 
 def _short(value: Any, length: int = 18) -> str:
@@ -35,6 +37,32 @@ def _tone(item: dict[str, Any]) -> str:
 
 def _badge(text: str, tone: str = "neutral") -> str:
     return f'<span class="badge {tone}">{escape(text)}</span>'
+
+
+def _arc_explorer_base_url() -> str:
+    return os.getenv("ARC_EXPLORER_BASE_URL", "https://testnet.arcscan.app").rstrip("/")
+
+
+def _arc_search_url(value: Any) -> str:
+    return f"{_arc_explorer_base_url()}/search?q={quote(str(value or ''))}"
+
+
+def _arc_tx_url(value: Any) -> str:
+    return f"{_arc_explorer_base_url()}/tx/{quote(str(value or ''))}"
+
+
+def _arc_hash_link(value: Any, *, tx: bool = False, length: int = 30) -> str:
+    raw = str(value or "")
+    if not raw:
+        return "<code>none</code>"
+    url = _arc_tx_url(raw) if tx else _arc_search_url(raw)
+    label = escape(_short(raw, length))
+    title = escape(raw)
+    return (
+        f'<a href="{escape(url)}" target="_blank" rel="noopener noreferrer" '
+        f'title="{title}" style="color: var(--green); text-decoration: underline; text-underline-offset: 3px;">'
+        f"<code>{label}</code></a>"
+    )
 
 
 def _css() -> str:
@@ -1139,6 +1167,8 @@ def _record_cards(items: list[dict[str, Any]], *, limit: int | None = None, comp
         precedent_list = item.get("precedentRefs", []) or item.get("precedent_refs", []) or []
         precedent = ", ".join(precedent_list) or "none"
         reasoning = escape(str(item.get("reasoningTrace") or item.get("reasoning_trace") or "No reasoning trace recorded."))
+        trace_hash = item.get("reasoningTraceHash") or item.get("reasoning_trace_hash")
+        arc_tx_hash = item.get("arcTxHash") or item.get("arc_tx_hash")
         reversal = item.get("reversal") or {}
         reversal_note = ""
         if item.get("reversed") or item.get("supersedes"):
@@ -1151,10 +1181,11 @@ def _record_cards(items: list[dict[str, Any]], *, limit: int | None = None, comp
             details = f"""
             <details style="margin-top: 14px;">
               <summary style="font-size: 13px; color: var(--primary); font-weight: 600; cursor: pointer; user-select: none;">View reasoning and hashes</summary>
-              <div class="facts" style="margin-top: 12px; margin-bottom: 12px;">
+              <div class="facts" style="margin-top: 12px; margin-bottom: 12px; grid-template-columns: repeat(4, 1fr);">
                 <div class="fact"><span>Deliverable</span><strong>{_text(obligation.get("deliverable"))}</strong></div>
                 <div class="fact"><span>Acceptance</span><strong>{_text(obligation.get("acceptance_criterion"))}</strong></div>
-                <div class="fact"><span>Trace hash</span><code>{escape(_short(item.get("reasoningTraceHash") or item.get("reasoning_trace_hash"), 30))}</code></div>
+                <div class="fact"><span>Trace hash</span>{_arc_hash_link(trace_hash, length=30)}</div>
+                <div class="fact"><span>Arc tx</span>{_arc_hash_link(arc_tx_hash, tx=True, length=30)}</div>
               </div>
               <pre style="background: rgba(0,0,0,0.25); padding: 16px; border-radius: 8px; border: 1px solid var(--line); font-size: 12.5px; overflow-x: auto; white-space: pre-wrap; font-family: monospace; color: var(--muted);">{reasoning}</pre>
             </details>
@@ -1384,7 +1415,7 @@ def _commerce_panels(state: dict[str, Any], profile_username: str) -> str:
           <p>Every unlock records buyer, trace hash, amount, and payment proof.</p>
           <div class="facts" style="grid-template-columns: 1fr; margin-top: 14px;">
             <div class="fact"><span>Access ID</span><code>{escape(_short(latest_peek.get("accessId") or "none yet", 34))}</code></div>
-            <div class="fact"><span>Trace hash</span><code>{escape(_short(latest_peek.get("reasoningTraceHash") or "awaiting unlock", 34))}</code></div>
+            <div class="fact"><span>Trace hash</span>{_arc_hash_link(latest_peek.get("reasoningTraceHash"), length=34) if latest_peek.get("reasoningTraceHash") else "<code>awaiting unlock</code>"}</div>
             <div class="fact"><span>Payment</span><strong>{escape(str(latest_peek.get("amountUSDC") or 0))} USDC</strong></div>
           </div>
         </article>
@@ -1409,7 +1440,7 @@ def _commerce_panels(state: dict[str, Any], profile_username: str) -> str:
           <span class="badge good">Yield</span><h3>Idle balance rewards</h3><p>Sponsored reserve stays live while USYC allocation waits for allowlist/provider execution.</p>
           <div class="facts" style="grid-template-columns: 1fr; margin: 14px 0;"><div class="fact"><span>Reserve</span><code>{escape(_short(reserve.get("wallet"), 34))}</code></div><div class="fact"><span>Target APY</span><strong>{escape(str((reserve.get("targetApyBps") or 0) / 100))}%</strong></div><div class="fact"><span>USYC</span><strong>{escape(str(usyc.get("status", "awaiting_allowlist")))}</strong></div></div>
           <form method="post" action="/ui/treasury/yield/process"><label for="yield_target">Target username / notary ID</label><input id="yield_target" name="target_identity" value="{escape(default_buyer)}" /><label style="display: flex; gap: 8px; align-items: center; margin-top: 10px;"><input name="force" type="checkbox" value="true" /> Force payout check</label><button style="width: 100%; margin-top: 12px;">Process yield</button></form>
-          <p class="status-line" style="margin-top: 10px;">Latest payout: {escape(_short(latest_yield.get("arcTxHash") or "none yet", 34))}</p>
+          <p class="status-line" style="margin-top: 10px;">Latest payout: {_arc_hash_link(latest_yield.get("arcTxHash"), tx=True, length=34) if latest_yield.get("arcTxHash") else "none yet"}</p>
         </article>
       </div>
     </section>
