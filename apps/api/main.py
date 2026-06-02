@@ -342,7 +342,7 @@ async def ui_create_case(
     user = _require_ui_user(request)
     identity = str(user.get("email") or user.get("id"))
     try:
-        await get_app_service().create_conditional_case(
+        case = await get_app_service().create_conditional_case(
             created_by_identity=identity,
             created_by_type="human",
             payer_identity=payer_identity,
@@ -356,7 +356,17 @@ async def ui_create_case(
         )
     except Exception as exc:
         return RedirectResponse(f"/app/escrow?error={quote(_ui_error(exc))}", status_code=303)
-    return RedirectResponse("/app/escrow?message=Escrow%20case%20created", status_code=303)
+    status = str(case.get("status") or "")
+    auto_status = str((case.get("metadata", {}) or {}).get("autoFundingStatus") or "")
+    if status == "funded_awaiting_evidence":
+        message = "Escrow created and funded automatically. Evidence portal is open."
+    elif auto_status == "submitted":
+        message = "Escrow created. Funding transaction is pending Arc confirmation."
+    elif auto_status == "failed":
+        message = "Escrow created, but automatic reserve funding failed. Fund the payer wallet or use manual Arc funding."
+    else:
+        message = "Escrow case created"
+    return RedirectResponse(f"/app/escrow?message={quote(message)}", status_code=303)
 
 
 @app.get("/cases/{case_id}/evidence", response_class=HTMLResponse)

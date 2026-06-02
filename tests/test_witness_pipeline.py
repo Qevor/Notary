@@ -2,6 +2,7 @@ from notary.crypto.eip712 import EIP712Signer
 from notary.app_service import NotaryAppService
 from notary.config import Settings
 from notary.models.schemas import PartyType, Ruling, VerdictOutcome, WitnessIntakeRequest
+from notary.services.circle_wallets_api import CircleDeveloperWalletClient
 from notary.witness_pipeline import WitnessPipeline
 
 
@@ -366,6 +367,125 @@ async def test_registered_users_can_create_local_checkout_case_without_supabase(
     assert case["metadata"]["payerWallet"] == payer["wallet"]
     assert case["metadata"]["payeeWallet"] == payee["wallet"]
     assert case["metadata"]["executorEscrowAddress"] == "0x0000000000000000000000000000000000000c33"
+
+
+async def test_conditional_case_auto_funds_from_payer_circle_wallet(tmp_path, monkeypatch) -> None:
+    reserve_wallet = "0x0000000000000000000000000000000000000c33"
+    payer_wallet = "0x0000000000000000000000000000000000000a11"
+    payee_wallet = "0x0000000000000000000000000000000000000b22"
+    tx_hash = "0x" + "7" * 64
+    settings = Settings(
+        notary_db_path=tmp_path / "notary.sqlite3",
+        notary_env="development",
+        notary_escrow_demo_mode=False,
+        notary_escrow_reserve_wallet=reserve_wallet,
+        circle_api_key="TEST_API_KEY:abc:def",
+        circle_entity_secret="1" * 64,
+        circle_wallet_set_id="wallet-set-1",
+    )
+    service = NotaryAppService(settings)
+    service.store.put(
+        "profiles",
+        "payer",
+        {
+            "username": "payer",
+            "wallet": payer_wallet,
+            "circle_wallet_id": "circle-dev-wallet-payer",
+        },
+    )
+    service.store.put(
+        "profiles",
+        "payee",
+        {
+            "username": "payee",
+            "wallet": payee_wallet,
+            "circle_wallet_id": "circle-dev-wallet-payee",
+        },
+    )
+    service.store.put(
+        "agent_wallets",
+        "circle-dev-wallet-payer",
+        {
+            "id": "circle-dev-wallet-payer",
+            "profile_wallet": payer_wallet,
+            "wallet_address": payer_wallet,
+            "chain": settings.circle_chain,
+            "status": "active",
+            "executor_mode": "escrow",
+            "escrow_address": reserve_wallet,
+            "attestation_mode": "attest",
+        },
+    )
+
+    calls = []
+
+    def fake_transfer_usdc(
+        self,
+        *,
+        wallet_id,
+        wallet_address,
+        to_address,
+        amount_usdc,
+        ref_id=None,
+    ):
+        calls.append(
+            {
+                "wallet_id": wallet_id,
+                "wallet_address": wallet_address,
+                "to_address": to_address,
+                "amount_usdc": amount_usdc,
+                "ref_id": ref_id,
+            }
+        )
+        return {
+            "txHash": tx_hash,
+            "status": "complete",
+            "provider": "circle_developer_wallets",
+            "demo": False,
+        }
+
+    class FakeArc:
+        async def verify_usdc_transfer(self, *, tx_hash, from_address, to_address, amount_usdc):
+            assert tx_hash == "0x" + "7" * 64
+            assert from_address == payer_wallet
+            assert to_address == reserve_wallet
+            assert amount_usdc == 7
+            return {
+                "txHash": tx_hash,
+                "status": "verified",
+                "from": from_address,
+                "to": to_address,
+                "amountUSDC": amount_usdc,
+            }
+
+    monkeypatch.setattr(CircleDeveloperWalletClient, "transfer_usdc", fake_transfer_usdc)
+    service.arc = FakeArc()
+
+    case = await service.create_conditional_case(
+        created_by_identity="payer",
+        created_by_type="human",
+        payer_identity="payer",
+        payee_identity="payee",
+        approver_identity="payer",
+        payer_type="human",
+        payee_type="human",
+        approver_type="human",
+        instruction="Pay payee 7 USDC after the copy package is approved.",
+        amount_usdc=7,
+    )
+
+    assert case["status"] == "funded_awaiting_evidence"
+    assert case["metadata"]["fundingStatus"] == "funded"
+    assert case["metadata"]["fundingEvent"]["fundingMode"] == "automatic"
+    assert case["metadata"]["fundingEvent"]["arcTxHash"] == tx_hash
+    assert "/cases/" in case["metadata"]["evidenceUploadPath"]
+    assert calls[0]["wallet_id"] == "circle-dev-wallet-payer"
+    assert calls[0]["wallet_address"] == payer_wallet
+    assert calls[0]["to_address"] == reserve_wallet
+    assert calls[0]["amount_usdc"] == 7
+    receipt = service.store.get("arc_receipts", tx_hash)
+    assert receipt["status"] == "verified_funding"
+    assert receipt["fundingMode"] == "automatic"
 
 
 async def test_arc_funding_must_verify_before_case_unlocks(tmp_path) -> None:

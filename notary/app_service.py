@@ -1311,7 +1311,75 @@ class NotaryAppService:
         case.escrow_payment_url = payment.get("url")
         case.escrow_provider = payment.get("provider")
         self.store.put("cases", case.case_id, case.model_dump(mode="json"))
-        return case.model_dump(mode="json") | {"evidenceInviteToken": token}
+        case_data = await self._auto_fund_conditional_case(case, payment)
+        return case_data | {"evidenceInviteToken": token}
+
+    async def _auto_fund_conditional_case(
+        self,
+        case: NotaryCase,
+        payment: dict[str, Any],
+    ) -> dict[str, Any]:
+        payment_reference = str(case.escrow_payment_reference or "")
+        reserve_wallet = str(case.metadata.get("executorEscrowAddress") or "")
+        if self.settings.notary_demo_mode or not payment_reference or not reserve_wallet:
+            return case.model_dump(mode="json")
+
+        case.metadata["autoFundingStatus"] = "attempting"
+        case.metadata["autoFundingStartedAt"] = utc_now().isoformat()
+        self.store.put("cases", case.case_id, case.model_dump(mode="json"))
+
+        try:
+            funding = await self._pay_or_verify_usdc(
+                payer_identity=case.payer_identity,
+                recipient_address=reserve_wallet,
+                amount_usdc=case.amount_usdc,
+                tx_hash=None,
+                purpose=f"NOTARY escrow reserve {payment_reference}",
+            )
+        except Exception as exc:
+            case.metadata["autoFundingStatus"] = "failed"
+            case.metadata["autoFundingError"] = str(exc)
+            case.metadata["fundingStatus"] = "awaiting_funding"
+            case.updated_at = utc_now()
+            self.store.put("cases", case.case_id, case.model_dump(mode="json"))
+            return case.model_dump(mode="json")
+
+        tx_hash = str(funding.get("txHash") or "")
+        if tx_hash.startswith("0x") and funding.get("verification"):
+            funded = self.mark_case_funded(
+                payment_reference,
+                {
+                    "status": "funded",
+                    "fundingMode": "automatic",
+                    "arcTxHash": tx_hash,
+                    "autoFunding": funding,
+                    "verification": funding.get("verification"),
+                    "payment": payment,
+                },
+            )
+            if funded:
+                self.store.put(
+                    "arc_receipts",
+                    tx_hash,
+                    {
+                        "txHash": tx_hash,
+                        "status": "verified_funding",
+                        "contract": "USDC",
+                        "method": "Transfer",
+                        "payload": funding.get("verification"),
+                        "caseId": case.case_id,
+                        "escrowReference": payment_reference,
+                        "fundingMode": "automatic",
+                    },
+                )
+                return funded
+
+        case.metadata["autoFundingStatus"] = "submitted"
+        case.metadata["autoFunding"] = funding
+        case.metadata["fundingStatus"] = "pending_arc_confirmation"
+        case.updated_at = utc_now()
+        self.store.put("cases", case.case_id, case.model_dump(mode="json"))
+        return case.model_dump(mode="json")
 
     def mark_case_funded(self, payment_reference: str, payload: dict[str, Any]) -> dict[str, Any] | None:
         funded_statuses = {
