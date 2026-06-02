@@ -11,7 +11,7 @@ from urllib.parse import quote
 from html import escape
 
 from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 
 from apps.api.dashboard import (
     render_case_evidence,
@@ -79,6 +79,10 @@ def _require_ui_user(request: Request) -> dict:
     if not user:
         raise HTTPException(status_code=401, detail="Sign in required")
     return user
+
+
+def _secure_cookie() -> bool:
+    return get_settings().notary_env == "production"
 
 
 def _user_state(state: dict, user: dict) -> dict:
@@ -166,6 +170,21 @@ async def health() -> dict[str, str]:
     return {"status": "ok", "service": "notary"}
 
 
+@app.head("/")
+async def landing_head() -> Response:
+    return Response(status_code=200)
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+async def robots() -> PlainTextResponse:
+    return PlainTextResponse("User-agent: *\nAllow: /\n")
+
+
+@app.get("/favicon.ico")
+async def favicon() -> Response:
+    return Response(status_code=204)
+
+
 @app.get("/", response_class=HTMLResponse)
 async def landing(request: Request) -> HTMLResponse:
     service = get_app_service()
@@ -235,7 +254,7 @@ async def user_profile_page(
 
 @app.get("/profile", response_class=HTMLResponse)
 async def own_profile_redirect(request: Request) -> RedirectResponse:
-    user = _get_user_from_session(request)
+    user = _read_session(request)
     if not user:
         return RedirectResponse("/login?error=Please%20sign%20in%20to%20view%20your%20profile.", status_code=303)
     service = get_app_service()
@@ -394,21 +413,23 @@ async def submit_case_evidence_ui(
 
 
 @app.post("/api/cases")
-async def api_create_case(request: WitnessIntakeRequest) -> dict:
-    if not request.payer_identity or not request.payee_identity or not request.amount_usdc:
+async def api_create_case(request: Request, payload: WitnessIntakeRequest) -> dict:
+    _require_ui_user(request)
+    case_request = payload
+    if not case_request.payer_identity or not case_request.payee_identity or not case_request.amount_usdc:
         raise HTTPException(status_code=400, detail="payer_identity, payee_identity, and amount_usdc are required")
     try:
         return await get_app_service().create_conditional_case(
-            created_by_identity=request.payer_identity,
-            created_by_type=request.payer_type.value,
-            payer_identity=request.payer_identity,
-            payee_identity=request.payee_identity,
-            approver_identity=request.approver_identity or request.payer_identity,
-            payer_type=request.payer_type.value,
-            payee_type=request.payee_type.value,
-            approver_type=request.approver_type.value,
-            instruction=request.instruction,
-            amount_usdc=request.amount_usdc,
+            created_by_identity=case_request.payer_identity,
+            created_by_type=case_request.payer_type.value,
+            payer_identity=case_request.payer_identity,
+            payee_identity=case_request.payee_identity,
+            approver_identity=case_request.approver_identity or case_request.payer_identity,
+            payer_type=case_request.payer_type.value,
+            payee_type=case_request.payee_type.value,
+            approver_type=case_request.approver_type.value,
+            instruction=case_request.instruction,
+            amount_usdc=case_request.amount_usdc,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -468,7 +489,7 @@ async def auth_login(
         SESSION_COOKIE,
         cookie,
         httponly=True,
-        secure=False,
+        secure=_secure_cookie(),
         samesite="lax",
         max_age=24 * 3600,
     )
@@ -504,7 +525,7 @@ async def auth_register(
         SESSION_COOKIE,
         cookie,
         httponly=True,
-        secure=False,
+        secure=_secure_cookie(),
         samesite="lax",
         max_age=24 * 3600,
     )
@@ -544,7 +565,7 @@ async def auth_dev_login(
         SESSION_COOKIE,
         cookie,
         httponly=True,
-        secure=False,
+        secure=_secure_cookie(),
         samesite="lax",
         max_age=24 * 3600,
     )
@@ -596,7 +617,8 @@ async def ui_update_username(
 
 
 @app.post("/notaries")
-async def create_notary(label: str | None = None) -> dict:
+async def create_notary(request: Request, label: str | None = None) -> dict:
+    _require_ui_user(request)
     return await get_app_service().create_notary(label)
 
 
@@ -606,12 +628,14 @@ async def list_notaries() -> list[dict]:
 
 
 @app.get("/circle/status")
-async def circle_status() -> dict:
+async def circle_status(request: Request) -> dict:
+    _require_ui_user(request)
     return await get_app_service().circle_status()
 
 
 @app.get("/circle/wallet")
-async def circle_wallet_summary() -> dict:
+async def circle_wallet_summary(request: Request) -> dict:
+    _require_ui_user(request)
     return await get_app_service().circle_wallet_summary()
 
 
@@ -631,20 +655,28 @@ async def feature_coverage() -> dict:
 
 
 @app.post("/circle/login/init")
-async def circle_login_init(email: str | None = None) -> dict:
+async def circle_login_init(request: Request, email: str | None = None) -> dict:
+    _require_ui_user(request)
     return await get_app_service().circle_login_init(email)
 
 
 @app.post("/circle/login/complete")
-async def circle_login_complete(request_id: str = Form(...), otp: str = Form(...)) -> dict:
+async def circle_login_complete(
+    request: Request,
+    request_id: str = Form(...),
+    otp: str = Form(...),
+) -> dict:
+    _require_ui_user(request)
     return await get_app_service().circle_login_complete(request_id, otp)
 
 
 @app.post("/circle/gateway/deposit")
 async def circle_gateway_deposit(
+    request: Request,
     amount_usdc: float = Form(...),
     wallet_id: str | None = Form(default=None),
 ) -> dict:
+    _require_ui_user(request)
     return await get_app_service().prepare_circle_gateway_deposit(
         amount_usdc=amount_usdc,
         wallet_id=wallet_id or None,
@@ -653,6 +685,7 @@ async def circle_gateway_deposit(
 
 @app.post("/commerce/x402/data")
 async def x402_paid_data(
+    request: Request,
     description: str = Form(...),
     service_url: str = Form(...),
     max_usdc: float = Form(default=0.01),
@@ -661,6 +694,7 @@ async def x402_paid_data(
     request_body: str | None = Form(default=None),
     headers_json: str | None = Form(default=None),
 ) -> dict:
+    _require_ui_user(request)
     headers: list[str] = []
     if headers_json:
         try:
@@ -758,12 +792,14 @@ async def ui_reasoning_pay_to_peek(
 
 @app.post("/markets/predictions")
 async def create_prediction(
+    request: Request,
     question: str = Form(...),
     probability_bps: int = Form(...),
     horizon: str = Form(...),
     rationale: str = Form(...),
     notary_id: str | None = Form(default=None),
 ) -> dict:
+    _require_ui_user(request)
     return await get_app_service().create_prediction(
         question=question,
         probability_bps=probability_bps,
@@ -834,11 +870,13 @@ async def ui_buy_micro_share(
 
 @app.post("/agents/karma/checkpoint")
 async def karma_checkpoint(
+    request: Request,
     notary_id: str = Form(...),
     delta: int = Form(...),
     reason: str = Form(...),
     evidence_ref: str | None = Form(default=None),
 ) -> dict:
+    _require_ui_user(request)
     return await get_app_service().record_karma_checkpoint(
         notary_id=notary_id,
         delta=delta,
@@ -849,10 +887,12 @@ async def karma_checkpoint(
 
 @app.post("/agents/identity/erc8004")
 async def erc8004_identity(
+    request: Request,
     notary_id: str = Form(...),
     service_endpoint: str = Form(...),
     metadata_uri: str | None = Form(default=None),
 ) -> dict:
+    _require_ui_user(request)
     return await get_app_service().register_agent_identity_erc8004(
         notary_id=notary_id,
         service_endpoint=service_endpoint,
@@ -881,10 +921,12 @@ async def ui_erc8004_identity(
 
 @app.post("/agents/replicate")
 async def replicate_notary(
+    request: Request,
     parent_notary_id: str = Form(...),
     mutation_prompt: str = Form(...),
     min_karma: int = Form(default=0),
 ) -> dict:
+    _require_ui_user(request)
     return await get_app_service().replicate_notary(
         parent_notary_id=parent_notary_id,
         mutation_prompt=mutation_prompt,
@@ -913,10 +955,12 @@ async def ui_replicate_notary(
 
 @app.post("/treasury/usyc/intents")
 async def usyc_intent(
+    request: Request,
     notary_id: str = Form(...),
     amount_usdc: float = Form(...),
     tx_hash: str | None = Form(default=None),
 ) -> dict:
+    _require_ui_user(request)
     return await get_app_service().create_usyc_intent(
         notary_id=notary_id,
         amount_usdc=amount_usdc,
@@ -931,9 +975,11 @@ async def treasury_yield_status() -> dict:
 
 @app.post("/treasury/yield/process")
 async def treasury_yield_process(
+    request: Request,
     target_identity: str | None = Form(default=None),
     force: bool = Form(default=False),
 ) -> dict:
+    _require_ui_user(request)
     return await get_app_service().process_sponsored_yield(
         target_identity=target_identity or None,
         force=force,
@@ -958,7 +1004,8 @@ async def ui_treasury_yield_process(
 
 
 @app.post("/markets/arbitrage/analyze")
-async def arbitrage_analyze(payload: dict = Body(...)) -> dict:
+async def arbitrage_analyze(request: Request, payload: dict = Body(...)) -> dict:
+    _require_ui_user(request)
     return await get_app_service().analyze_arbitrage(
         base_asset=str(payload.get("base_asset") or payload.get("baseAsset") or "USDC"),
         quote_asset=str(payload.get("quote_asset") or payload.get("quoteAsset") or "USD"),
@@ -989,7 +1036,8 @@ async def ui_create_notary(request: Request, label: str = Form(default="")) -> R
 
 
 @app.post("/notaries/{notary_id}/register-onchain")
-async def register_notary_onchain(notary_id: str) -> dict:
+async def register_notary_onchain(request: Request, notary_id: str) -> dict:
+    _require_ui_user(request)
     return await get_app_service().register_notary_onchain(notary_id)
 
 
@@ -1046,26 +1094,30 @@ async def ui_circle_gateway_deposit(
 
 
 @app.post("/observations/cycle")
-async def submit_observation_and_run_cycle(observation: Observation) -> dict:
+async def submit_observation_and_run_cycle(request: Request, observation: Observation) -> dict:
+    _require_ui_user(request)
     return await get_app_service().run_cycle(observation)
 
 
 @app.post("/witness/obligations")
-async def submit_witness_obligation(request: WitnessIntakeRequest) -> dict:
+async def submit_witness_obligation(request: Request, payload: WitnessIntakeRequest) -> dict:
+    _require_ui_user(request)
     try:
-        return await get_app_service().submit_witness_obligation(request)
+        return await get_app_service().submit_witness_obligation(payload)
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/witness/rulings/{ruling_id}/dispute")
 async def dispute_witness_ruling(
+    request: Request,
     ruling_id: str,
     counter_evidence_text: str = Form(...),
     submitter_identity: str = Form(...),
     submitter_type: str = Form(default="human"),
     evidence_ref: str | None = Form(default=None),
 ) -> dict:
+    _require_ui_user(request)
     try:
         return await get_app_service().dispute_ruling(
             ruling_id,
@@ -1080,12 +1132,14 @@ async def dispute_witness_ruling(
 
 @app.post("/witness/rulings/{ruling_id}/reverse")
 async def reverse_witness_ruling(
+    request: Request,
     ruling_id: str,
     new_evidence_text: str = Form(...),
     submitter_identity: str = Form(...),
     submitter_type: str = Form(default="human"),
     evidence_ref: str | None = Form(default=None),
 ) -> dict:
+    _require_ui_user(request)
     try:
         return await get_app_service().reverse_ruling_with_new_evidence(
             ruling_id,
@@ -1100,12 +1154,14 @@ async def reverse_witness_ruling(
 
 @app.post("/witness/rulings/{ruling_id}/confirm")
 async def confirm_witness_ruling(
+    request: Request,
     ruling_id: str,
     party_identity: str = Form(...),
     party_type: str = Form(default="human"),
     outcome: str = Form(...),
     notes: str | None = Form(default=None),
 ) -> dict:
+    _require_ui_user(request)
     return get_app_service().confirm_ruling_outcome(
         ruling_id=ruling_id,
         party_identity=party_identity,
@@ -1450,7 +1506,12 @@ async def ui_upload_media(
 
 
 @app.post("/media/attest")
-async def attest_transcript(transcript_text: str, privacy_mode: PrivacyMode = PrivacyMode.PROTECTED) -> dict:
+async def attest_transcript(
+    request: Request,
+    transcript_text: str,
+    privacy_mode: PrivacyMode = PrivacyMode.PROTECTED,
+) -> dict:
+    _require_ui_user(request)
     return await get_app_service().ingest_transcript(transcript_text, privacy_mode)
 
 
@@ -1472,20 +1533,23 @@ async def ui_attest_transcript(
 
 
 @app.post("/escrow/payment-link")
-async def create_payment_link(request: EscrowPaymentLinkRequest) -> dict:
+async def create_payment_link(request: Request, payload: EscrowPaymentLinkRequest) -> dict:
+    _require_ui_user(request)
     try:
-        return await get_app_service().create_payment_link(request)
+        return await get_app_service().create_payment_link(payload)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/evidence/grants")
 async def grant_evidence_access(
+    request: Request,
     evidence_id: str = Form(...),
     grantee: str = Form(...),
     purpose: str = Form(...),
     disclosure_level: DisclosureLevel = Form(...),
 ) -> dict:
+    _require_ui_user(request)
     return get_app_service().grant_evidence_access(
         evidence_id=evidence_id,
         grantee=grantee,

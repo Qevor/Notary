@@ -12,6 +12,36 @@ def test_login_page_renders():
     assert "Register" in response.text
     assert "Password" in response.text
 
+
+def test_public_route_metadata_is_available():
+    assert client.head("/").status_code == 200
+    assert client.get("/robots.txt").text == "User-agent: *\nAllow: /\n"
+    assert client.get("/favicon.ico").status_code == 204
+
+
+def test_profile_shortcut_redirects_anonymous_users_to_login():
+    client.cookies.clear()
+    response = client.get("/profile", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/login")
+
+
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        ("/notaries", {}),
+        ("/circle/login/init", {}),
+        ("/commerce/x402/data", {"description": "test", "service_url": "https://example.com"}),
+        ("/treasury/yield/process", {}),
+        ("/markets/arbitrage/analyze", {"venues": []}),
+    ],
+)
+def test_operator_routes_require_sign_in(path, payload):
+    client.cookies.clear()
+    response = client.post(path, data=payload if path != "/markets/arbitrage/analyze" else None, json=payload if path == "/markets/arbitrage/analyze" else None)
+    assert response.status_code == 401
+
+
 @patch("apps.api.main.get_app_service")
 def test_register_user_success(mock_get_service):
     mock_service = mock_get_service.return_value

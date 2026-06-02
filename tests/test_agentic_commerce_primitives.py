@@ -176,6 +176,61 @@ async def test_agentic_commerce_primitives_are_operational(tmp_path):
 
 
 @pytest.mark.anyio
+async def test_public_coverage_hides_circle_operator_identity(tmp_path, monkeypatch):
+    settings = Settings(notary_db_path=tmp_path / "notary_coverage.sqlite3")
+    service = NotaryAppService(settings)
+
+    async def fake_circle_status():
+        return {
+            "data": {
+                "type": "agent",
+                "email": "operator@example.com",
+                "testnet": {"tokenStatus": "VALID", "expiresIn": "6d"},
+            }
+        }
+
+    monkeypatch.setattr(service, "circle_status", fake_circle_status)
+
+    coverage = await service.feature_coverage()
+    wallets = coverage["circle"]["agentWallets"]
+    assert wallets["authenticated"] is True
+    assert wallets["operatorSession"]["status"] == "VALID"
+    assert "operator@example.com" not in str(coverage)
+    assert "expiresIn" not in str(coverage)
+
+
+@pytest.mark.anyio
+async def test_sponsored_yield_does_not_repeat_unchanged_intent_validation(tmp_path, monkeypatch):
+    settings = Settings(
+        notary_db_path=tmp_path / "notary_yield_dedupe.sqlite3",
+        notary_yield_mode="sponsored_reserve",
+        notary_yield_reserve_private_key="1" * 64,
+        notary_yield_reserve_wallet="0x" + "4" * 40,
+        notary_yield_min_idle_usdc=1,
+    )
+    service = NotaryAppService(settings)
+    service.store.put(
+        "profiles",
+        "idleuser",
+        {"username": "idleuser", "wallet": "0x" + "a" * 40},
+    )
+
+    async def fake_get_usdc_balance(self, address, token_address=None):
+        return 5.0 if address == settings.notary_yield_reserve_wallet else 0.0
+
+    monkeypatch.setattr(ArcClient, "get_usdc_balance", fake_get_usdc_balance)
+
+    await service.process_sponsored_yield(target_identity="idleuser")
+    first = service.store.list("validations")
+    await service.process_sponsored_yield(target_identity="idleuser")
+    second = service.store.list("validations")
+
+    assert len(first) == 1
+    assert len(second) == 1
+    assert second[0]["kind"] == "sponsored_yield_intent"
+
+
+@pytest.mark.anyio
 async def test_live_commerce_primitives_auto_pay_with_circle(tmp_path, monkeypatch):
     settings = Settings(
         notary_db_path=tmp_path / "notary_live_commerce.sqlite3",

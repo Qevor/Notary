@@ -136,6 +136,16 @@ class NotaryAppService:
 
     async def feature_coverage(self) -> dict[str, Any]:
         """Return an executable product checklist for the hackathon scope."""
+        circle_status = await self.circle_status()
+        circle_data = circle_status.get("data", {}) if isinstance(circle_status, dict) else {}
+        circle_testnet = circle_data.get("testnet", {}) if isinstance(circle_data, dict) else {}
+        public_circle_status = {
+            "available": not bool(circle_status.get("error")),
+            "authenticated": bool(circle_data or circle_status.get("authenticated")),
+            "operatorSession": {
+                "status": circle_testnet.get("tokenStatus", circle_status.get("status", "unknown"))
+            },
+        }
         return {
             "arc": {
                 "finality": {"status": "external", "rpcUrlConfigured": bool(self.settings.arc_rpc_url)},
@@ -156,7 +166,7 @@ class NotaryAppService:
                 },
             },
             "circle": {
-                "agentWallets": await self.circle_status(),
+                "agentWallets": public_circle_status,
                 "gateway": {"enabled": self.settings.circle_gateway_enabled},
                 "paymaster": {"enabled": self.settings.circle_paymaster_enabled},
                 "x402": {"route": "/commerce/x402/pay-to-peek"},
@@ -935,12 +945,26 @@ class NotaryAppService:
                 "updatedAt": utc_now().isoformat(),
             }
             self.store.put("yield_positions", key, updated_position)
-            await self._commit_validation(
-                kind="sponsored_yield_intent",
-                subject_id=key,
-                payload=updated_position,
-                notary_id=self._default_notary_id(),
+            position_fields = (
+                "targetId",
+                "targetType",
+                "targetWallet",
+                "mode",
+                "usycStatus",
+                "idleBalanceUSDC",
+                "walletBalanceUSDC",
+                "lastStatus",
             )
+            position_changed = not position or any(
+                position.get(field) != updated_position.get(field) for field in position_fields
+            )
+            if position_changed:
+                await self._commit_validation(
+                    kind="sponsored_yield_intent",
+                    subject_id=key,
+                    payload=updated_position,
+                    notary_id=self._default_notary_id(),
+                )
             results.append(
                 updated_position
                 | {

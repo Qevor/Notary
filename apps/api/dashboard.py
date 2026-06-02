@@ -1718,7 +1718,7 @@ def render_feature_coverage(coverage: dict[str, Any], user: dict[str, Any] | Non
         <div class="section-head"><div><h2>Circle agentic commerce</h2><p>Wallets, Gateway, x402, Paymaster, and treasury paths.</p></div></div>
         <div class="feature-grid">
           {cards([
-            ("Agent wallets", f"Circle token status: {agent_wallets.get('data', {}).get('testnet', {}).get('tokenStatus', agent_wallets.get('status', 'configured'))}.", bool(agent_wallets)),
+            ("Agent wallets", f"Circle operator session: {agent_wallets.get('operatorSession', {}).get('status', 'unknown')}.", agent_wallets.get("available")),
             ("Gateway", "Unified balance and bridge deposit flow is exposed from the workspace.", circle.get("gateway", {}).get("enabled")),
             ("Bridge Kit and App Kit", "Users can deposit on supported chains and route USDC toward Arc.", bool(circle.get("bridgeAppKit", {}).get("route"))),
             ("Nanopayments / x402", "Paid data requests and Pay-to-Peek are wired through the x402 commerce path.", bool(circle.get("x402", {}).get("route"))),
