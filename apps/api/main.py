@@ -760,8 +760,8 @@ async def ui_x402_paid_data(
             headers=headers,
         )
     except Exception as exc:
-        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
-    return RedirectResponse("/app?message=x402%20paid%20data%20request%20recorded", status_code=303)
+        return RedirectResponse(f"/app/yield?error={quote(_ui_error(exc))}", status_code=303)
+    return RedirectResponse("/app/yield?message=x402%20paid%20data%20request%20recorded", status_code=303)
 
 
 @app.post("/commerce/reasoning/pay-to-peek")
@@ -796,8 +796,8 @@ async def ui_reasoning_pay_to_peek(
             tx_hash=tx_hash or None,
         )
     except Exception as exc:
-        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
-    return RedirectResponse("/app?message=Pay-to-Peek%20access%20recorded", status_code=303)
+        return RedirectResponse(f"/app/predictions?error={quote(_ui_error(exc))}", status_code=303)
+    return RedirectResponse("/app/predictions?message=Pay-to-Peek%20access%20recorded", status_code=303)
 
 
 @app.post("/markets/predictions")
@@ -838,8 +838,8 @@ async def ui_create_prediction(
             notary_id=notary_id or None,
         )
     except Exception as exc:
-        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
-    return RedirectResponse("/app?message=Prediction%20committed%20on%20Arc", status_code=303)
+        return RedirectResponse(f"/app/predictions?error={quote(_ui_error(exc))}", status_code=303)
+    return RedirectResponse("/app/predictions?message=Prediction%20committed%20on%20Arc", status_code=303)
 
 
 @app.post("/commerce/micro-shares")
@@ -874,8 +874,8 @@ async def ui_buy_micro_share(
             tx_hash=tx_hash or None,
         )
     except Exception as exc:
-        return RedirectResponse(f"/app?error={quote(_ui_error(exc))}", status_code=303)
-    return RedirectResponse("/app?message=Micro-share%20purchase%20recorded", status_code=303)
+        return RedirectResponse(f"/app/predictions?error={quote(_ui_error(exc))}", status_code=303)
+    return RedirectResponse("/app/predictions?message=Micro-share%20purchase%20recorded", status_code=303)
 
 
 @app.post("/agents/karma/checkpoint")

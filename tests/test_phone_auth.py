@@ -42,6 +42,72 @@ def test_operator_routes_require_sign_in(path, payload):
     assert response.status_code == 401
 
 
+@pytest.mark.parametrize(
+    ("path", "payload", "service_method", "expected_location"),
+    [
+        (
+            "/ui/commerce/pay-to-peek",
+            {"ruling_id": "ruling_1", "buyer_identity": "@testuser", "amount_usdc": "0.01", "tx_hash": "0xabc"},
+            "create_reasoning_pay_to_peek",
+            "/app/predictions?message=Pay-to-Peek%20access%20recorded",
+        ),
+        (
+            "/ui/commerce/micro-shares",
+            {"prediction_id": "pred_1", "buyer_identity": "@testuser", "amount_usdc": "0.25", "tx_hash": "0xdef"},
+            "buy_micro_share",
+            "/app/predictions?message=Micro-share%20purchase%20recorded",
+        ),
+        (
+            "/ui/markets/predictions",
+            {"question": "Will this test pass?", "probability_bps": "7000", "horizon": "7d", "rationale": "Regression test"},
+            "create_prediction",
+            "/app/predictions?message=Prediction%20committed%20on%20Arc",
+        ),
+        (
+            "/ui/commerce/x402/data",
+            {"description": "paid dataset", "service_url": "https://example.com/x402", "max_usdc": "0.01"},
+            "paid_data_service_request",
+            "/app/yield?message=x402%20paid%20data%20request%20recorded",
+        ),
+    ],
+)
+@patch("apps.api.main.get_app_service")
+@patch("apps.api.main._require_ui_user", return_value={"id": "testuser", "email": "testuser@notary.local", "role": "user"})
+def test_ui_commerce_actions_return_to_their_dashboard_section(
+    mock_require_user,
+    mock_get_service,
+    path,
+    payload,
+    service_method,
+    expected_location,
+):
+    client.cookies.clear()
+    mock_service = mock_get_service.return_value
+    setattr(mock_service, service_method, AsyncMock(return_value={}))
+
+    response = client.post(path, data=payload, follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == expected_location
+
+
+@patch("apps.api.main.get_app_service")
+@patch("apps.api.main._require_ui_user", return_value={"id": "testuser", "email": "testuser@notary.local", "role": "user"})
+def test_ui_pay_to_peek_errors_stay_on_predictions(mock_require_user, mock_get_service):
+    client.cookies.clear()
+    mock_service = mock_get_service.return_value
+    mock_service.create_reasoning_pay_to_peek = AsyncMock(side_effect=ValueError("missing Arc payment"))
+
+    response = client.post(
+        "/ui/commerce/pay-to-peek",
+        data={"ruling_id": "ruling_1", "buyer_identity": "@testuser", "amount_usdc": "0.01"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/app/predictions?error=missing%20Arc%20payment")
+
+
 @patch("apps.api.main.get_app_service")
 def test_register_user_success(mock_get_service):
     mock_service = mock_get_service.return_value
@@ -124,6 +190,7 @@ def test_dev_login_sandbox_phone():
 
 @patch("apps.api.main.get_app_service")
 def test_update_username_success(mock_get_service):
+    client.cookies.clear()
     mock_service = mock_get_service.return_value
     mock_service.change_username = AsyncMock(return_value={
         "username": "newtestuser",
@@ -163,6 +230,7 @@ def test_update_username_unauthorized():
 
 @patch("apps.api.main.get_app_service")
 def test_update_username_already_changed(mock_get_service):
+    client.cookies.clear()
     mock_service = mock_get_service.return_value
     mock_service.change_username = AsyncMock(side_effect=ValueError("You can only change your username once."))
     
