@@ -1446,16 +1446,17 @@ def _commerce_panels(state: dict[str, Any], profile_username: str) -> str:
     </section>
 
     <section id="data" class="section-card app-view">
-      <div class="section-head"><div><div class="eyebrow">Paid Data &amp; Treasury</div><h2>x402 intelligence and yield controls</h2><p>External data purchases and idle capital rewards are displayed as their own operating rails.</p></div></div>
+      <div class="section-head"><div><div class="eyebrow">Paid Data &amp; Treasury</div><h2>Buy agent data and manage yield</h2><p>Let NOTARY pay for external intelligence sources, then keep idle USDC visible in the treasury rail.</p></div></div>
       <div class="section-grid">
         <article class="status-card">
-          <span class="badge warn">x402</span><h3>Paid data request</h3><p>Use Circle's paid-service flow for external intelligence sources.</p>
+          <span class="badge warn">Paid data</span><h3>Buy external data for NOTARY</h3><p>Use this when the witness swarm needs a paid feed, API, oracle, research source, or market signal before making a ruling or prediction.</p>
+          <p class="status-line">Paste a seller's x402 URL. NOTARY pays up to your USDC limit, records the request, and can use the response as evidence or market intelligence.</p>
           <form method="post" action="/ui/commerce/x402/data" style="margin-top: 16px;">
-            <label for="x402_description">Request description</label><input id="x402_description" name="description" value="Market intelligence request" required />
-            <label for="service_url">x402 service URL</label><input id="service_url" name="service_url" placeholder="https://seller.example/x402/feed" required />
-            <div class="split"><div><label for="x402_max">Max USDC</label><input id="x402_max" name="max_usdc" type="number" min="0.000001" step="0.000001" value="0.01" required /></div><div><label for="x402_method">Method</label><select id="x402_method" name="method"><option>GET</option><option>POST</option></select></div></div>
-            <label for="request_body">Body / headers JSON</label><textarea id="request_body" name="request_body" placeholder='{{"topic":"arbitrage"}}'></textarea>
-            <button style="width: 100%; margin-top: 12px;">Pay x402 service</button>
+            <label for="x402_description">What should NOTARY buy?</label><input id="x402_description" name="description" value="Market intelligence request" required />
+            <label for="service_url">Paid data URL</label><input id="service_url" name="service_url" placeholder="https://seller.example/x402/feed" required />
+            <div class="split"><div><label for="x402_max">Spending limit in USDC</label><input id="x402_max" name="max_usdc" type="number" min="0.000001" step="0.000001" value="0.01" required /></div><div><label for="x402_method">Request type</label><select id="x402_method" name="method"><option>GET</option><option>POST</option></select></div></div>
+            <label for="request_body">Optional request details</label><textarea id="request_body" name="request_body" placeholder='{{"topic":"arbitrage","market":"USDC"}}'></textarea>
+            <button style="width: 100%; margin-top: 12px;">Buy data for NOTARY</button>
           </form>
           <p class="status-line" style="margin-top: 10px;">Latest request: {escape(_short(latest_x402.get("paymentId") or "none yet", 34))}</p>
         </article>
